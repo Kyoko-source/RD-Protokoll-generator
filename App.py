@@ -1,5 +1,145 @@
 import streamlit as st
+def add_line(text, value):
+    """
+    Fügt nur Zeilen hinzu, wenn ein Wert vorhanden ist.
+    """
+    if value not in ["", "Keine Angabe", 0, None]:
+        return text + value + "\n"
+    return text
 
+
+def generate_protocol():
+
+    protocol = ""
+
+    # --------------------------------------------------
+    # Vitalwerte
+    # --------------------------------------------------
+
+    vital = ""
+
+    if rr_sys and rr_dia:
+        vital += f"RR {rr_sys}/{rr_dia} mmHg\n"
+
+    if puls:
+        vital += f"Puls {puls}/min\n"
+
+    if spo2:
+        vital += f"SpO₂ {spo2}%\n"
+
+    if af:
+        vital += f"AF {af}/min\n"
+
+    if bz:
+        vital += f"BZ {bz} mg/dl\n"
+
+    if temperatur:
+        vital += f"Temperatur {temperatur:.1f} °C\n"
+
+    if gcs:
+        vital += f"GCS {gcs}\n"
+
+    if vital != "":
+        protocol += "VITALWERTE\n"
+        protocol += "-------------------------\n"
+        protocol += vital + "\n"
+
+    # --------------------------------------------------
+    # xABCDE
+    # --------------------------------------------------
+
+    xabcde = ""
+
+    if x_blutung != "Keine Angabe":
+        xabcde += f"x: {x_blutung}\n"
+
+    if airway != "Keine Angabe":
+        xabcde += f"A: Atemweg {airway}\n"
+
+    if atmung != "Keine Angabe":
+        xabcde += f"B: Atmung {atmung}\n"
+
+    if haut != "Keine Angabe":
+        xabcde += f"C: Haut {haut}\n"
+
+    if avpu != "Keine Angabe":
+        xabcde += f"D: AVPU {avpu}\n"
+
+    if bodycheck != "Keine Angabe":
+        xabcde += f"E: {bodycheck}\n"
+
+    if xabcde != "":
+        protocol += "xABCDE\n"
+        protocol += "-------------------------\n"
+        protocol += xabcde + "\n"
+
+    # --------------------------------------------------
+    # SAMPLERS
+    # --------------------------------------------------
+
+    samplers = ""
+
+    if symptome != "":
+        samplers += f"S: {symptome}\n"
+
+    if allergien == "Keine bekannt":
+        samplers += "A: Keine Allergien bekannt\n"
+
+    if allergien == "Vorhanden":
+        samplers += f"A: {allergie_text}\n"
+
+    if medikamente_option == "Siehe Medikamentenplan":
+        samplers += "M: Siehe Medikamentenplan\n"
+
+    if medikamente_option == "Medikamente eingeben":
+        samplers += f"M: {medikamente}\n"
+
+    if vorgeschichte != "":
+        samplers += f"P: {vorgeschichte}\n"
+
+    if letzte_mahlzeit != "":
+        samplers += f"L: {letzte_mahlzeit}\n"
+
+    if ereignis != "":
+        samplers += f"E: {ereignis}\n"
+
+    if samplers != "":
+        protocol += "SAMPLERS\n"
+        protocol += "-------------------------\n"
+        protocol += samplers + "\n"
+
+    # --------------------------------------------------
+    # OPQRST
+    # --------------------------------------------------
+
+    if schmerz_vorhanden == "Ja":
+
+        opqrst = ""
+
+        if onset != "Keine Angabe":
+            opqrst += f"O: {onset}\n"
+
+        if provocation != "":
+            opqrst += f"P: {provocation}\n"
+
+        if quality != "Keine Angabe":
+            opqrst += f"Q: {quality}\n"
+
+        if region != "":
+            opqrst += f"R: {region}\n"
+
+        if nrs > 0:
+            opqrst += f"S: NRS {nrs}/10\n"
+
+        if zeitverlauf != "":
+            opqrst += f"T: {zeitverlauf}\n"
+
+        if opqrst != "":
+            protocol += "OPQRST\n"
+            protocol += "-------------------------\n"
+            protocol += opqrst + "\n"
+
+    return protocol
 # --------------------------------------------------
 # Grundeinstellungen
 # --------------------------------------------------
@@ -638,3 +778,55 @@ elif seite == "📋 SAMPLERS":
         ]
 
     )
+# -----------------------------
+# PROTOKOLL
+# -----------------------------
+
+with tab5:
+
+    st.header("📄 Fertiges Protokoll")
+
+    st.write(
+        "Nach Klick auf **Protokoll generieren** wird automatisch "
+        "ein RD-Protokoll aus den eingegebenen Daten erstellt."
+    )
+
+    st.divider()
+
+    if st.button(
+        "🚑 Protokoll generieren",
+        use_container_width=True,
+        type="primary"
+    ):
+
+        protocol = generate_protocol()
+
+        if protocol.strip() == "":
+
+            st.warning("Es wurden noch keine Daten eingegeben.")
+
+        else:
+
+            st.success("Protokoll erstellt.")
+
+            st.text_area(
+
+                "RD-Protokoll",
+
+                protocol,
+
+                height=600
+
+            )
+
+            st.download_button(
+
+                "💾 Protokoll als TXT herunterladen",
+
+                protocol,
+
+                file_name="RD_Protokoll.txt",
+
+                mime="text/plain"
+
+            )
