@@ -430,3 +430,99 @@ with tab3:
             "Nicht relevant"
         ]
     )
+    # -----------------------------
+# OPQRST
+# -----------------------------
+
+with tab4:
+
+    st.header("🔥 OPQRST")
+
+    schmerz_vorhanden = st.radio(
+        "Hat der Patient Schmerzen?",
+        [
+            "Nein",
+            "Ja"
+        ]
+    )
+
+    if schmerz_vorhanden == "Ja":
+
+        st.divider()
+
+        st.subheader("O - Onset")
+
+        onset = st.selectbox(
+            "Beginn",
+            [
+                "Keine Angabe",
+                "Plötzlich",
+                "Schleichend",
+                "Nach Belastung",
+                "In Ruhe",
+                "Unbekannt"
+            ]
+        )
+
+        st.divider()
+
+        st.subheader("P - Provocation / Palliation")
+
+        provocation = st.text_input(
+            "Was verschlechtert oder verbessert den Schmerz?"
+        )
+
+        st.divider()
+
+        st.subheader("Q - Quality")
+
+        quality = st.selectbox(
+            "Schmerzqualität",
+            [
+                "Keine Angabe",
+                "Stechend",
+                "Drückend",
+                "Dumpf",
+                "Brennend",
+                "Kolikartig",
+                "Reißend",
+                "Pochend"
+            ]
+        )
+
+        st.divider()
+
+        st.subheader("R - Region / Radiation")
+
+        region = st.text_input(
+            "Lokalisation"
+        )
+
+        ausstrahlung = st.text_input(
+            "Ausstrahlung"
+        )
+
+        st.divider()
+
+        st.subheader("S - Severity")
+
+        nrs = st.slider(
+            "Schmerzskala (NRS)",
+            0,
+            10,
+            0
+        )
+
+        st.divider()
+
+        st.subheader("T - Time")
+
+        zeitverlauf = st.text_area(
+            "Zeitlicher Verlauf",
+            height=120
+        )
+
+        begleiterscheinungen = st.text_area(
+            "Begleiterscheinungen",
+            height=100
+        )
