@@ -429,12 +429,6 @@ def generate_protocol():
             protocol += line + "\n"
         protocol += "\n"
 
-    mist_text, isbar_text = build_handover_text(patient)
-    protocol += "ÜBERGABE (MIST / ISBAR)\n"
-    protocol += "=" * 50 + "\n"
-    protocol += "MIST:\n" + mist_text + "\n\n"
-    protocol += "ISBAR:\n" + isbar_text + "\n\n"
-
     # Kurzbericht
     kurzbericht = v.get('kurzbericht', '').strip()
     if kurzbericht:
