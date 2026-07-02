@@ -347,10 +347,10 @@ st.markdown(
         .stApp { background: linear-gradient(180deg,var(--bg) 0%, #071025 100%); color:var(--text) }
         .header { background: linear-gradient(90deg,var(--accent) 0%, #08306b 100%); color: white; padding: 14px 22px; border-radius:10px }
         .card { background: var(--card); padding: 14px; border-radius: 10px; box-shadow: 0 6px 20px rgba(2,6,23,0.6); color:var(--text) }
-        .nav-button button { background: transparent; border:2px solid rgba(255,255,255,0.06); color:var(--text); padding:18px 26px; border-radius:10px; font-size:18px; font-weight:600 }
-        .nav-button button:hover { border-color: rgba(255,255,255,0.14); transform:translateY(-2px) }
-        .nav-button .active { background: linear-gradient(90deg,var(--accent) 0%, var(--accent-2) 100%); color:#fff }
-        .stButton>button { height:56px }
+        .nav-button button { background: transparent; border:2px solid rgba(255,255,255,0.06); color:var(--text); padding:22px 30px; border-radius:12px; font-size:18px; font-weight:700; min-width:160px }
+        .nav-button button:hover { border-color: rgba(255,255,255,0.18); transform:translateY(-3px) }
+        .nav-active-badge { background: linear-gradient(90deg,var(--accent) 0%, var(--accent-2) 100%); color:#fff; padding:18px 26px; border-radius:12px; text-align:center; font-weight:700 }
+        .stButton>button { height:64px; font-size:16px; }
         .css-1q8dd3e { color:var(--muted) }
         .stTextInput>div>input, textarea, .stNumberInput input { background:#0b1220; color:var(--text); border:1px solid rgba(255,255,255,0.06) }
         section[data-testid='stSidebar']{ display:none; }
@@ -452,17 +452,17 @@ nav_options = [
 
 nav_container = st.container()
 with nav_container:
-    # center the nav by surrounding with spacers
-    cols = st.columns([1, 3, 3, 3, 3, 3, 1])
+    cols = st.columns([1,2,2,2,2,2,1])
     for i, opt in enumerate(nav_options):
         col = cols[i+1]
         is_active = (st.session_state['seite'] == opt)
+        # render the button (large)
         btn = col.button(opt, key=f"nav_{i}")
         if btn:
             st.session_state['seite'] = opt
-        # indicate active with a small note
+        # render active badge below the button so the active tab is visually highlighted
         if is_active:
-            col.markdown("<div style='text-align:center;color:#fff;margin-top:6px;font-weight:600'>Aktiv</div>", unsafe_allow_html=True)
+            col.markdown(f"<div class='nav-active-badge'>{opt}</div>", unsafe_allow_html=True)
 
 seite = st.session_state['seite']
 
