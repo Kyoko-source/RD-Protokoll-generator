@@ -551,13 +551,13 @@ nav_options = [
     "📄 Protokoll"
 ]
 
-# Navigation mit Streamlit-Widgets und Session-State
+# Navigation mit Streamlit-Buttons und Session-State
 nav_container = st.container()
 with nav_container:
     cols_nav = st.columns([1, 1, 1, 1, 1, 1, 1])
     for i, opt in enumerate(nav_options):
         with cols_nav[i+1]:
-            if st.radio("", [opt], index=0, key=f"nav_{i}", horizontal=True):
+            if st.button(opt, key=f"nav_{i}", use_container_width=True):
                 st.session_state['seite'] = opt
 
 seite = st.session_state['seite']
