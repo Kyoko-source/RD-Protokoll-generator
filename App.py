@@ -454,9 +454,6 @@ st.set_page_config(
     layout="wide"
 )
 
-st.title("🚑 RD-Protokoll Generator")
-st.caption("Dokumentationshilfe für den Rettungsdienst")
-
 # --- Custom styling (Dark Mode, centered navigation) -----------------
 st.markdown(
         """
@@ -755,19 +752,40 @@ st.markdown(
 
 st.markdown(
     """
-    <div class='hero-card'>
-        <div class='hero-row'>
+    <div style="
+        position:relative;
+        overflow:hidden;
+        margin: 10px 0 22px;
+        padding: 28px 30px 26px;
+        border-radius: 30px;
+        border: 1px solid rgba(255,255,255,0.14);
+        background:
+            radial-gradient(circle at 12% 16%, rgba(96,175,255,0.24), transparent 24%),
+            radial-gradient(circle at 90% 8%, rgba(255,120,156,0.15), transparent 22%),
+            linear-gradient(135deg, rgba(18,32,58,0.92) 0%, rgba(10,22,40,0.88) 100%);
+        box-shadow: 0 28px 60px rgba(2,8,24,0.32);
+    ">
+        <div style="display:flex; justify-content:space-between; gap:20px; align-items:flex-start; flex-wrap:wrap;">
             <div>
-                <div class='hero-kicker'><span class='hero-kicker-badge'></span> RD-Protokoll Generator</div>
-                <div class='hero-title'>Schnell. Klar. Einsatzbereit.</div>
-                <div class='hero-meta'>
-                    <div class='hero-chip'>17 SOPs <span>zentral steuerbar</span></div>
-                    <div class='hero-chip'>Workflow <span>schrittgeführt</span></div>
-                    <div class='hero-chip'>Protokoll <span>einsatzbereit</span></div>
+                <div style="display:inline-flex; align-items:center; gap:10px; font-size:0.76rem; letter-spacing:0.16em; text-transform:uppercase; color:rgba(231,241,255,0.72); font-weight:900;">
+                    <span style="width:10px; height:10px; border-radius:999px; background:linear-gradient(135deg, #61b6ff 0%, #ff7b8f 100%); box-shadow:0 0 0 5px rgba(97,182,255,0.10);"></span>
+                    RD-Protokoll Generator
+                </div>
+                <div style="margin-top:10px; font-size:2.35rem; line-height:0.98; font-weight:950; letter-spacing:-0.05em; color:#fbfdff;">
+                    Schnell. Klar. Einsatzbereit.
+                </div>
+                <div style="margin-top:10px; color:rgba(231,241,255,0.70); font-size:0.98rem; font-weight:600;">
+                    Dokumentationshilfe f\u00fcr den Rettungsdienst
+                </div>
+                <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:18px;">
+                    <div style="padding:10px 13px; border-radius:999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10); color:#eef5ff; font-size:0.8rem; font-weight:850;">17 SOPs <span style='opacity:0.72; font-weight:700;'>zentral steuerbar</span></div>
+                    <div style="padding:10px 13px; border-radius:999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10); color:#eef5ff; font-size:0.8rem; font-weight:850;">Workflow <span style='opacity:0.72; font-weight:700;'>schrittgef\u00fchrt</span></div>
+                    <div style="padding:10px 13px; border-radius:999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10); color:#eef5ff; font-size:0.8rem; font-weight:850;">Protokoll <span style='opacity:0.72; font-weight:700;'>einsatzbereit</span></div>
                 </div>
             </div>
-            <div class='hero-cta'>
-                <div class='hero-status'><span class='hero-status-dot'></span> Live-System</div>
+            <div style="display:inline-flex; align-items:center; gap:8px; padding:11px 14px; border-radius:16px; background:linear-gradient(135deg, rgba(87,164,255,0.16), rgba(255,125,102,0.14)); border:1px solid rgba(255,255,255,0.10); color:#f4f8ff; font-size:0.80rem; font-weight:850; box-shadow: 0 14px 26px rgba(2,8,24,0.18);">
+                <span style="width:8px; height:8px; border-radius:999px; background:#5cffb1; box-shadow:0 0 0 5px rgba(92,255,177,0.10);"></span>
+                Live-System
             </div>
         </div>
     </div>
@@ -1124,14 +1142,14 @@ def render_live_summary(title, lines):
     escaped_title = html.escape(title)
     if valid_lines:
         chip_markup = "".join(
-            f"<span class='rd-summary-chip'>{html.escape(str(line))}</span>"
+            f"<span style='display:inline-flex; align-items:center; padding:8px 10px; border-radius:999px; background:rgba(7,17,31,0.34); border:1px solid rgba(255,255,255,0.08); color:#eef5ff; font-size:0.82rem; line-height:1.2;'>{html.escape(str(line))}</span>"
             for line in valid_lines[:5]
         )
         st.markdown(
             f"""
-            <div class="rd-summary-card">
-                <div class="rd-summary-head">{escaped_title}</div>
-                <div class="rd-summary-row">{chip_markup}</div>
+            <div style="margin:14px 0 10px; padding:14px 16px; border-radius:18px; background:linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025)); border:1px solid rgba(255,255,255,0.09); box-shadow:0 14px 30px rgba(2,8,24,0.18);">
+                <div style="font-size:0.74rem; text-transform:uppercase; letter-spacing:0.16em; color:rgba(235,244,255,0.58); font-weight:900; margin-bottom:10px;">{escaped_title}</div>
+                <div style="display:flex; flex-wrap:wrap; gap:8px;">{chip_markup}</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1139,9 +1157,9 @@ def render_live_summary(title, lines):
     else:
         st.markdown(
             f"""
-            <div class="rd-summary-card rd-summary-empty">
-                <div class="rd-summary-head">{escaped_title}</div>
-                <div class="rd-summary-muted">Noch keine relevanten Angaben</div>
+            <div style="margin:14px 0 10px; padding:14px 16px; border-radius:18px; background:linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025)); border:1px solid rgba(255,255,255,0.09); box-shadow:0 14px 30px rgba(2,8,24,0.18);">
+                <div style="font-size:0.74rem; text-transform:uppercase; letter-spacing:0.16em; color:rgba(235,244,255,0.58); font-weight:900; margin-bottom:10px;">{escaped_title}</div>
+                <div style="color:rgba(234,243,255,0.62); font-size:0.88rem;">Noch keine relevanten Angaben</div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -1300,16 +1318,16 @@ current_workflow_index = workflow_step_index(st.session_state["seite"])
 if current_workflow_index is not None:
     st.markdown(
         f"""
-        <div class="workflow-shell">
-            <div class="workflow-head">
+        <div style="margin:10px 0 16px; padding:18px 18px 16px; border-radius:26px; border:1px solid rgba(255,255,255,0.10); background:linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.02)); box-shadow:0 18px 40px rgba(2,8,24,0.22);">
+            <div style="display:flex; justify-content:space-between; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
                 <div>
-                    <div class="workflow-kicker">Einsatz-Workflow</div>
-                    <div class="workflow-title">Schritt {current_workflow_index + 1} von {workflow_total}: {WORKFLOW_STEPS[current_workflow_index]['label']}</div>
+                    <div style="font-size:0.76rem; text-transform:uppercase; letter-spacing:0.16em; color:rgba(238,245,255,0.58); font-weight:900;">Einsatz-Workflow</div>
+                    <div style="font-size:1.12rem; font-weight:900; color:#f5f9ff;">Schritt {current_workflow_index + 1} von {workflow_total}: {WORKFLOW_STEPS[current_workflow_index]['label']}</div>
                 </div>
-                <div class="workflow-count">{workflow_completed}/{workflow_total} abgeschlossen</div>
+                <div style="padding:9px 13px; border-radius:999px; background:rgba(255,255,255,0.055); color:#dce9ff; font-weight:800; font-size:0.84rem; border:1px solid rgba(255,255,255,0.08);">{workflow_completed}/{workflow_total} abgeschlossen</div>
             </div>
-            <div class="workflow-progress">
-                <div class="workflow-progress-bar" style="width:{(workflow_completed / workflow_total) * 100:.0f}%;"></div>
+            <div style="height:10px; border-radius:999px; background:rgba(255,255,255,0.08); overflow:hidden; margin-bottom:12px;">
+                <div style="width:{(workflow_completed / workflow_total) * 100:.0f}%; height:100%; border-radius:999px; background:linear-gradient(90deg, #5ea8ff 0%, #44ddbd 52%, #ff9c7c 100%); box-shadow:0 0 18px rgba(94,168,255,0.22);"></div>
             </div>
         </div>
         """,
