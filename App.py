@@ -401,68 +401,63 @@ st.caption("Dokumentationshilfe für den Rettungsdienst")
 st.markdown(
         """
         <style>
-        :root { --bg:#071026; --card:#0f1724; --muted:#9aa4b2; --accent:#1e73ff; --accent-2:#ff6b6b; --text:#e6eef8 }
-        html, body, [class*="css"]  { background: linear-gradient(180deg,var(--bg) 0%, #051123 100%) !important; color:var(--text) }
-        .header { background: linear-gradient(90deg,var(--accent) 0%, #0950b0 100%); color: white; padding: 14px 22px; border-radius:10px }
-        .card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding: 18px; border-radius: 12px; box-shadow: 0 10px 30px rgba(2,6,23,0.6); color:var(--text); margin-top:18px }
-        /* Tight nav button styling */
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) { padding: 0 -4px; }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button { width: 100%; padding: 14px 20px; border-radius: 22px; border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.03); color: var(--text); font-weight: 700; margin: 0; box-shadow: 0 6px 20px rgba(2,6,23,0.6); transition: all 0.15s ease; }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.12); transform: translateY(-2px); }
-        /* Active nav button - apply gradient when it contains certain keywords */
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button:focus { outline: none; }
+        :root { --bg:#07111f; --panel:#101b30; --panel-2:#16233c; --muted:#91a0b8; --accent:#4b8cff; --accent-2:#ff7a7a; --accent-3:#30d4a1; --text:#eef5ff; --line:rgba(255,255,255,0.08); }
+        html, body, [class*="css"] { background: radial-gradient(circle at top left, rgba(75,140,255,0.18), transparent 28%), linear-gradient(135deg, var(--bg) 0%, #081426 100%) !important; color: var(--text); }
+        .header { background: linear-gradient(135deg, rgba(75,140,255,0.95) 0%, rgba(255,122,122,0.9) 100%); color: white; padding: 20px 24px; border-radius: 18px; box-shadow: 0 16px 40px rgba(4,10,24,0.35); border: 1px solid rgba(255,255,255,0.16); }
+        .welcome-card { margin-top: 16px; padding: 18px 20px; border-radius: 16px; background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03)); border: 1px solid var(--line); box-shadow: 0 12px 30px rgba(2,6,23,0.18); }
+        .badge { display:inline-block; padding:6px 10px; border-radius:999px; background: rgba(48,212,161,0.18); color:#bff7e4; font-size:0.8rem; font-weight:700; letter-spacing:0.04em; margin-bottom:10px; }
+        .welcome-title { font-size:1.15rem; font-weight:800; color:var(--text); margin-bottom:6px; }
+        .welcome-copy { color:var(--muted); font-size:0.95rem; line-height:1.45; }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) { padding: 0 2px; }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: var(--text); font-weight: 700; margin:0; box-shadow: 0 8px 24px rgba(2,6,23,0.22); transition: all 0.2s ease; }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button:hover { background: rgba(255,255,255,0.08); transform: translateY(-2px); }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button:focus { outline:none; }
+        input, textarea, select { background:#0c1628 !important; color:var(--text) !important; border:1px solid rgba(255,255,255,0.08) !important; border-radius:12px !important; padding:10px 12px !important; font-size:0.95rem !important; }
+        input:focus, textarea:focus, select:focus { border-color:var(--accent) !important; box-shadow: 0 0 0 3px rgba(75,140,255,0.18) !important; }
+        [data-testid="stSelectbox"] { margin: 10px 0; }
+        [data-testid="stRadio"] > label { padding:8px 10px; border-radius:10px; cursor:pointer; transition: all 0.2s ease; }
+        [data-testid="stRadio"] > label:hover { background: rgba(255,255,255,0.03); }
+        [data-testid="stSlider"] > div > div > div { border-radius:10px; }
+        [data-testid="stCheckbox"] > label { cursor:pointer; }
+        [data-testid="stNumberInput"] { margin: 10px 0; }
+        [data-testid="stTextArea"] { margin: 10px 0; }
+        h3 { color:#8dc7ff; margin-top:20px; margin-bottom:10px; border-bottom:1px solid rgba(141,199,255,0.2); padding-bottom:8px; }
+        hr { border-color: rgba(255,255,255,0.06) !important; margin: 22px 0; }
+        section[data-testid='stSidebar']{ display:none; }
+        main .block-container { padding-top: 12px; padding-left: 80px; padding-right:80px }
         </style>
         <script>
-        // Color active nav button
         setTimeout(function() {
             const navButtons = document.querySelectorAll('[data-testid="column"]:nth-child(n+2):nth-child(-n+6) button');
-            navButtons.forEach((btn, idx) => {
+            navButtons.forEach((btn) => {
                 const text = btn.textContent.trim();
                 if (text === '❤️ Vitalwerte' || text === '🩺 xABCDE' || text === '📋 SAMPLERS' || text === '🔥 OPQRST' || text === '📄 Protokoll') {
-                    // Check if button was recently clicked by checking if it's focused
                     btn.addEventListener('click', function() {
-                        navButtons.forEach(b => b.style.background = 'rgba(255,255,255,0.03)');
-                        btn.style.background = 'linear-gradient(90deg, #1e73ff 0%, #ff6b6b 100%)';
+                        navButtons.forEach(b => {
+                            b.style.background = 'rgba(255,255,255,0.04)';
+                            b.style.color = '#eef5ff';
+                            b.style.border = '1px solid rgba(255,255,255,0.08)';
+                            b.style.boxShadow = '0 8px 24px rgba(2,6,23,0.22)';
+                        });
+                        btn.style.background = 'linear-gradient(135deg, #4b8cff 0%, #ff7a7a 100%)';
                         btn.style.color = '#fff';
                         btn.style.border = 'none';
-                        btn.style.boxShadow = '0 8px 25px rgba(12,50,120,0.4)';
+                        btn.style.boxShadow = '0 12px 32px rgba(75,140,255,0.28)';
                     });
                 }
             });
         }, 100);
         </script>
-        <style>
-        /* Inputs */
-        input, textarea { background:#081029; color:var(--text) !important; border:1px solid rgba(255,255,255,0.04); border-radius:8px; padding:10px !important; font-size:0.95rem }
-        input:focus, textarea:focus { border-color:#1e73ff !important; box-shadow: 0 0 8px rgba(30,115,255,0.3) !important }
-        select { background:#081029; color:var(--text) !important; border:1px solid rgba(255,255,255,0.04); border-radius:8px; padding:10px !important }
-        /* Selectbox styling */
-        [data-testid="stSelectbox"] { margin: 12px 0 }
-        /* Radio button styling */
-        [data-testid="stRadio"] > label { padding:8px; border-radius:8px; cursor:pointer; transition: all 0.2s ease }
-        [data-testid="stRadio"] > label:hover { background: rgba(255,255,255,0.02) }
-        /* Slider styling */
-        [data-testid="stSlider"] > div > div > div { border-radius:8px }
-        /* Checkbox styling */
-        [data-testid="stCheckbox"] > label { cursor:pointer; transition: all 0.2s ease }
-        /* Number input */
-        [data-testid="stNumberInput"] { margin: 12px 0 }
-        /* Text area */
-        [data-testid="stTextArea"] { margin: 12px 0 }
-        /* Subheader styling */
-        h3 { color:#1e73ff; margin-top:20px; margin-bottom:12px; border-bottom:1px solid rgba(30,115,255,0.3); padding-bottom:8px }
-        /* Divider */
-        hr { border-color: rgba(255,255,255,0.05) !important; margin: 24px 0 }
-        /* Hide sidebar completely */
-        section[data-testid='stSidebar']{ display:none; }
-        /* Main content padding */
-        main .block-container { padding-top: 12px; padding-left: 80px; padding-right:80px }
-        </style>
         <div class='header'>
-            <div style='display:flex; align-items:center; gap:14px'>
+            <div style='display:flex; align-items:center; gap:14px; flex-wrap:wrap;'>
                 <div style='font-size:20px; font-weight:800'>🚑 RD-Protokoll Generator</div>
-                <div style='opacity:0.9; color:var(--muted); margin-left:8px'>— Hochwertige, ausfüllbare Einsatzdokumentation (anonym)</div>
+                <div style='opacity:0.95; color:rgba(255,255,255,0.9);'>Helfende, strukturierte Einsatzdokumentation in wenigen Schritten</div>
             </div>
+        </div>
+        <div class='welcome-card'>
+            <div class='badge'>✨ Schnell • sicher • klar</div>
+            <div class='welcome-title'>Ihr Protokoll entsteht direkt aus den wichtigsten Angaben.</div>
+            <div class='welcome-copy'>Die Eingaben sind bewusst einfach gehalten, aber trotzdem so aufgebaut, dass ein professionelles Rettungsdienst-Protokoll entsteht.</div>
         </div>
         """,
         unsafe_allow_html=True,
