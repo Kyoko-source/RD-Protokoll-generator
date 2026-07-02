@@ -1415,6 +1415,7 @@ elif seite == "💉 Medikamentenrechner":
             "Massive Übelkeit / Erbrechen",
             "Starke Schmerzen",
             "Instabile Bradykardie",
+            "Instabile Tachykardie",
         ],
     )
 
@@ -2306,7 +2307,7 @@ elif seite == "💉 Medikamentenrechner":
             ],
         )
 
-    else:
+    elif sop == "Instabile Bradykardie":
         st.subheader("Klinische Konstellation")
         b1, b2, b3 = st.columns(3)
         with b1:
@@ -2381,6 +2382,71 @@ elif seite == "💉 Medikamentenrechner":
                 f"HF: {hf}/min",
                 f"Instabilitätszeichen: {instabil}",
                 f"Asystolie-Gefahr: {asystolie_gefahr}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    else:
+        st.subheader("Klinische Konstellation")
+        t1, t2, t3 = st.columns(3)
+        with t1:
+            hf_tachy = st.number_input("Herzfrequenz (HF/min)", min_value=20, max_value=300, value=160, key="tachy_hf")
+        with t2:
+            instabil_tachy = st.selectbox("Instabilitätszeichen vorhanden", ["Nein", "Ja"], key="tachy_instability")
+        with t3:
+            bewusstlos_tachy = st.selectbox("Bewusstlosigkeit", ["Nein", "Ja"], key="tachy_unconscious")
+
+        meds = []
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Reanimationsbereitschaft herstellen",
+            "Notarztruf prüfen",
+        ]
+        hinweise = [
+            "Instabilitätszeichen: Schock, Bewusstseinsstörung, Synkope, Myokardischämie, schwere Herzinsuffizienz",
+        ]
+
+        if hf_tachy < 100:
+            hinweise.append("SOP-Hinweis: Flussbild für instabile Tachykardie ist typischerweise bei deutlich erhöhter HF relevant.")
+
+        if instabil_tachy == "Nein":
+            handlung.append("ABCDE-Re-Evaluation")
+            handlung.append("Klinik / Ende")
+        else:
+            if bewusstlos_tachy == "Ja":
+                handlung.append("Notarztruf auslösen")
+                meds.append("Erw.: Kardioversion")
+                handlung.append("ABCDE-Re-Evaluation")
+                handlung.append("Klinik / Ende")
+            else:
+                handlung.append("ABCDE-Re-Evaluation")
+                handlung.append("Klinik / Ende")
+
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        if meds:
+            for i, med in enumerate(meds, start=1):
+                st.write(f"{i}. {med}")
+        else:
+            st.write("Keine medikamentöse Empfehlung in diesem Entscheidungszweig.")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        st.subheader("Zusätzliche Hinweise")
+        for i, h in enumerate(hinweise, start=1):
+            st.write(f"{i}. {h}")
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"HF: {hf_tachy}/min",
+                f"Instabilitätszeichen: {instabil_tachy}",
+                f"Bewusstlosigkeit: {bewusstlos_tachy}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
