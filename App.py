@@ -9,7 +9,8 @@ from copy import deepcopy
 from dotenv import load_dotenv
 
 # Load environment variables from .env
-load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
+env_path = os.path.join(os.path.dirname(__file__), ".env")
+load_dotenv(dotenv_path=env_path)
 
 
 def add_line(text, value):
@@ -561,6 +562,9 @@ patient["massnahmen"].setdefault("medikation", [])
 # --------------------------------------------------
 
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+print(f"DEBUG: env_path = {env_path}")
+print(f"DEBUG: env_path exists = {os.path.exists(env_path)}")
+print(f"DEBUG: ADMIN_PASSWORD = '{ADMIN_PASSWORD}'")
 if not ADMIN_PASSWORD:
     st.warning("⚠️ Admin-Passwort nicht in .env gesetzt. Adminbereich deaktiviert.")
 SOP_ADMIN_CONFIG_FILE = "sop_admin_config.json"
