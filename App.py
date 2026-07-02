@@ -767,201 +767,95 @@ if seite == "❤️ Vitalwerte":
 elif seite == "🩺 xABCDE":
 
     st.header("🩺 xABCDE")
-
-    # ---------------- x ----------------
-
-    st.subheader("x – Exsanguination")
-
-    patient["xabcde"]["blutung"] = st.radio(
-        "Kritische Blutung",
-        [
-            "Keine Angabe",
-            "Keine kritische Blutung",
-            "Kritische Blutung vorhanden"
-        ],
-        key="x_blutung"
+    st.markdown(
+        "<div style='text-align:center; margin-bottom:18px;'>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>A</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>B</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>C</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>D</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>E</div>"
+        "</div>",
+        unsafe_allow_html=True
     )
 
-    if patient["xabcde"]["blutung"] == "Kritische Blutung vorhanden":
-
-        patient["xabcde"]["blutung_lokalisation"] = st.text_input(
-            "Lokalisation",
-            key="x_blutung_lokalisation"
+    with st.expander("A – Airway", expanded=False):
+        patient["xabcde"]["atemweg"] = st.radio(
+            "Atemweg",
+            ["Keine Angabe", "Frei", "Gefährdet", "Verlegt"],
+            key="atemweg"
+        )
+        patient["xabcde"]["hws"] = st.radio(
+            "HWS",
+            ["Keine Angabe", "Keine Immobilisation", "Stifneck", "Vakuummatratze"],
+            key="hws"
         )
 
-    st.divider()
-
-    # ---------------- A ----------------
-
-    st.subheader("A – Airway")
-
-    patient["xabcde"]["atemweg"] = st.radio(
-        "Atemweg",
-        [
-            "Keine Angabe",
-            "Frei",
-            "Gefährdet",
-            "Verlegt"
-        ],
-        key="atemweg"
-    )
-
-    patient["xabcde"]["hws"] = st.radio(
-        "HWS",
-        [
-            "Keine Angabe",
-            "Keine Immobilisation",
-            "Stifneck",
-            "Vakuummatratze"
-        ],
-        key="hws"
-    )
-
-    st.divider()
-
-    # ---------------- B ----------------
-
-    st.subheader("B – Breathing")
-
-    patient["xabcde"]["atmung"] = st.radio(
-        "Atmung",
-        [
-            "Keine Angabe",
-            "Unauffällig",
-            "Dyspnoe",
-            "Bradypnoe",
-            "Tachypnoe",
-            "Apnoe"
-        ],
-        key="atmung"
-    )
-
-    patient["xabcde"]["atemgeraeusche"] = st.radio(
-        "Atemgeräusche",
-        [
-            "Keine Angabe",
-            "Beidseits vorhanden",
-            "Links abgeschwächt",
-            "Rechts abgeschwächt",
-            "Keine"
-        ],
-        key="atemgeraeusche"
-    )
-
-    patient["xabcde"]["sauerstoff"] = st.selectbox(
-        "Sauerstoffgabe",
-        [
-            "Keine",
-            "2 l/min",
-            "4 l/min",
-            "6 l/min",
-            "10 l/min",
-            "15 l/min"
-        ],
-        key="sauerstoff"
-    )
-
-    st.divider()
-
-    # ---------------- C ----------------
-
-    st.subheader("C – Circulation")
-
-    patient["xabcde"]["haut"] = st.radio(
-        "Haut",
-        [
-            "Keine Angabe",
-            "Rosig / warm",
-            "Blass",
-            "Kalt / schweißig",
-            "Zyanotisch"
-        ],
-        key="haut"
-    )
-
-    patient["xabcde"]["rekap"] = st.radio(
-        "Rekapillarisierungszeit",
-        [
-            "Keine Angabe",
-            "< 2 Sekunden",
-            "> 2 Sekunden"
-        ],
-        key="rekap"
-    )
-
-    patient["xabcde"]["pulsqualitaet"] = st.radio(
-        "Pulsqualität",
-        [
-            "Keine Angabe",
-            "Kräftig",
-            "Schwach",
-            "Fadenförmig"
-        ],
-        key="pulsqualitaet"
-    )
-
-    st.divider()
-
-    # ---------------- D ----------------
-
-    st.subheader("D – Disability")
-
-    patient["xabcde"]["avpu"] = st.radio(
-        "AVPU",
-        [
-            "Keine Angabe",
-            "A",
-            "V",
-            "P",
-            "U"
-        ],
-        key="avpu"
-    )
-
-    patient["xabcde"]["pupillen"] = st.radio(
-        "Pupillen",
-        [
-            "Keine Angabe",
-            "Isokor",
-            "Anisokor",
-            "Lichtstarr"
-        ],
-        key="pupillen"
-    )
-
-    st.divider()
-
-    # ---------------- E ----------------
-
-    st.subheader("E – Exposure")
-
-    patient["xabcde"]["bodycheck"] = st.radio(
-        "Bodycheck",
-        [
-            "Keine Angabe",
-            "Unauffällig",
-            "Auffällig"
-        ],
-        key="bodycheck"
-    )
-
-    if patient["xabcde"]["bodycheck"] == "Auffällig":
-
-        patient["xabcde"]["bodycheck_text"] = st.text_area(
-            "Auffälligkeiten",
-            height=120,
-            key="bodycheck_text"
+    with st.expander("B – Breathing", expanded=False):
+        patient["xabcde"]["atmung"] = st.radio(
+            "Atmung",
+            ["Keine Angabe", "Unauffällig", "Dyspnoe", "Bradypnoe", "Tachypnoe", "Apnoe"],
+            key="atmung"
+        )
+        patient["xabcde"]["atemgeraeusche"] = st.radio(
+            "Atemgeräusche",
+            ["Keine Angabe", "Beidseits vorhanden", "Links abgeschwächt", "Rechts abgeschwächt", "Keine"],
+            key="atemgeraeusche"
+        )
+        patient["xabcde"]["sauerstoff"] = st.selectbox(
+            "Sauerstoffgabe",
+            ["Keine", "2 l/min", "4 l/min", "6 l/min", "10 l/min", "15 l/min"],
+            key="sauerstoff"
         )
 
-    patient["xabcde"]["unterkuehlung"] = st.checkbox(
-        "Unterkühlung",
-        key="unterkuehlung"
-    )
+    with st.expander("C – Circulation", expanded=False):
+        patient["xabcde"]["haut"] = st.radio(
+            "Haut",
+            ["Keine Angabe", "Rosig / warm", "Blass", "Kalt / schweißig", "Zyanotisch"],
+            key="haut"
+        )
+        patient["xabcde"]["rekap"] = st.radio(
+            "Rekapillarisierungszeit",
+            ["Keine Angabe", "< 2 Sekunden", "> 2 Sekunden"],
+            key="rekap"
+        )
+        patient["xabcde"]["pulsqualitaet"] = st.radio(
+            "Pulsqualität",
+            ["Keine Angabe", "Kräftig", "Schwach", "Fadenförmig"],
+            key="pulsqualitaet"
+        )
 
-    patient["xabcde"]["verbrennung"] = st.checkbox(
-        "Verbrennung",
-        key="verbrennung"
-    )
+    with st.expander("D – Disability", expanded=False):
+        patient["xabcde"]["avpu"] = st.radio(
+            "AVPU",
+            ["Keine Angabe", "A", "V", "P", "U"],
+            key="avpu"
+        )
+        patient["xabcde"]["pupillen"] = st.radio(
+            "Pupillen",
+            ["Keine Angabe", "Isokor", "Anisokor", "Lichtstarr"],
+            key="pupillen"
+        )
+
+    with st.expander("E – Exposure", expanded=False):
+        patient["xabcde"]["bodycheck"] = st.radio(
+            "Bodycheck",
+            ["Keine Angabe", "Unauffällig", "Auffällig"],
+            key="bodycheck"
+        )
+        if patient["xabcde"]["bodycheck"] == "Auffällig":
+            patient["xabcde"]["bodycheck_text"] = st.text_area(
+                "Auffälligkeiten",
+                height=120,
+                key="bodycheck_text"
+            )
+        patient["xabcde"]["unterkuehlung"] = st.checkbox(
+            "Unterkühlung",
+            key="unterkuehlung"
+        )
+        patient["xabcde"]["verbrennung"] = st.checkbox(
+            "Verbrennung",
+            key="verbrennung"
+        )
     # --------------------------------------------------
 # SAMPLERS
 # --------------------------------------------------
@@ -969,170 +863,133 @@ elif seite == "🩺 xABCDE":
 elif seite == "📋 SAMPLERS":
 
     st.header("📋 SAMPLERS")
-
-    # -------------------------
-    # S Symptome
-    # -------------------------
-
-    st.subheader("S – Symptome")
-
-    textarea_field(
-        "samplers",
-        "symptome",
-        "Beschwerden / Symptome"
+    st.markdown(
+        "<div style='text-align:center; margin-bottom:18px;'>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>S</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>A</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>M</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>P</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>L</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>E</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>R</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>S</div>"
+        "</div>",
+        unsafe_allow_html=True
     )
 
-    st.divider()
-
-    # -------------------------
-    # A Allergien
-    # -------------------------
-
-    st.subheader("A – Allergien")
-
-    allergien = radio_field(
-
-        "samplers",
-
-        "allergien",
-
-        "Allergien",
-
-        [
-
-            "Keine Angabe",
-
-            "Keine bekannt",
-
-            "Vorhanden"
-
-        ]
-
-    )
-
-    if allergien == "Vorhanden":
-
-        text_field(
-
-            "samplers",
-
-            "allergien_text",
-
-            "Welche Allergien?"
-
-        )
-
-    st.divider()
-
-    # -------------------------
-    # M Medikamente
-    # -------------------------
-
-    st.subheader("M – Medikamente")
-
-    medikamente = radio_field(
-
-        "samplers",
-
-        "medikamente_option",
-
-        "Medikamente",
-
-        [
-
-            "Keine Angabe",
-
-            "Siehe Medikamentenplan",
-
-            "Medikamente eingeben"
-
-        ]
-
-    )
-
-    if medikamente == "Medikamente eingeben":
-
+    with st.expander("S – Symptome", expanded=False):
         textarea_field(
-
             "samplers",
-
-            "medikamente",
-
-            "Bitte Medikamente eingeben"
-
+            "symptome",
+            "Beschwerden / Symptome"
         )
 
-    st.divider()
+    with st.expander("A – Allergien", expanded=False):
+        allergien = radio_field(
+            "samplers",
+            "allergien",
+            "Allergien",
+            [
+                "Keine Angabe",
+                "Keine bekannt",
+                "Vorhanden"
+            ]
+        )
+        if allergien == "Vorhanden":
+            text_field(
+                "samplers",
+                "allergien_text",
+                "Welche Allergien?"
+            )
 
-    # -------------------------
-    # P Vorgeschichte
-    # -------------------------
+    with st.expander("M – Medikamente", expanded=False):
+        medikamente = radio_field(
+            "samplers",
+            "medikamente_option",
+            "Medikamente",
+            [
+                "Keine Angabe",
+                "Siehe Medikamentenplan",
+                "Medikamente eingeben"
+            ]
+        )
+        if medikamente == "Medikamente eingeben":
+            textarea_field(
+                "samplers",
+                "medikamente",
+                "Bitte Medikamente eingeben"
+            )
 
-    st.subheader("P – Patientenvorgeschichte")
+    with st.expander("P – Patientenvorgeschichte", expanded=False):
+        textarea_field(
+            "samplers",
+            "vorgeschichte",
+            "Vorerkrankungen"
+        )
 
-    textarea_field(
+    with st.expander("L – Letzte Nahrungsaufnahme", expanded=False):
+        letzte_mahlzeit = radio_field(
+            "samplers",
+            "letzte_mahlzeit",
+            "Letzte Mahlzeit",
+            [
+                "Keine Angabe",
+                "< 2 Stunden",
+                "2–6 Stunden",
+                "> 6 Stunden",
+                "Unbekannt",
+                "Eigene Eingabe"
+            ]
+        )
 
-        "samplers",
+        if letzte_mahlzeit == "Eigene Eingabe":
+            text_field(
+                "samplers",
+                "letzte_mahlzeit_text",
+                "Eigene Eingabe"
+            )
 
-        "vorgeschichte",
+    with st.expander("E – Ereignis", expanded=False):
+        textarea_field(
+            "samplers",
+            "ereignis",
+            "Ereignisbeschreibung",
+            height=180
+        )
 
-        "Vorerkrankungen"
+    with st.expander("R – Risikofaktoren", expanded=False):
+        col1, col2 = st.columns(2)
+        with col1:
+            checkbox_field("samplers","raucher","Raucher")
+            checkbox_field("samplers","alkohol","Alkoholkonsum")
+            checkbox_field("samplers","drogen","Drogen")
 
-    )
-
-    st.divider()
-
-    # -------------------------
-    # L Letzte Mahlzeit
-    # -------------------------
-
-    st.subheader("L – Letzte Nahrungsaufnahme")
-
-    letzte_mahlzeit = radio_field(
-
-        "samplers",
-
-        "letzte_mahlzeit",
-
-        "Letzte Mahlzeit",
-
-        [
-
-            "Keine Angabe",
-
-            "< 2 Stunden",
-
-            "2–6 Stunden",
-
-            "> 6 Stunden",
-
-            "Unbekannt",
-
-            "Eigene Eingabe"
-
-        ]
-
-    )
-
-    if letzte_mahlzeit == "Eigene Eingabe":
+        with col2:
+            checkbox_field("samplers","diabetes","Diabetes")
+            checkbox_field("samplers","hypertonie","Hypertonie")
+            checkbox_field("samplers","antikoagulation","Antikoagulation")
 
         text_field(
-
             "samplers",
-
-            "letzte_mahlzeit_text",
-
-            "Eigene Eingabe"
-
+            "risiken_sonstige",
+            "Weitere Risikofaktoren"
         )
 
-    st.divider()
+    with st.expander("S – Schwangerschaft", expanded=False):
+        radio_field(
+            "samplers",
+            "schwangerschaft",
+            "Schwangerschaft",
+            [
+                "Nicht relevant",
+                "Nein",
+                "Ja",
+                "Unbekannt"
+            ]
+        )
 
-    # -------------------------
-    # E Ereignis
-    # -------------------------
-
-    st.subheader("E – Ereignis")
+# --------------------------------------------------
+# OPQRST
 
     textarea_field(
 
@@ -1169,44 +1026,23 @@ elif seite == "📋 SAMPLERS":
         checkbox_field("samplers","antikoagulation","Antikoagulation")
 
     text_field(
-
         "samplers",
-
         "risiken_sonstige",
-
         "Weitere Risikofaktoren"
-
     )
 
-    st.divider()
-
-    # -------------------------
-    # S Schwangerschaft
-    # -------------------------
-
-    st.subheader("S – Schwangerschaft")
-
-    radio_field(
-
-        "samplers",
-
-        "schwangerschaft",
-
-        "Schwangerschaft",
-
-        [
-
-            "Nicht relevant",
-
-            "Nein",
-
-            "Ja",
-
-            "Unbekannt"
-
-        ]
-
-    )
+    with st.expander("S – Schwangerschaft", expanded=False):
+        radio_field(
+            "samplers",
+            "schwangerschaft",
+            "Schwangerschaft",
+            [
+                "Nicht relevant",
+                "Nein",
+                "Ja",
+                "Unbekannt"
+            ]
+        )
 
 # --------------------------------------------------
 # OPQRST
@@ -1215,6 +1051,17 @@ elif seite == "📋 SAMPLERS":
 elif seite == "🔥 OPQRST":
 
     st.header("🔥 OPQRST – Schmerzassessment")
+    st.markdown(
+        "<div style='text-align:center; margin-bottom:18px;'>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>O</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>P</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>Q</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>R</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>S</div>"
+        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>T</div>"
+        "</div>",
+        unsafe_allow_html=True
+    )
     
     st.write("Detaillierte Schmerzerfassung für Schmerzpatienten")
     
@@ -1228,90 +1075,72 @@ elif seite == "🔥 OPQRST":
     
     if patient["opqrst"]["schmerz_vorhanden"] == "Ja":
         
-        st.divider()
+        with st.expander("O – Onset (Beginn des Schmerzes)", expanded=False):
+            patient["opqrst"]["onset"] = st.selectbox(
+                "Beginn",
+                ["", "Plötzlich", "Allmählich", "Progressiv verschlimmernd", "Wiederkehrend"],
+                key="opqrst_onset"
+            )
+            patient["opqrst"]["onset_text"] = st.text_input(
+                "Zusätzliche Information zu Beginn",
+                key="opqrst_onset_text"
+            )
         
-        # O - Onset
-        st.subheader("O – Onset (Beginn des Schmerzes)")
-        patient["opqrst"]["onset"] = st.selectbox(
-            "Beginn",
-            ["", "Plötzlich", "Allmählich", "Progressiv verschlimmernd", "Wiederkehrend"],
-            key="opqrst_onset"
-        )
-        patient["opqrst"]["onset_text"] = st.text_input(
-            "Zusätzliche Information zu Beginn",
-            key="opqrst_onset_text"
-        )
+        with st.expander("P – Provocation/Palliation (Auslöser und Linderung)", expanded=False):
+            patient["opqrst"]["provocation"] = st.selectbox(
+                "Was verschlimmert oder lindert den Schmerz?",
+                ["", "Bewegung verschlimmert", "Ruhe lindert", "Tiefe Atmung verschlimmert", "Druck lindert", "Wärme lindert", "Kälte lindert", "Nichts lindert"],
+                key="opqrst_provocation"
+            )
+            patient["opqrst"]["provocation_text"] = st.text_input(
+                "Genauere Beschreibung",
+                key="opqrst_provocation_text"
+            )
         
-        st.divider()
+        with st.expander("Q – Quality (Charakteristik des Schmerzes)", expanded=False):
+            patient["opqrst"]["quality"] = st.selectbox(
+                "Wie beschreibt der Patient den Schmerz?",
+                ["", "Stechend/Messerscharf", "Dumpf", "Drückend", "Reißend", "Brennend", "Ziehend", "Klopfend", "Rauschhaft"],
+                key="opqrst_quality"
+            )
+            patient["opqrst"]["quality_text"] = st.text_input(
+                "Patienteneigene Beschreibung",
+                key="opqrst_quality_text"
+            )
         
-        # P - Provocation/Palliation
-        st.subheader("P – Provocation/Palliation (Auslöser und Linderung)")
-        patient["opqrst"]["provocation"] = st.selectbox(
-            "Was verschlimmert oder lindert den Schmerz?",
-            ["", "Bewegung verschlimmert", "Ruhe lindert", "Tiefe Atmung verschlimmert", "Druck lindert", "Wärme lindert", "Kälte lindert", "Nichts lindert"],
-            key="opqrst_provocation"
-        )
-        patient["opqrst"]["provocation_text"] = st.text_input(
-            "Genauere Beschreibung",
-            key="opqrst_provocation_text"
-        )
+        with st.expander("R – Region/Radiation (Ort und Ausbreitung)", expanded=False):
+            patient["opqrst"]["region"] = st.text_input(
+                "Wo tut es weh?",
+                key="opqrst_region"
+            )
+            patient["opqrst"]["radiation"] = st.text_input(
+                "Ausstrahlung (Breitet sich der Schmerz aus?)",
+                key="opqrst_radiation"
+            )
         
-        st.divider()
+        with st.expander("S – Severity (Stärke des Schmerzes)", expanded=False):
+            patient["opqrst"]["nrs"] = st.slider(
+                "Numerische Rating-Skala (NRS) 0-10",
+                0, 10, 0,
+                key="opqrst_nrs"
+            )
+            patient["opqrst"]["severity_desc"] = st.selectbox(
+                "Auswirkung auf Aktivitäten",
+                ["", "Kein Schmerz (0)", "Minimal (1-3)", "Mäßig (4-6)", "Schwer (7-8)", "Sehr schwer (9-10)"],
+                key="opqrst_severity"
+            )
         
-        # Q - Quality
-        st.subheader("Q – Quality (Charakteristik des Schmerzes)")
-        patient["opqrst"]["quality"] = st.selectbox(
-            "Wie beschreibt der Patient den Schmerz?",
-            ["", "Stechend/Messerscharf", "Dumpf", "Drückend", "Reißend", "Brennend", "Ziehend", "Klopfend", "Rauschhaft"],
-            key="opqrst_quality"
-        )
-        patient["opqrst"]["quality_text"] = st.text_input(
-            "Patienteneigene Beschreibung",
-            key="opqrst_quality_text"
-        )
-        
-        st.divider()
-        
-        # R - Region/Radiation
-        st.subheader("R – Region/Radiation (Ort und Ausbreitung)")
-        patient["opqrst"]["region"] = st.text_input(
-            "Wo tut es weh?",
-            key="opqrst_region"
-        )
-        patient["opqrst"]["radiation"] = st.text_input(
-            "Ausstrahlung (Breitet sich der Schmerz aus?)",
-            key="opqrst_radiation"
-        )
-        
-        st.divider()
-        
-        # S - Severity
-        st.subheader("S – Severity (Stärke des Schmerzes)")
-        patient["opqrst"]["nrs"] = st.slider(
-            "Numerische Rating-Skala (NRS) 0-10",
-            0, 10, 0,
-            key="opqrst_nrs"
-        )
-        patient["opqrst"]["severity_desc"] = st.selectbox(
-            "Auswirkung auf Aktivitäten",
-            ["", "Kein Schmerz (0)", "Minimal (1-3)", "Mäßig (4-6)", "Schwer (7-8)", "Sehr schwer (9-10)"],
-            key="opqrst_severity"
-        )
-        
-        st.divider()
-        
-        # T - Time
-        st.subheader("T – Time (Zeitverlauf)")
-        patient["opqrst"]["zeitverlauf"] = st.selectbox(
-            "Zeitlicher Verlauf",
-            ["", "Konstant", "Intermittierend", "Sich verschlimmernd", "Sich verbessernd", "Gleichbleibend"],
-            key="opqrst_zeitverlauf"
-        )
-        patient["opqrst"]["dauer"] = st.text_input(
-            "Wie lange besteht der Schmerz bereits?",
-            placeholder="z.B. 2 Stunden, seit heute Morgen, ...",
-            key="opqrst_dauer"
-        )
+        with st.expander("T – Time (Zeitverlauf)", expanded=False):
+            patient["opqrst"]["zeitverlauf"] = st.selectbox(
+                "Zeitlicher Verlauf",
+                ["", "Konstant", "Intermittierend", "Sich verschlimmernd", "Sich verbessernd", "Gleichbleibend"],
+                key="opqrst_zeitverlauf"
+            )
+            patient["opqrst"]["dauer"] = st.text_input(
+                "Wie lange besteht der Schmerz bereits?",
+                placeholder="z.B. 2 Stunden, seit heute Morgen, ...",
+                key="opqrst_dauer"
+            )
 
 # --------------------------------------------------
 # PROTOKOLL
