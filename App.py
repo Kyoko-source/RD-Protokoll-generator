@@ -110,45 +110,42 @@ def generate_protocol():
 
     # Narrative Einleitung (anonym, nur nicht-identifizierende Informationen)
     try:
-        intro_parts = []
+        intro = "PATIENTENSITUATION:\n"
+        intro += "─" * 50 + "\n"
+        
         sex = v.get('geschlecht')
         age = v.get('alter')
         found = v.get('auffindesituation')
         avpu = x.get('avpu')
         ereignis = s.get('ereignis')
+        
+        intro_desc = "Patient"
+        
+        if sex:
+            intro_desc += f" ({sex})"
+        if age and int(age) > 0:
+            intro_desc += f", {int(age)} Jahre alt"
+        
+        if found:
+            intro_desc += f"\nAuffindesituation: {found}"
 
-        intro = ""
-        if sex or (age and int(age) > 0) or found or avpu or ereignis:
-            intro = "PATIENTENSITUATION:\n"
-            intro += "─" * 50 + "\n"
-            intro_desc = "Patient"
-            if sex:
-                intro_desc += f" ({sex})"
-            if age and int(age) > 0:
-                intro_desc += f", {int(age)} Jahre alt"
-            
-            if found:
-                intro_desc += f"\nAuffindesituation: {found}"
+        # Bewusstseinszustand aus AVPU
+        if avpu and avpu != "Keine Angabe":
+            intro_desc += "\nBewusstseinszustand: "
+            if avpu == 'A':
+                intro_desc += "Wach, vollständig ansprechbar und orientiert"
+            elif avpu == 'V':
+                intro_desc += "Verbal ansprechbar"
+            elif avpu == 'P':
+                intro_desc += "Nur auf Schmerzreize ansprechbar"
+            elif avpu == 'U':
+                intro_desc += "Nicht ansprechbar (bewusstlos)"
 
-            # Bewusstseinszustand aus AVPU
-            if avpu and avpu != "Keine Angabe":
-                intro_desc += "\nBewusstseinszustand: "
-                if avpu == 'A':
-                    intro_desc += "Wach, vollständig ansprechbar und orientiert"
-                elif avpu == 'V':
-                    intro_desc += "Verbal ansprechbar"
-                elif avpu == 'P':
-                    intro_desc += "Nur auf Schmerzreize ansprechbar"
-                elif avpu == 'U':
-                    intro_desc += "Nicht ansprechbar (bewusstlos)"
+        if ereignis:
+            intro_desc += f"\n\nEinsatzmeldung: {ereignis}"
 
-            if ereignis:
-                intro_desc += f"\n\nEinsatzmeldung: {ereignis}"
-
-            intro = intro_desc + "\n\n"
-
-        if intro:
-            protocol += intro
+        intro += intro_desc + "\n\n"
+        protocol += intro
     except Exception:
         pass
 
@@ -171,27 +168,25 @@ def generate_protocol():
     spo2 = v.get("spo2")
     
     if x.get("atmung") and x.get("atmung") != "Keine Angabe":
-        b_section += f"B — ATMUNG:\n  Status: {x.get('atmung')}\n"
+        b_section = f"B — ATMUNG:\n  Status: {x.get('atmung')}\n"
         if x.get("atemgeraeusche"):
             b_section += f"  Atemgeräusche: {x.get('atemgeraeusche')}\n"
         if x.get("sauerstoff"):
             b_section += f"  Sauerstofftherapie: {x.get('sauerstoff')}\n"
-        
-        if af is not None and af != 0:
-            af_cat, af_val = categorize_af(af)
-            b_section += f"  Atemfrequenz: {af_cat}\n"
-        
-        if spo2 is not None and spo2 != 0:
-            s_cat, s_val = categorize_spo2(spo2)
-            b_section += f"  Sauerstoffsättigung: {s_cat}\n"
-    elif (af is not None and af != 0) or (spo2 is not None and spo2 != 0):
-        b_section = f"B — ATMUNG:\n"
-        if af is not None and af != 0:
-            af_cat, af_val = categorize_af(af)
-            b_section += f"  Atemfrequenz: {af_cat}\n"
-        if spo2 is not None and spo2 != 0:
-            s_cat, s_val = categorize_spo2(spo2)
-            b_section += f"  Sauerstoffsättigung: {s_cat}\n"
+    
+    # Atemfrequenz (immer hinzufügen, wenn vorhanden)
+    if af and af != 0:
+        if not b_section:
+            b_section = f"B — ATMUNG:\n"
+        af_cat, af_val = categorize_af(af)
+        b_section += f"  Atemfrequenz: {af_cat}\n"
+    
+    # SpO2 (immer hinzufügen, wenn vorhanden)
+    if spo2 and spo2 != 0:
+        if not b_section:
+            b_section = f"B — ATMUNG:\n"
+        s_cat, s_val = categorize_spo2(spo2)
+        b_section += f"  Sauerstoffsättigung: {s_cat}\n"
     
     if b_section:
         xabcde += "\n" + b_section
@@ -203,27 +198,25 @@ def generate_protocol():
     puls = v.get("puls")
     
     if x.get("haut") and x.get("haut") != "Keine Angabe":
-        c_section += f"C — ZIRKULATION (Kreislauf):\n  Hautzeichen: {x.get('haut')}\n"
+        c_section = f"C — ZIRKULATION (Kreislauf):\n  Hautzeichen: {x.get('haut')}\n"
         if x.get("rekap"):
             c_section += f"  Kapillare Füllung: {x.get('rekap')}\n"
         if x.get("pulsqualitaet"):
             c_section += f"  Pulsqualität: {x.get('pulsqualitaet')}\n"
-        
-        if rr_sys and rr_dia:
-            rr_cat, rr_vals = categorize_rr(rr_sys, rr_dia)
-            c_section += f"  Blutdruck: {rr_cat}\n"
-        
-        if puls is not None and puls != 0:
-            p_cat, p_val = categorize_puls(puls)
-            c_section += f"  Pulsfrequenz: {p_cat}\n"
-    elif (puls is not None and puls != 0) or (rr_sys and rr_dia):
-        c_section = f"C — ZIRKULATION (Kreislauf):\n"
-        if rr_sys and rr_dia:
-            rr_cat, rr_vals = categorize_rr(rr_sys, rr_dia)
-            c_section += f"  Blutdruck: {rr_cat}\n"
-        if puls is not None and puls != 0:
-            p_cat, p_val = categorize_puls(puls)
-            c_section += f"  Pulsfrequenz: {p_cat}\n"
+    
+    # Blutdruck (immer hinzufügen, wenn vorhanden)
+    if rr_sys and rr_dia:
+        if not c_section:
+            c_section = f"C — ZIRKULATION (Kreislauf):\n"
+        rr_cat, rr_vals = categorize_rr(rr_sys, rr_dia)
+        c_section += f"  Blutdruck: {rr_cat}\n"
+    
+    # Pulsfrequenz (immer hinzufügen, wenn vorhanden)
+    if puls and puls != 0:
+        if not c_section:
+            c_section = f"C — ZIRKULATION (Kreislauf):\n"
+        p_cat, p_val = categorize_puls(puls)
+        c_section += f"  Pulsfrequenz: {p_cat}\n"
     
     if c_section:
         xabcde += "\n" + c_section
@@ -234,75 +227,59 @@ def generate_protocol():
     bz = v.get("bz")
     
     if x.get("avpu") and x.get("avpu") != "Keine Angabe":
-        d_section += f"D — DISABILITY (Neurologischer Status):\n  Bewusstsein (AVPU): {x.get('avpu')}\n"
+        d_section = f"D — DISABILITY (Neurologischer Status):\n  Bewusstsein (AVPU): {x.get('avpu')}\n"
         if x.get("pupillen"):
             d_section += f"  Pupillen: {x.get('pupillen')}\n"
-        
-        if gcs:
-            try:
-                g = int(gcs)
-                if g == 15:
-                    g_cat = "Normal (vollständig orientiert)"
-                elif g >= 13:
-                    g_cat = "Leicht eingeschränkt"
-                elif g >= 9:
-                    g_cat = "Mäßig eingeschränkt"
-                else:
-                    g_cat = "Schwer eingeschränkt / Intubationskriterium"
-            except Exception:
-                g_cat = "Unbekannt"
-            d_section += f"  Glasgow Coma Scale: {g_cat}\n"
-        
-        if bz is not None and bz != 0:
-            bz_cat, bz_val = categorize_bz(bz)
-            d_section += f"  Blutzucker: {bz_cat}\n"
-    elif gcs or (bz is not None and bz != 0):
-        d_section = f"D — DISABILITY (Neurologischer Status):\n"
-        if gcs:
-            try:
-                g = int(gcs)
-                if g == 15:
-                    g_cat = "Normal (vollständig orientiert)"
-                elif g >= 13:
-                    g_cat = "Leicht eingeschränkt"
-                elif g >= 9:
-                    g_cat = "Mäßig eingeschränkt"
-                else:
-                    g_cat = "Schwer eingeschränkt / Intubationskriterium"
-            except Exception:
-                g_cat = "Unbekannt"
-            d_section += f"  Glasgow Coma Scale: {g_cat}\n"
-        if bz is not None and bz != 0:
-            bz_cat, bz_val = categorize_bz(bz)
-            d_section += f"  Blutzucker: {bz_cat}\n"
+    
+    # GCS (immer hinzufügen, wenn vorhanden)
+    if gcs:
+        if not d_section:
+            d_section = f"D — DISABILITY (Neurologischer Status):\n"
+        try:
+            g = int(gcs)
+            if g == 15:
+                g_cat = "Normal (vollständig orientiert)"
+            elif g >= 13:
+                g_cat = "Leicht eingeschränkt"
+            elif g >= 9:
+                g_cat = "Mäßig eingeschränkt"
+            else:
+                g_cat = "Schwer eingeschränkt / Intubationskriterium"
+        except Exception:
+            g_cat = "Unbekannt"
+        d_section += f"  Glasgow Coma Scale: {g_cat}\n"
+    
+    # Blutzucker (immer hinzufügen, wenn vorhanden)
+    if bz and bz != 0:
+        if not d_section:
+            d_section = f"D — DISABILITY (Neurologischer Status):\n"
+        bz_cat, bz_val = categorize_bz(bz)
+        d_section += f"  Blutzucker: {bz_cat}\n"
     
     if d_section:
         xabcde += "\n" + d_section
 
     # E - EXPOSURE mit Temperatur
     e_section = ""
+    temperatur = v.get("temperatur")
+    
     if x.get("bodycheck") and x.get("bodycheck") != "Keine Angabe":
-        e_section += f"E — EXPOSURE (Ganzkörperuntersuchung):\n  Status: {x.get('bodycheck')}\n"
+        e_section = f"E — EXPOSURE (Ganzkörperuntersuchung):\n  Status: {x.get('bodycheck')}\n"
         if x.get("bodycheck_text"):
             e_section += f"  Auffälligkeiten: {x.get('bodycheck_text')}\n"
         if x.get("unterkuehlung"):
             e_section += f"  Unterkühlung: {x.get('unterkuehlung')}\n"
         if x.get("verbrennung"):
             e_section += f"  Thermische Verletzungen: {x.get('verbrennung')}\n"
-        
-        # Körpertemperatur
-        temperatur = v.get("temperatur")
-        if temperatur is not None:
-            t_cat, t_val = categorize_temperature(temperatur)
-            e_section += f"  Körpertemperatur: {t_cat}\n"
-    else:
-        e_section = f"E — EXPOSURE (Ganzkörperuntersuchung):\n"
-        temperatur = v.get("temperatur")
-        if temperatur is not None:
-            t_cat, t_val = categorize_temperature(temperatur)
-            e_section += f"  Körpertemperatur: {t_cat}\n"
     
-    if e_section and e_section != f"E — EXPOSURE (Ganzkörperuntersuchung):\n":
+    # Körpertemperatur (immer hinzufügen, wenn vorhanden)
+    if temperatur is not None:
+        if not e_section:
+            e_section = f"E — EXPOSURE (Ganzkörperuntersuchung):\n"
+        t_cat, t_val = categorize_temperature(temperatur)
+        e_section += f"  Körpertemperatur: {t_cat}\n"
+    
+    if e_section:
         xabcde += "\n" + e_section
 
     if xabcde:
