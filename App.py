@@ -460,11 +460,11 @@ st.markdown(
     .header::before { content:""; position:absolute; inset:-20% auto auto -10%; width:220px; height:220px; background: radial-gradient(circle, rgba(255,255,255,0.25), transparent 70%); pointer-events:none; }
     .header-title { font-size:1.6rem; font-weight:900; letter-spacing:0.01em; }
     .header-sub { opacity:0.92; color:rgba(255,255,255,0.92); font-size:1.01rem; font-weight:600; }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+8) { padding: 0 2px; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+8) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.13); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)); color: var(--text); font-weight: 800; margin:0; box-shadow: 0 12px 24px rgba(2,8,24,0.28); transition: all 0.22s ease; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+8) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+8) > [data-testid="stButton"] > button:focus { outline:none; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+8) > [data-testid="stButton"] > button[kind='primary'] { color:#fff; border:none; box-shadow: 0 15px 30px rgba(64,124,255,0.3); }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+9) { padding: 0 2px; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+9) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.13); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)); color: var(--text); font-weight: 800; margin:0; box-shadow: 0 12px 24px rgba(2,8,24,0.28); transition: all 0.22s ease; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+9) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+9) > [data-testid="stButton"] > button:focus { outline:none; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+9) > [data-testid="stButton"] > button[kind='primary'] { color:#fff; border:none; box-shadow: 0 15px 30px rgba(64,124,255,0.3); }
         input, textarea, select { background:#0c1628 !important; color:var(--text) !important; border:1px solid rgba(255,255,255,0.08) !important; border-radius:12px !important; padding:10px 12px !important; font-size:0.95rem !important; }
         input:focus, textarea:focus, select:focus { border-color:var(--accent) !important; box-shadow: 0 0 0 3px rgba(75,140,255,0.18) !important; }
         [data-testid="stSelectbox"] { margin: 10px 0; }
@@ -625,6 +625,82 @@ def build_handover_text(patient_data):
     isbar.append(f"R: {rec}")
 
     return "\n".join(mist), "\n".join(isbar)
+
+
+def build_suspicion_assessment(patient_data):
+    v = patient_data.get("vitalwerte", {})
+    x = patient_data.get("xabcde", {})
+    s = patient_data.get("samplers", {})
+    o = patient_data.get("opqrst", {})
+
+    symptome = (s.get("symptome") or "").lower()
+    region = (o.get("region") or "").lower()
+    quality = (o.get("quality") or "").lower()
+    ereignis = (s.get("ereignis") or "").lower()
+
+    suspicions = []
+    recommendations = []
+
+    if any(k in symptome for k in ["atemnot", "dyspnoe", "luftnot"]) or x.get("atmung") in ["Dyspnoe", "Tachypnoe", "Apnoe"] or (_is_valid_value(v.get("spo2")) and int(v.get("spo2")) < 90):
+        suspicions.append("Respiratorische Insuffizienz / akute Dyspnoe")
+        recommendations.extend([
+            "Atemweg sichern und Atemarbeit engmaschig überwachen",
+            "Sauerstofftherapie titriert fortführen",
+            "Frühe Zielklinikmeldung bei persistierender Hypoxie"
+        ])
+
+    if any(k in symptome for k in ["brust", "thorax", "druck"]) or any(k in region for k in ["brust", "thorax"]) or "drückend" in quality:
+        suspicions.append("Akutes Koronarsyndrom (ACS) als Differentialdiagnose")
+        recommendations.extend([
+            "12-Kanal-EKG und Verlaufskontrolle",
+            "Schmerz- und Kreislaufmonitoring",
+            "Zeitkritischen Transport erwägen"
+        ])
+
+    if x.get("avpu") in ["P", "U"] or (_is_valid_value(v.get("gcs")) and int(v.get("gcs")) <= 8):
+        suspicions.append("Schwere neurologische Beeinträchtigung")
+        recommendations.extend([
+            "Atemwegsschutz priorisieren",
+            "Neurologischen Verlauf wiederholt dokumentieren",
+            "Zielklinik mit neurologischer Versorgung bevorzugen"
+        ])
+
+    if any(k in ereignis for k in ["sturz", "unfall", "trauma", "kollision"]) or (x.get("bodycheck") == "Auffällig"):
+        suspicions.append("Traumatische Genese / relevante Verletzung möglich")
+        recommendations.extend([
+            "Vollständigen Bodycheck und Blutungskontrolle sichern",
+            "Immobilisationsbedarf prüfen",
+            "Traumazentrum-Indikation evaluieren"
+        ])
+
+    if _is_valid_value(v.get("bz")) and float(v.get("bz")) < 70:
+        suspicions.append("Hypoglykämie")
+        recommendations.extend([
+            "Sofortige Glukosegabe gemäß SOP",
+            "Blutzucker nach Intervention kontrollieren"
+        ])
+    elif _is_valid_value(v.get("bz")) and float(v.get("bz")) > 250:
+        suspicions.append("Hyperglykäme Stoffwechsellage")
+        recommendations.extend([
+            "Hydratationsstatus und Vigilanz eng überwachen",
+            "Zeitnahe klinische Abklärung veranlassen"
+        ])
+
+    if _is_valid_value(o.get("nrs")) and int(o.get("nrs")) >= 7:
+        suspicions.append("Akutes Schmerzsyndrom")
+        recommendations.extend([
+            "Analgesiekonzept dokumentieren und Wirkung nachkontrollieren",
+            "Schmerzverlauf (NRS) seriell erfassen"
+        ])
+
+    if not suspicions:
+        suspicions.append("Aktuell keine klare Verdachtsdiagnose aus den verfügbaren Angaben ableitbar")
+        recommendations.append("Datensatz vervollständigen (xABCDE, SAMPLERS, OPQRST) und Verlauf engmaschig re-evaluieren")
+
+    # Duplikate entfernen, Reihenfolge behalten
+    dedup_recs = list(dict.fromkeys(recommendations))
+    dedup_susp = list(dict.fromkeys(suspicions))
+    return dedup_susp, dedup_recs
 # --------------------------------------------------
 # Navigation
 # --------------------------------------------------
@@ -642,6 +718,7 @@ nav_options = [
     "📋 SAMPLERS",
     "🔥 OPQRST",
     "⏱️ Maßnahmen",
+    "🔎 Verdacht",
     "🗣️ Übergabe",
     "📄 Protokoll"
 ]
@@ -649,7 +726,7 @@ nav_options = [
 # Navigation mit Streamlit-Buttons und Session-State
 nav_container = st.container()
 with nav_container:
-    cols_nav = st.columns([1] + [1]*7 + [1])
+    cols_nav = st.columns([1] + [1]*8 + [1])
     for i, opt in enumerate(nav_options):
         with cols_nav[i+1]:
             nav_type = "primary" if st.session_state['seite'] == opt else "secondary"
@@ -665,6 +742,7 @@ active_nav_palette = {
     "📋 SAMPLERS": ("#5f89ff", "#7a67f8"),
     "🔥 OPQRST": ("#ff8a4d", "#ff4f7b"),
     "⏱️ Maßnahmen": ("#2ac4df", "#3de99a"),
+    "🔎 Verdacht": ("#f3b33d", "#ff6f4a"),
     "🗣️ Übergabe": ("#7d6bff", "#5bbdff"),
     "📄 Protokoll": ("#4e72ff", "#5ac8ff"),
 }
@@ -672,7 +750,7 @@ start_color, end_color = active_nav_palette.get(seite, ("#4b8cff", "#ff7a7a"))
 st.markdown(
     f"""
     <style>
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+8) > [data-testid="stButton"] > button[kind='primary'] {{
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+9) > [data-testid="stButton"] > button[kind='primary'] {{
         background: linear-gradient(135deg, {start_color} 0%, {end_color} 100%);
     }}
     </style>
@@ -1276,6 +1354,35 @@ elif seite == "⏱️ Maßnahmen":
         [
             f"Timeline-Einträge: {len(m.get('timeline', []))}",
             f"Medikationen: {len(m.get('medikation', []))}",
+        ],
+    )
+
+# --------------------------------------------------
+# VERDACHT
+# --------------------------------------------------
+
+elif seite == "🔎 Verdacht":
+
+    st.header("🔎 Verdacht & Handlungshilfe")
+    st.warning("Hinweis: Dies sind unterstützende Verdachtshinweise und keine ärztliche Diagnose.")
+
+    suspicions, recommendations = build_suspicion_assessment(patient)
+
+    st.subheader("Mögliche Verdachtsdiagnosen")
+    for idx, item in enumerate(suspicions, start=1):
+        st.write(f"{idx}. {item}")
+
+    st.subheader("Empfohlene nächste Hilfsmaßnahmen")
+    for idx, rec in enumerate(recommendations, start=1):
+        st.write(f"{idx}. {rec}")
+
+    render_live_summary(
+        "Live-Zusammenfassung Verdacht",
+        [
+            f"Verdachte: {len(suspicions)}",
+            f"Empfehlungen: {len(recommendations)}",
+            f"AVPU: {patient.get('xabcde', {}).get('avpu')}" if _is_valid_value(patient.get('xabcde', {}).get('avpu')) else "",
+            f"SpO2: {patient.get('vitalwerte', {}).get('spo2')}" if _is_valid_value(patient.get('vitalwerte', {}).get('spo2')) else "",
         ],
     )
 
