@@ -363,26 +363,48 @@ def generate_protocol():
     if o.get('schmerz_vorhanden') == 'Ja' or o.get('nrs'):
         opqrst = ""
         if o.get('onset'):
-            opqrst += f"\nONSET (Beginn): {o.get('onset')}\n"
+            opqrst += f"\nONSET (Beginn): {o.get('onset')}"
+            if o.get('onset_text'):
+                opqrst += f" — {o.get('onset_text')}"
+            opqrst += "\n"
         if o.get('provocation'):
-            opqrst += f"PROVOCATION (Auslöser/Linderung): {o.get('provocation')}\n"
+            opqrst += f"PROVOCATION (Auslöser/Linderung): {o.get('provocation')}"
+            if o.get('provocation_text'):
+                opqrst += f" — {o.get('provocation_text')}"
+            opqrst += "\n"
         if o.get('quality'):
-            opqrst += f"QUALITY (Charakteristik): {o.get('quality')}\n"
+            opqrst += f"QUALITY (Charakteristik): {o.get('quality')}"
+            if o.get('quality_text'):
+                opqrst += f" — {o.get('quality_text')}"
+            opqrst += "\n"
         if o.get('region'):
             opqrst += f"REGION (Lokalisation): {o.get('region')}\n"
+        if o.get('radiation'):
+            opqrst += f"  Ausstrahlung: {o.get('radiation')}\n"
         if o.get('nrs'):
             try:
                 n = int(o.get('nrs'))
                 if n > 0:
                     opqrst += f"SEVERITY (Stärke): {n}/10 (Numerische Ratingskala)\n"
+                    if o.get('severity_desc'):
+                        opqrst += f"  Auswirkung: {o.get('severity_desc')}\n"
             except Exception:
                 pass
         if o.get('zeitverlauf'):
             opqrst += f"TIME (Zeitverlauf): {o.get('zeitverlauf')}\n"
+            if o.get('dauer'):
+                opqrst += f"  Dauer: {o.get('dauer')}\n"
         if opqrst:
             protocol += "SCHMERZASSESSMENT (OPQRST)\n"
             protocol += "=" * 50 + "\n"
             protocol += opqrst + "\n"
+
+    # Kurzbericht
+    kurzbericht = v.get('kurzbericht', '').strip()
+    if kurzbericht:
+        protocol += "EINSATZ-KURZBERICHT\n"
+        protocol += "=" * 50 + "\n"
+        protocol += kurzbericht + "\n\n"
 
     return protocol
 # --------------------------------------------------
@@ -434,7 +456,26 @@ st.markdown(
         </script>
         <style>
         /* Inputs */
-        input, textarea { background:#081029; color:var(--text) !important; border:1px solid rgba(255,255,255,0.04) }
+        input, textarea { background:#081029; color:var(--text) !important; border:1px solid rgba(255,255,255,0.04); border-radius:8px; padding:10px !important; font-size:0.95rem }
+        input:focus, textarea:focus { border-color:#1e73ff !important; box-shadow: 0 0 8px rgba(30,115,255,0.3) !important }
+        select { background:#081029; color:var(--text) !important; border:1px solid rgba(255,255,255,0.04); border-radius:8px; padding:10px !important }
+        /* Selectbox styling */
+        [data-testid="stSelectbox"] { margin: 12px 0 }
+        /* Radio button styling */
+        [data-testid="stRadio"] > label { padding:8px; border-radius:8px; cursor:pointer; transition: all 0.2s ease }
+        [data-testid="stRadio"] > label:hover { background: rgba(255,255,255,0.02) }
+        /* Slider styling */
+        [data-testid="stSlider"] > div > div > div { border-radius:8px }
+        /* Checkbox styling */
+        [data-testid="stCheckbox"] > label { cursor:pointer; transition: all 0.2s ease }
+        /* Number input */
+        [data-testid="stNumberInput"] { margin: 12px 0 }
+        /* Text area */
+        [data-testid="stTextArea"] { margin: 12px 0 }
+        /* Subheader styling */
+        h3 { color:#1e73ff; margin-top:20px; margin-bottom:12px; border-bottom:1px solid rgba(30,115,255,0.3); padding-bottom:8px }
+        /* Divider */
+        hr { border-color: rgba(255,255,255,0.05) !important; margin: 24px 0 }
         /* Hide sidebar completely */
         section[data-testid='stSidebar']{ display:none; }
         /* Main content padding */
@@ -557,93 +598,141 @@ seite = st.session_state['seite']
 
 if seite == "❤️ Vitalwerte":
 
-    st.header("❤️ Vitalwerte")
-
-    c1, c2, c3, c4 = st.columns(4)
-
+    st.header("❤️ Vitalwerte & Demographie")
+    
+    # --- Blutdruck ---
+    st.subheader("Blutdruck (RR)")
+    col_rr1, col_rr2 = st.columns(2)
+    
+    with col_rr1:
+        rr_option = st.radio(
+            "Wie möchtest du den Blutdruck eingeben?",
+            ["Zahlen eingeben", "Auswählen"],
+            key="rr_option",
+            horizontal=True
+        )
+    
+    if rr_option == "Zahlen eingeben":
+        col_sys, col_dia = st.columns(2)
+        with col_sys:
+            patient["vitalwerte"]["rr_sys"] = st.number_input("RR systolisch", 0, 300, 0)
+        with col_dia:
+            patient["vitalwerte"]["rr_dia"] = st.number_input("RR diastolisch", 0, 200, 0)
+    else:
+        rr_cat = st.selectbox(
+            "Blutdruck-Kategorie",
+            ["", "Hypotonie (<90/60)", "Normal (90-140/60-90)", "Erhöht (140-160/90-100)", "Hypertonie (>160/100)"],
+            key="rr_category"
+        )
+        if rr_cat == "Hypotonie (<90/60)":
+            patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 85, 55
+        elif rr_cat == "Normal (90-140/60-90)":
+            patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 120, 80
+        elif rr_cat == "Erhöht (140-160/90-100)":
+            patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 150, 95
+        elif rr_cat == "Hypertonie (>160/100)":
+            patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 170, 105
+    
+    st.divider()
+    
+    # --- Puls, SpO2, BZ ---
+    st.subheader("Weitere Vitalwerte")
+    c1, c2, c3 = st.columns(3)
+    
     with c1:
-
-        patient["vitalwerte"]["rr_sys"] = st.number_input(
-            "RR systolisch",
-            0,
-            300,
-            0
-        )
-
-        patient["vitalwerte"]["rr_dia"] = st.number_input(
-            "RR diastolisch",
-            0,
-            200,
-            0
-        )
-
+        patient["vitalwerte"]["puls"] = st.number_input("Pulsfrequenz (/min)", 0, 250, 0)
+    
     with c2:
-
-        patient["vitalwerte"]["puls"] = st.number_input(
-            "Puls",
-            0,
-            250,
-            0
-        )
-
-        patient["vitalwerte"]["spo2"] = st.number_input(
-            "SpO₂",
-            0,
-            100,
-            0
-        )
-
+        patient["vitalwerte"]["spo2"] = st.number_input("SpO₂ (%)", 0, 100, 0)
+    
     with c3:
-
-        patient["vitalwerte"]["af"] = st.number_input(
-            "Atemfrequenz",
-            0,
-            60,
-            0
+        patient["vitalwerte"]["bz"] = st.number_input("Blutzucker (mg/dL)", 0, 1000, 0)
+    
+    st.divider()
+    
+    # --- Atemfrequenz ---
+    st.subheader("Atemfrequenz (AF)")
+    af_option = st.radio(
+        "Wie möchtest du die Atemfrequenz eingeben?",
+        ["Zahlen eingeben", "Auswählen"],
+        key="af_option",
+        horizontal=True
+    )
+    
+    if af_option == "Zahlen eingeben":
+        patient["vitalwerte"]["af"] = st.number_input("AF (/min)", 0, 60, 0)
+    else:
+        af_cat = st.selectbox(
+            "Atemfrequenz-Kategorie",
+            ["", "Bradypnoe (<10)", "Normal (10-20)", "Tachypnoe (20-30)", "Schwere Tachypnoe (>30)"],
+            key="af_category"
         )
-
-        patient["vitalwerte"]["bz"] = st.number_input(
-            "Blutzucker",
-            0,
-            1000,
-            0
+        if af_cat == "Bradypnoe (<10)":
+            patient["vitalwerte"]["af"] = 8
+        elif af_cat == "Normal (10-20)":
+            patient["vitalwerte"]["af"] = 15
+        elif af_cat == "Tachypnoe (20-30)":
+            patient["vitalwerte"]["af"] = 25
+        elif af_cat == "Schwere Tachypnoe (>30)":
+            patient["vitalwerte"]["af"] = 35
+    
+    st.divider()
+    
+    # --- Temperatur ---
+    st.subheader("Körpertemperatur")
+    temp_gemessen = st.checkbox("Temperatur gemessen", key="temp_checkbox")
+    
+    if temp_gemessen:
+        temp_option = st.radio(
+            "Wie möchtest du die Temperatur eingeben?",
+            ["Zahlen eingeben", "Auswählen"],
+            key="temp_option",
+            horizontal=True
         )
-
-    with c4:
-
-        temp_gemessen = st.checkbox("Temperatur gemessen")
-
-        if temp_gemessen:
-
+        
+        if temp_option == "Zahlen eingeben":
             patient["vitalwerte"]["temperatur"] = st.number_input(
-
-                "Temperatur",
-
+                "Temperatur (°C)",
                 min_value=30.0,
-
                 max_value=45.0,
-
                 value=36.5,
-
                 step=0.1
-
             )
-
-        patient["vitalwerte"]["gcs"] = st.number_input(
-            "GCS",
-            3,
-            15,
-            15
-        )
-
-    # Demographie / Auffindesituation (keine PII: kein Name, kein Geburtsdatum)
-    with c4:
+        else:
+            temp_cat = st.selectbox(
+                "Temperatur-Kategorie",
+                ["", "Unterkühlung (<36°C)", "Normal (36-37.5°C)", "Erhöht (37.5-38°C)", "Fieber (>38°C)"],
+                key="temp_category"
+            )
+            if temp_cat == "Unterkühlung (<36°C)":
+                patient["vitalwerte"]["temperatur"] = 35.5
+            elif temp_cat == "Normal (36-37.5°C)":
+                patient["vitalwerte"]["temperatur"] = 37.0
+            elif temp_cat == "Erhöht (37.5-38°C)":
+                patient["vitalwerte"]["temperatur"] = 37.7
+            elif temp_cat == "Fieber (>38°C)":
+                patient["vitalwerte"]["temperatur"] = 38.5
+    
+    st.divider()
+    
+    # --- GCS ---
+    st.subheader("Neurologischer Status")
+    patient["vitalwerte"]["gcs"] = st.number_input("Glasgow Coma Scale (GCS)", 3, 15, 15)
+    
+    st.divider()
+    
+    # --- Demographie ---
+    st.subheader("Patientendemographie")
+    d1, d2, d3 = st.columns(3)
+    
+    with d1:
         patient["vitalwerte"]["geschlecht"] = st.selectbox(
             "Geschlecht",
             ["", "männlich", "weiblich", "divers", "Unbekannt"],
             key="geschlecht"
         )
-
+    
+    with d2:
         patient["vitalwerte"]["alter"] = st.number_input(
             "Alter (Jahre)",
             min_value=0,
@@ -651,12 +740,24 @@ if seite == "❤️ Vitalwerte":
             value=0,
             key="alter"
         )
-
+    
+    with d3:
         patient["vitalwerte"]["auffindesituation"] = st.selectbox(
             "Auffindesituation",
             ["", "sitzend vorgefunden", "liegend vorgefunden", "stehend vorgefunden", "am Boden", "auf Stuhl/Sofa", "in häuslicher Umgebung"],
             key="auffindesituation"
         )
+    
+    st.divider()
+    
+    # --- Kurzbericht ---
+    st.subheader("📝 Einsatz-Kurzbericht")
+    patient["vitalwerte"]["kurzbericht"] = st.text_area(
+        "Beschreibung des Einsatzes (optional)",
+        height=150,
+        key="kurzbericht",
+        placeholder="z.B. Sturz aus Höhe, Verkehrsunfall, Schmerzen seit 2 Stunden, ..."
+    )
 
 # --------------------------------------------------
 # xABCDE
@@ -1105,9 +1206,115 @@ elif seite == "📋 SAMPLERS":
         ]
 
     )
-# -----------------------------
+
+# --------------------------------------------------
+# OPQRST
+# --------------------------------------------------
+
+elif seite == "🔥 OPQRST":
+
+    st.header("🔥 OPQRST – Schmerzassessment")
+    
+    st.write("Detaillierte Schmerzerfassung für Schmerzpatienten")
+    
+    # Schmerz vorhanden?
+    patient["opqrst"]["schmerz_vorhanden"] = st.radio(
+        "Schmerzen vorhanden?",
+        ["Nein", "Ja"],
+        key="opqrst_schmerz",
+        horizontal=True
+    )
+    
+    if patient["opqrst"]["schmerz_vorhanden"] == "Ja":
+        
+        st.divider()
+        
+        # O - Onset
+        st.subheader("O – Onset (Beginn des Schmerzes)")
+        patient["opqrst"]["onset"] = st.selectbox(
+            "Beginn",
+            ["", "Plötzlich", "Allmählich", "Progressiv verschlimmernd", "Wiederkehrend"],
+            key="opqrst_onset"
+        )
+        patient["opqrst"]["onset_text"] = st.text_input(
+            "Zusätzliche Information zu Beginn",
+            key="opqrst_onset_text"
+        )
+        
+        st.divider()
+        
+        # P - Provocation/Palliation
+        st.subheader("P – Provocation/Palliation (Auslöser und Linderung)")
+        patient["opqrst"]["provocation"] = st.selectbox(
+            "Was verschlimmert oder lindert den Schmerz?",
+            ["", "Bewegung verschlimmert", "Ruhe lindert", "Tiefe Atmung verschlimmert", "Druck lindert", "Wärme lindert", "Kälte lindert", "Nichts lindert"],
+            key="opqrst_provocation"
+        )
+        patient["opqrst"]["provocation_text"] = st.text_input(
+            "Genauere Beschreibung",
+            key="opqrst_provocation_text"
+        )
+        
+        st.divider()
+        
+        # Q - Quality
+        st.subheader("Q – Quality (Charakteristik des Schmerzes)")
+        patient["opqrst"]["quality"] = st.selectbox(
+            "Wie beschreibt der Patient den Schmerz?",
+            ["", "Stechend/Messerscharf", "Dumpf", "Drückend", "Reißend", "Brennend", "Ziehend", "Klopfend", "Rauschhaft"],
+            key="opqrst_quality"
+        )
+        patient["opqrst"]["quality_text"] = st.text_input(
+            "Patienteneigene Beschreibung",
+            key="opqrst_quality_text"
+        )
+        
+        st.divider()
+        
+        # R - Region/Radiation
+        st.subheader("R – Region/Radiation (Ort und Ausbreitung)")
+        patient["opqrst"]["region"] = st.text_input(
+            "Wo tut es weh?",
+            key="opqrst_region"
+        )
+        patient["opqrst"]["radiation"] = st.text_input(
+            "Ausstrahlung (Breitet sich der Schmerz aus?)",
+            key="opqrst_radiation"
+        )
+        
+        st.divider()
+        
+        # S - Severity
+        st.subheader("S – Severity (Stärke des Schmerzes)")
+        patient["opqrst"]["nrs"] = st.slider(
+            "Numerische Rating-Skala (NRS) 0-10",
+            0, 10, 0,
+            key="opqrst_nrs"
+        )
+        patient["opqrst"]["severity_desc"] = st.selectbox(
+            "Auswirkung auf Aktivitäten",
+            ["", "Kein Schmerz (0)", "Minimal (1-3)", "Mäßig (4-6)", "Schwer (7-8)", "Sehr schwer (9-10)"],
+            key="opqrst_severity"
+        )
+        
+        st.divider()
+        
+        # T - Time
+        st.subheader("T – Time (Zeitverlauf)")
+        patient["opqrst"]["zeitverlauf"] = st.selectbox(
+            "Zeitlicher Verlauf",
+            ["", "Konstant", "Intermittierend", "Sich verschlimmernd", "Sich verbessernd", "Gleichbleibend"],
+            key="opqrst_zeitverlauf"
+        )
+        patient["opqrst"]["dauer"] = st.text_input(
+            "Wie lange besteht der Schmerz bereits?",
+            placeholder="z.B. 2 Stunden, seit heute Morgen, ...",
+            key="opqrst_dauer"
+        )
+
+# --------------------------------------------------
 # PROTOKOLL
-# -----------------------------
+# --------------------------------------------------
 
 elif seite == "📄 Protokoll":
 
