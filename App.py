@@ -107,6 +107,7 @@ def generate_protocol():
     x = patient.get("xabcde", {})
     s = patient.get("samplers", {})
     o = patient.get("opqrst", {})
+    m = patient.get("massnahmen", {})
 
     # Narrative Einleitung (anonym, nur nicht-identifizierende Informationen)
     try:
@@ -374,6 +375,66 @@ def generate_protocol():
         protocol += "=" * 50 + "\n"
         protocol += xabcde + "\n"
 
+    # Klinischer Verlauf als Fließtext
+    try:
+        narrative = []
+        if s.get("symptome"):
+            narrative.append(f"Leitsymptomatisch zeigte sich {s.get('symptome')}. ")
+        if x.get("atemweg") and x.get("atemweg") != "Keine Angabe":
+            narrative.append(f"Der Atemweg war {x.get('atemweg').lower()}. ")
+        if x.get("atmung") and x.get("atmung") != "Keine Angabe":
+            narrative.append(f"Die Atmung wurde als {x.get('atmung').lower()} eingeschätzt. ")
+        if x.get("haut") and x.get("haut") != "Keine Angabe":
+            narrative.append(f"Kreislaufbezogen zeigte sich die Haut {x.get('haut').lower()}. ")
+        if x.get("avpu") and x.get("avpu") != "Keine Angabe":
+            narrative.append(f"Neurologisch ergab sich ein AVPU-Status {x.get('avpu')}. ")
+        if o.get("nrs") and int(o.get("nrs", 0)) > 0:
+            narrative.append(f"Die Schmerzintensität wurde mit NRS {o.get('nrs')}/10 angegeben. ")
+        if narrative:
+            protocol += "KLINISCHER VERLAUF (NARRATIV)\n"
+            protocol += "=" * 50 + "\n"
+            protocol += "".join(narrative).strip() + "\n\n"
+    except Exception:
+        pass
+
+    # Maßnahmen-Timeline
+    timeline_entries = m.get("timeline", [])
+    if timeline_entries:
+        protocol += "MAßNAHMEN-TIMELINE\n"
+        protocol += "=" * 50 + "\n"
+        for entry in timeline_entries:
+            zeit = entry.get("zeit", "--:--")
+            massnahme = entry.get("massnahme", "Maßnahme")
+            wirkung = entry.get("wirkung", "")
+            line = f"{zeit} - {massnahme}"
+            if wirkung:
+                line += f" | Wirkung: {wirkung}"
+            protocol += line + "\n"
+        protocol += "\n"
+
+    # Medikationsmodul
+    meds = m.get("medikation", [])
+    if meds:
+        protocol += "MEDIKATION\n"
+        protocol += "=" * 50 + "\n"
+        for med in meds:
+            zeit = med.get("zeit", "--:--")
+            name = med.get("name", "Unbekannt")
+            dosis = med.get("dosis", "k.A.")
+            weg = med.get("weg", "k.A.")
+            wirkung = med.get("wirkung", "")
+            line = f"{zeit} - {name}, Dosis: {dosis}, Applikation: {weg}"
+            if wirkung:
+                line += f", Wirkung: {wirkung}"
+            protocol += line + "\n"
+        protocol += "\n"
+
+    mist_text, isbar_text = build_handover_text(patient)
+    protocol += "ÜBERGABE (MIST / ISBAR)\n"
+    protocol += "=" * 50 + "\n"
+    protocol += "MIST:\n" + mist_text + "\n\n"
+    protocol += "ISBAR:\n" + isbar_text + "\n\n"
+
     # Kurzbericht
     kurzbericht = v.get('kurzbericht', '').strip()
     if kurzbericht:
@@ -405,11 +466,11 @@ st.markdown(
     .header::before { content:""; position:absolute; inset:-20% auto auto -10%; width:220px; height:220px; background: radial-gradient(circle, rgba(255,255,255,0.25), transparent 70%); pointer-events:none; }
     .header-title { font-size:1.6rem; font-weight:900; letter-spacing:0.01em; }
     .header-sub { opacity:0.92; color:rgba(255,255,255,0.92); font-size:1.01rem; font-weight:600; }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) { padding: 0 2px; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.13); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)); color: var(--text); font-weight: 800; margin:0; box-shadow: 0 12px 24px rgba(2,8,24,0.28); transition: all 0.22s ease; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button:focus { outline:none; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button[kind='primary'] { color:#fff; border:none; box-shadow: 0 15px 30px rgba(64,124,255,0.3); }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+8) { padding: 0 2px; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+8) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.13); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)); color: var(--text); font-weight: 800; margin:0; box-shadow: 0 12px 24px rgba(2,8,24,0.28); transition: all 0.22s ease; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+8) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+8) > [data-testid="stButton"] > button:focus { outline:none; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+8) > [data-testid="stButton"] > button[kind='primary'] { color:#fff; border:none; box-shadow: 0 15px 30px rgba(64,124,255,0.3); }
         input, textarea, select { background:#0c1628 !important; color:var(--text) !important; border:1px solid rgba(255,255,255,0.08) !important; border-radius:12px !important; padding:10px 12px !important; font-size:0.95rem !important; }
         input:focus, textarea:focus, select:focus { border-color:var(--accent) !important; box-shadow: 0 0 0 3px rgba(75,140,255,0.18) !important; }
         [data-testid="stSelectbox"] { margin: 10px 0; }
@@ -444,11 +505,23 @@ if "patient" not in st.session_state:
 
         "samplers": {},
 
-        "opqrst": {}
+        "opqrst": {},
+
+        "massnahmen": {
+            "timeline": [],
+            "medikation": []
+        }
 
     }
 
 patient = st.session_state.patient
+patient.setdefault("vitalwerte", {})
+patient.setdefault("xabcde", {})
+patient.setdefault("samplers", {})
+patient.setdefault("opqrst", {})
+patient.setdefault("massnahmen", {"timeline": [], "medikation": []})
+patient["massnahmen"].setdefault("timeline", [])
+patient["massnahmen"].setdefault("medikation", [])
 # --------------------------------------------------
 # Hilfsfunktionen
 # --------------------------------------------------
@@ -499,6 +572,65 @@ def checkbox_field(section, key, label):
     )
     patient[section][key] = value
     return value
+
+
+def _is_valid_value(value):
+    return value not in [None, "", "Keine Angabe", 0]
+
+
+def render_live_summary(title, lines):
+    valid_lines = [line for line in lines if line]
+    if valid_lines:
+        st.caption(f"{title}: " + " | ".join(valid_lines[:5]))
+    else:
+        st.caption(f"{title}: Noch keine relevanten Angaben")
+
+
+def build_handover_text(patient_data):
+    v = patient_data.get("vitalwerte", {})
+    x = patient_data.get("xabcde", {})
+    s = patient_data.get("samplers", {})
+    o = patient_data.get("opqrst", {})
+    m = patient_data.get("massnahmen", {})
+
+    mist = []
+    mechanism = s.get("ereignis") or v.get("auffindesituation") or "Kein klares Ereignis dokumentiert"
+    injuries = x.get("bodycheck_text") if x.get("bodycheck") == "Auffällig" else "Keine relevanten Verletzungen dokumentiert"
+    signs = []
+    if _is_valid_value(v.get("spo2")):
+        signs.append(f"SpO2 {v.get('spo2')}")
+    if _is_valid_value(v.get("af")):
+        signs.append(f"AF {v.get('af')}")
+    if _is_valid_value(v.get("puls")):
+        signs.append(f"Puls {v.get('puls')}")
+    if _is_valid_value(v.get("rr_sys")) and _is_valid_value(v.get("rr_dia")):
+        signs.append(f"RR {v.get('rr_sys')}/{v.get('rr_dia')}")
+    treatment = []
+    for event in m.get("timeline", []):
+        if event.get("massnahme"):
+            treatment.append(f"{event.get('zeit', '--:--')} {event.get('massnahme')}")
+    mist.append(f"M: {mechanism}")
+    mist.append(f"I: {injuries}")
+    mist.append("S: " + (", ".join(signs) if signs else "Keine Vitalzeichen dokumentiert"))
+    mist.append("T: " + ("; ".join(treatment[-4:]) if treatment else "Keine Maßnahmen dokumentiert"))
+
+    isbar = []
+    identity = "Patient"
+    if _is_valid_value(v.get("geschlecht")):
+        identity += f", {v.get('geschlecht')}"
+    if _is_valid_value(v.get("alter")):
+        identity += f", {v.get('alter')} Jahre"
+    isbar.append(f"I: {identity}")
+    isbar.append(f"S: {s.get('symptome') or 'Kein Leitsymptom dokumentiert'}")
+    isbar.append(f"B: {s.get('vorgeschichte') or 'Keine relevante Vorgeschichte dokumentiert'}")
+    assess = x.get("atmung") or x.get("atemweg") or x.get("avpu") or "Keine strukturierte Einschätzung dokumentiert"
+    isbar.append(f"A: {assess}")
+    rec = "Transport in geeignete Zielklinik und strukturierte Übergabe empfohlen"
+    if o.get("nrs") and int(o.get("nrs", 0)) >= 7:
+        rec = "Hohe Schmerzintensität, zeitnahe ärztliche Weiterbehandlung empfohlen"
+    isbar.append(f"R: {rec}")
+
+    return "\n".join(mist), "\n".join(isbar)
 # --------------------------------------------------
 # Navigation
 # --------------------------------------------------
@@ -515,13 +647,15 @@ nav_options = [
     "🩺 xABCDE",
     "📋 SAMPLERS",
     "🔥 OPQRST",
+    "⏱️ Maßnahmen",
+    "🗣️ Übergabe",
     "📄 Protokoll"
 ]
 
 # Navigation mit Streamlit-Buttons und Session-State
 nav_container = st.container()
 with nav_container:
-    cols_nav = st.columns([1, 1, 1, 1, 1, 1, 1])
+    cols_nav = st.columns([1] + [1]*7 + [1])
     for i, opt in enumerate(nav_options):
         with cols_nav[i+1]:
             nav_type = "primary" if st.session_state['seite'] == opt else "secondary"
@@ -536,13 +670,15 @@ active_nav_palette = {
     "🩺 xABCDE": ("#4b8cff", "#35d8a6"),
     "📋 SAMPLERS": ("#5f89ff", "#7a67f8"),
     "🔥 OPQRST": ("#ff8a4d", "#ff4f7b"),
+    "⏱️ Maßnahmen": ("#2ac4df", "#3de99a"),
+    "🗣️ Übergabe": ("#7d6bff", "#5bbdff"),
     "📄 Protokoll": ("#4e72ff", "#5ac8ff"),
 }
 start_color, end_color = active_nav_palette.get(seite, ("#4b8cff", "#ff7a7a"))
 st.markdown(
     f"""
     <style>
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button[kind='primary'] {{
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+8) > [data-testid="stButton"] > button[kind='primary'] {{
         background: linear-gradient(135deg, {start_color} 0%, {end_color} 100%);
     }}
     </style>
@@ -711,6 +847,17 @@ if seite == "❤️ Vitalwerte":
         placeholder="z.B. Sturz aus Höhe, Verkehrsunfall, Schmerzen seit 2 Stunden, ..."
     )
 
+    render_live_summary(
+        "Live-Zusammenfassung Vitalwerte",
+        [
+            f"Geschlecht: {patient['vitalwerte'].get('geschlecht')}" if _is_valid_value(patient['vitalwerte'].get('geschlecht')) else "",
+            f"Alter: {patient['vitalwerte'].get('alter')}" if _is_valid_value(patient['vitalwerte'].get('alter')) else "",
+            f"SpO2: {patient['vitalwerte'].get('spo2')}" if _is_valid_value(patient['vitalwerte'].get('spo2')) else "",
+            f"Puls: {patient['vitalwerte'].get('puls')}" if _is_valid_value(patient['vitalwerte'].get('puls')) else "",
+            f"GCS: {patient['vitalwerte'].get('gcs')}" if _is_valid_value(patient['vitalwerte'].get('gcs')) else "",
+        ],
+    )
+
 # --------------------------------------------------
 # xABCDE
 # --------------------------------------------------
@@ -836,6 +983,17 @@ elif seite == "🩺 xABCDE":
             "Verbrennung",
             key="verbrennung"
         )
+
+    render_live_summary(
+        "Live-Zusammenfassung xABCDE",
+        [
+            f"A: {patient['xabcde'].get('atemweg')}" if _is_valid_value(patient['xabcde'].get('atemweg')) else "",
+            f"B: {patient['xabcde'].get('atmung')}" if _is_valid_value(patient['xabcde'].get('atmung')) else "",
+            f"C: {patient['xabcde'].get('haut')}" if _is_valid_value(patient['xabcde'].get('haut')) else "",
+            f"D: AVPU {patient['xabcde'].get('avpu')}" if _is_valid_value(patient['xabcde'].get('avpu')) else "",
+            f"E: {patient['xabcde'].get('bodycheck')}" if _is_valid_value(patient['xabcde'].get('bodycheck')) else "",
+        ],
+    )
     # --------------------------------------------------
 # SAMPLERS
 # --------------------------------------------------
@@ -854,6 +1012,7 @@ elif seite == "📋 SAMPLERS":
         with col:
             if st.button(label, key=f"samplers_nav_{label}", use_container_width=True):
                 st.session_state["samplers_selected"] = label
+                st.rerun()
 
     samplers_selected = st.session_state["samplers_selected"]
     st.info(f"Aktive SAMPLERS-Sektion: {samplers_selected}")
@@ -925,6 +1084,17 @@ elif seite == "📋 SAMPLERS":
             ["Nicht relevant", "Nein", "Ja", "Unbekannt"]
         )
 
+    render_live_summary(
+        "Live-Zusammenfassung SAMPLERS",
+        [
+            f"Symptome: {patient['samplers'].get('symptome')}" if _is_valid_value(patient['samplers'].get('symptome')) else "",
+            f"Allergien: {patient['samplers'].get('allergien')}" if _is_valid_value(patient['samplers'].get('allergien')) else "",
+            f"Vorgeschichte: {patient['samplers'].get('vorgeschichte')}" if _is_valid_value(patient['samplers'].get('vorgeschichte')) else "",
+            f"Letzte Mahlzeit: {patient['samplers'].get('letzte_mahlzeit')}" if _is_valid_value(patient['samplers'].get('letzte_mahlzeit')) else "",
+            f"Ereignis: {patient['samplers'].get('ereignis')}" if _is_valid_value(patient['samplers'].get('ereignis')) else "",
+        ],
+    )
+
 # --------------------------------------------------
 # OPQRST
 # --------------------------------------------------
@@ -951,6 +1121,7 @@ elif seite == "🔥 OPQRST":
             with col:
                 if st.button(label, key=f"opqrst_nav_{label}", use_container_width=True):
                     st.session_state["opqrst_selected"] = label
+                    st.rerun()
 
         opqrst_selected = st.session_state["opqrst_selected"]
         st.info(f"Aktive OPQRST-Sektion: {opqrst_selected}")
@@ -1027,6 +1198,118 @@ elif seite == "🔥 OPQRST":
                 placeholder="z.B. 2 Stunden, seit heute Morgen, ...",
                 key="opqrst_dauer"
             )
+
+    render_live_summary(
+        "Live-Zusammenfassung OPQRST",
+        [
+            f"Onset: {patient['opqrst'].get('onset')}" if _is_valid_value(patient['opqrst'].get('onset')) else "",
+            f"Provocation: {patient['opqrst'].get('provocation')}" if _is_valid_value(patient['opqrst'].get('provocation')) else "",
+            f"Quality: {patient['opqrst'].get('quality')}" if _is_valid_value(patient['opqrst'].get('quality')) else "",
+            f"Region: {patient['opqrst'].get('region')}" if _is_valid_value(patient['opqrst'].get('region')) else "",
+            f"NRS: {patient['opqrst'].get('nrs')}" if _is_valid_value(patient['opqrst'].get('nrs')) else "",
+        ],
+    )
+
+# --------------------------------------------------
+# MASSNAHMEN
+# --------------------------------------------------
+
+elif seite == "⏱️ Maßnahmen":
+
+    st.header("⏱️ Maßnahmen & Timeline")
+
+    m = patient["massnahmen"]
+
+    st.subheader("🕒 Maßnahmen-Timeline")
+    t1, t2, t3 = st.columns([1, 2, 2])
+    with t1:
+        timeline_zeit = st.text_input("Uhrzeit", placeholder="14:32", key="timeline_zeit")
+    with t2:
+        timeline_massnahme = st.text_input("Maßnahme", placeholder="z.B. O2 über Maske", key="timeline_massnahme")
+    with t3:
+        timeline_wirkung = st.text_input("Wirkung", placeholder="z.B. Dyspnoe rückläufig", key="timeline_wirkung")
+
+    if st.button("Maßnahme zur Timeline hinzufügen", key="add_timeline", use_container_width=True):
+        if _is_valid_value(timeline_massnahme):
+            m["timeline"].append({
+                "zeit": timeline_zeit if _is_valid_value(timeline_zeit) else datetime.now().strftime("%H:%M"),
+                "massnahme": timeline_massnahme,
+                "wirkung": timeline_wirkung,
+            })
+            st.success("Maßnahme hinzugefügt")
+            st.rerun()
+        else:
+            st.warning("Bitte mindestens eine Maßnahme eingeben.")
+
+    if m.get("timeline"):
+        for idx, entry in enumerate(m["timeline"], start=1):
+            st.write(f"{idx}. {entry.get('zeit','--:--')} - {entry.get('massnahme','')} | Wirkung: {entry.get('wirkung','-')}")
+
+    st.divider()
+    st.subheader("💊 Medikationsmodul")
+    med1, med2, med3, med4, med5 = st.columns([2, 1, 1, 1, 2])
+    with med1:
+        med_name = st.text_input("Medikament", placeholder="z.B. Morphin", key="med_name")
+    with med2:
+        med_dosis = st.text_input("Dosis", placeholder="z.B. 2 mg", key="med_dosis")
+    with med3:
+        med_weg = st.selectbox("Applikation", ["i.v.", "i.m.", "p.o.", "intranasal", "inhalativ", "sonstiges"], key="med_weg")
+    with med4:
+        med_zeit = st.text_input("Uhrzeit", placeholder="14:35", key="med_zeit")
+    with med5:
+        med_wirkung = st.text_input("Wirkung", placeholder="z.B. Schmerzreduktion", key="med_wirkung")
+
+    if st.button("Medikation hinzufügen", key="add_medikation", use_container_width=True):
+        if _is_valid_value(med_name):
+            m["medikation"].append({
+                "name": med_name,
+                "dosis": med_dosis,
+                "weg": med_weg,
+                "zeit": med_zeit if _is_valid_value(med_zeit) else datetime.now().strftime("%H:%M"),
+                "wirkung": med_wirkung,
+            })
+            st.success("Medikation hinzugefügt")
+            st.rerun()
+        else:
+            st.warning("Bitte ein Medikament eintragen.")
+
+    if m.get("medikation"):
+        for idx, med in enumerate(m["medikation"], start=1):
+            st.write(f"{idx}. {med.get('zeit','--:--')} - {med.get('name','')} ({med.get('dosis','k.A.')}, {med.get('weg','k.A.')}) | Wirkung: {med.get('wirkung','-')}")
+
+    render_live_summary(
+        "Live-Zusammenfassung Maßnahmen",
+        [
+            f"Timeline-Einträge: {len(m.get('timeline', []))}",
+            f"Medikationen: {len(m.get('medikation', []))}",
+        ],
+    )
+
+# --------------------------------------------------
+# UEBERGABE
+# --------------------------------------------------
+
+elif seite == "🗣️ Übergabe":
+
+    st.header("🗣️ Übergabe (MIST / ISBAR)")
+
+    mist_text, isbar_text = build_handover_text(patient)
+
+    st.subheader("MIST")
+    st.text_area("Übergabe MIST", mist_text, height=180, key="handover_mist")
+
+    st.subheader("ISBAR")
+    st.text_area("Übergabe ISBAR", isbar_text, height=220, key="handover_isbar")
+
+    render_live_summary(
+        "Live-Zusammenfassung Übergabe",
+        [
+            "MIST generiert",
+            "ISBAR generiert",
+            f"Maßnahmen: {len(patient.get('massnahmen', {}).get('timeline', []))}",
+            f"Medikationen: {len(patient.get('massnahmen', {}).get('medikation', []))}",
+        ],
+    )
 
 # --------------------------------------------------
 # PROTOKOLL
