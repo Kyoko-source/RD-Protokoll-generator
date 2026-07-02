@@ -603,52 +603,36 @@ if seite == "❤️ Vitalwerte":
     b1, b2 = st.columns(2)
     
     with b1:
-        spo2_option = st.radio(
-            "SpO₂",
-            ["Zahlen", "Wählen"],
-            key="spo2_option",
-            horizontal=True
+        spo2_cat = st.selectbox(
+            "SpO₂-Wert",
+            ["", "Normal (≥95%)", "Leicht ↓ (90-94%)", "Kritisch ↓ (<90%)", "Selber schreiben"],
+            key="spo2_category"
         )
-        
-        if spo2_option == "Zahlen":
+        if spo2_cat == "Selber schreiben":
             patient["vitalwerte"]["spo2"] = st.number_input("SpO₂ (%)", 0, 100, 0, key="spo2_input")
-        else:
-            spo2_cat = st.selectbox(
-                "SpO₂-Wert",
-                ["", "Normal (≥95%)", "Leicht ↓ (90-94%)", "Kritisch ↓ (<90%)"],
-                key="spo2_category"
-            )
-            if spo2_cat == "Normal (≥95%)":
-                patient["vitalwerte"]["spo2"] = 97
-            elif spo2_cat == "Leicht ↓ (90-94%)":
-                patient["vitalwerte"]["spo2"] = 92
-            elif spo2_cat == "Kritisch ↓ (<90%)":
-                patient["vitalwerte"]["spo2"] = 85
+        elif spo2_cat == "Normal (≥95%)":
+            patient["vitalwerte"]["spo2"] = 97
+        elif spo2_cat == "Leicht ↓ (90-94%)":
+            patient["vitalwerte"]["spo2"] = 92
+        elif spo2_cat == "Kritisch ↓ (<90%)":
+            patient["vitalwerte"]["spo2"] = 85
     
     with b2:
-        af_option = st.radio(
-            "Atemfrequenz",
-            ["Zahlen", "Wählen"],
-            key="af_option",
-            horizontal=True
+        af_cat = st.selectbox(
+            "AF-Wert",
+            ["", "Bradypnoe (<10)", "Normal (10-20)", "Tachypnoe (20-30)", "Schwer (>30)", "Selber schreiben"],
+            key="af_category"
         )
-        
-        if af_option == "Zahlen":
+        if af_cat == "Selber schreiben":
             patient["vitalwerte"]["af"] = st.number_input("AF (/min)", 0, 60, 0, key="af_input")
-        else:
-            af_cat = st.selectbox(
-                "AF-Wert",
-                ["", "Bradypnoe (<10)", "Normal (10-20)", "Tachypnoe (20-30)", "Schwer (>30)"],
-                key="af_category"
-            )
-            if af_cat == "Bradypnoe (<10)":
-                patient["vitalwerte"]["af"] = 8
-            elif af_cat == "Normal (10-20)":
-                patient["vitalwerte"]["af"] = 15
-            elif af_cat == "Tachypnoe (20-30)":
-                patient["vitalwerte"]["af"] = 25
-            elif af_cat == "Schwer (>30)":
-                patient["vitalwerte"]["af"] = 35
+        elif af_cat == "Bradypnoe (<10)":
+            patient["vitalwerte"]["af"] = 8
+        elif af_cat == "Normal (10-20)":
+            patient["vitalwerte"]["af"] = 15
+        elif af_cat == "Tachypnoe (20-30)":
+            patient["vitalwerte"]["af"] = 25
+        elif af_cat == "Schwer (>30)":
+            patient["vitalwerte"]["af"] = 35
     
     st.divider()
     
@@ -658,33 +642,26 @@ if seite == "❤️ Vitalwerte":
     c1, c2 = st.columns(2)
     
     with c1:
-        rr_option = st.radio(
-            "Blutdruck (RR)",
-            ["Zahlen", "Wählen"],
-            key="rr_option",
-            horizontal=True
+        rr_cat = st.selectbox(
+            "RR-Wert",
+            ["", "Hypotonie (<90/60)", "Normal (90-140/60-90)", "Erhöht (140-160/90-100)", "Hypertonie (>160/100)", "Selber schreiben"],
+            key="rr_category"
         )
-        
-        if rr_option == "Zahlen":
+
+        if rr_cat == "Selber schreiben":
             col_sys, col_dia = st.columns(2)
             with col_sys:
                 patient["vitalwerte"]["rr_sys"] = st.number_input("sys", 0, 300, 0, key="rr_sys_input")
             with col_dia:
                 patient["vitalwerte"]["rr_dia"] = st.number_input("dia", 0, 200, 0, key="rr_dia_input")
-        else:
-            rr_cat = st.selectbox(
-                "RR-Wert",
-                ["", "Hypotonie (<90/60)", "Normal (90-140/60-90)", "Erhöht (140-160/90-100)", "Hypertonie (>160/100)"],
-                key="rr_category"
-            )
-            if rr_cat == "Hypotonie (<90/60)":
-                patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 85, 55
-            elif rr_cat == "Normal (90-140/60-90)":
-                patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 120, 80
-            elif rr_cat == "Erhöht (140-160/90-100)":
-                patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 150, 95
-            elif rr_cat == "Hypertonie (>160/100)":
-                patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 170, 105
+        elif rr_cat == "Hypotonie (<90/60)":
+            patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 85, 55
+        elif rr_cat == "Normal (90-140/60-90)":
+            patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 120, 80
+        elif rr_cat == "Erhöht (140-160/90-100)":
+            patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 150, 95
+        elif rr_cat == "Hypertonie (>160/100)":
+            patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 170, 105
     
     with c2:
         patient["vitalwerte"]["puls"] = st.number_input("Pulsfrequenz (/min)", 0, 250, 0, key="puls_input")
@@ -710,40 +687,28 @@ if seite == "❤️ Vitalwerte":
     temp_gemessen = st.checkbox("Temperatur gemessen", key="temp_checkbox")
     
     if temp_gemessen:
-        e1, e2 = st.columns(2)
-        
-        with e1:
-            temp_option = st.radio(
-                "Körpertemperatur",
-                ["Zahlen", "Wählen"],
-                key="temp_option",
-                horizontal=True
+        temp_cat = st.selectbox(
+            "Temp-Wert",
+            ["", "Unterkühlung (<36°C)", "Normal (36-37.5°C)", "Erhöht (37.5-38°C)", "Fieber (>38°C)", "Selber schreiben"],
+            key="temp_category"
+        )
+        if temp_cat == "Selber schreiben":
+            patient["vitalwerte"]["temperatur"] = st.number_input(
+                "Temp (°C)",
+                min_value=30.0,
+                max_value=45.0,
+                value=36.5,
+                step=0.1,
+                key="temp_input"
             )
-        
-        with e2:
-            if temp_option == "Zahlen":
-                patient["vitalwerte"]["temperatur"] = st.number_input(
-                    "Temp (°C)",
-                    min_value=30.0,
-                    max_value=45.0,
-                    value=36.5,
-                    step=0.1,
-                    key="temp_input"
-                )
-            else:
-                temp_cat = st.selectbox(
-                    "Temp-Wert",
-                    ["", "Unterkühlung (<36°C)", "Normal (36-37.5°C)", "Erhöht (37.5-38°C)", "Fieber (>38°C)"],
-                    key="temp_category"
-                )
-                if temp_cat == "Unterkühlung (<36°C)":
-                    patient["vitalwerte"]["temperatur"] = 35.5
-                elif temp_cat == "Normal (36-37.5°C)":
-                    patient["vitalwerte"]["temperatur"] = 37.0
-                elif temp_cat == "Erhöht (37.5-38°C)":
-                    patient["vitalwerte"]["temperatur"] = 37.7
-                elif temp_cat == "Fieber (>38°C)":
-                    patient["vitalwerte"]["temperatur"] = 38.5
+        elif temp_cat == "Unterkühlung (<36°C)":
+            patient["vitalwerte"]["temperatur"] = 35.5
+        elif temp_cat == "Normal (36-37.5°C)":
+            patient["vitalwerte"]["temperatur"] = 37.0
+        elif temp_cat == "Erhöht (37.5-38°C)":
+            patient["vitalwerte"]["temperatur"] = 37.7
+        elif temp_cat == "Fieber (>38°C)":
+            patient["vitalwerte"]["temperatur"] = 38.5
     
     st.divider()
     
