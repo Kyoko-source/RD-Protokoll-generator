@@ -485,6 +485,18 @@ st.markdown(
         0% { transform: translateX(-130%) rotate(10deg); }
         100% { transform: translateX(240%) rotate(10deg); }
     }
+    @keyframes ambulanceFloat {
+        0%, 100% { transform: translateY(0px) rotate(-2deg); }
+        50% { transform: translateY(-8px) rotate(1deg); }
+    }
+    @keyframes blueFlash {
+        0%, 100% { opacity:0.25; transform: scale(0.95); }
+        50% { opacity:0.9; transform: scale(1.08); }
+    }
+    @keyframes redFlash {
+        0%, 100% { opacity:0.18; transform: scale(0.92); }
+        50% { opacity:0.72; transform: scale(1.04); }
+    }
     html, body, [class*="css"], .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stMainBlockContainer"], section.main {
         background:
             radial-gradient(circle at 10% -4%, rgba(78,143,255,0.26), transparent 28%),
@@ -759,6 +771,7 @@ st.markdown(
             .hero-card { padding: 20px 18px 18px; border-radius: 24px; }
             .hero-title { font-size: 1.72rem; }
             .workflow-shell { padding: 14px 14px 12px; border-radius: 20px; }
+            .hero-ambulance-wrap { opacity: 0.18 !important; right: 8px !important; bottom: 4px !important; transform: scale(0.75) !important; }
         }
         </style>
         """,
@@ -780,6 +793,11 @@ st.markdown(
             linear-gradient(135deg, rgba(18,32,58,0.92) 0%, rgba(10,22,40,0.88) 100%);
         box-shadow: 0 28px 60px rgba(2,8,24,0.32);
     ">
+        <div class="hero-ambulance-wrap" style="position:absolute; right:22px; bottom:10px; width:300px; height:150px; pointer-events:none; opacity:0.26; z-index:0; animation:ambulanceFloat 4.8s ease-in-out infinite;">
+            <div class="hero-ambulance-light-blue" style="position:absolute; top:34px; left:86px; width:82px; height:82px; border-radius:999px; background:radial-gradient(circle, rgba(94,168,255,0.58) 0%, rgba(94,168,255,0.18) 34%, rgba(94,168,255,0) 72%); filter:blur(3px); animation:blueFlash 1.3s ease-in-out infinite;"></div>
+            <div class="hero-ambulance-light-red" style="position:absolute; top:38px; left:138px; width:72px; height:72px; border-radius:999px; background:radial-gradient(circle, rgba(255,116,133,0.48) 0%, rgba(255,116,133,0.16) 34%, rgba(255,116,133,0) 72%); filter:blur(4px); animation:redFlash 1.3s ease-in-out infinite 0.18s;"></div>
+            <div style="position:absolute; right:20px; bottom:12px; font-size:6rem; line-height:1; filter:drop-shadow(0 12px 26px rgba(5,10,20,0.28));">🚑</div>
+        </div>
         <div style="display:flex; justify-content:space-between; gap:20px; align-items:flex-start; flex-wrap:wrap;">
             <div>
                 <div style="display:inline-flex; align-items:center; gap:10px; font-size:0.76rem; letter-spacing:0.16em; text-transform:uppercase; color:rgba(231,241,255,0.72); font-weight:900;">
