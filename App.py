@@ -1358,10 +1358,11 @@ if current_workflow_index is not None:
             elif idx == current_workflow_index:
                 prefix = "•"
             else:
-                prefix = str(idx + 1)
+                prefix = ""
             button_type = "primary" if idx == current_workflow_index else "secondary"
             button_label = step.get("short_label", step["label"])
-            if st.button(f"{prefix} {button_label}", key=f"workflow_step_{idx}", use_container_width=True, type=button_type):
+            display_label = f"{prefix} {button_label}".strip()
+            if st.button(display_label, key=f"workflow_step_{idx}", use_container_width=True, type=button_type):
                 st.session_state["seite"] = step["page"]
                 st.rerun()
 
