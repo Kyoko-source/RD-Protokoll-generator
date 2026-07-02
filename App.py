@@ -921,36 +921,36 @@ st.markdown(
     <style>
     div[data-testid="stSelectbox"]:first-of-type {
         position: fixed;
-        top: 0.75rem;
-        right: 0.75rem;
+        top: 0.2rem;
+        right: 0.35rem;
         z-index: 1000;
-        width: 8.8rem;
+        width: 6.2rem;
+        transform: scale(0.86);
+        transform-origin: top right;
     }
     div[data-testid="stSelectbox"]:first-of-type div[data-baseweb="select"] {
-        min-height: 2rem;
-        font-size: 0.78rem;
+        min-height: 1.7rem;
+        font-size: 0.7rem;
     }
     div[data-testid="stSelectbox"]:first-of-type svg {
-        width: 0.8rem;
-        height: 0.8rem;
+        width: 0.7rem;
+        height: 0.7rem;
     }
     </style>
     """,
     unsafe_allow_html=True,
 )
 
-topbar_left, topbar_right = st.columns([14, 2])
-with topbar_right:
-    quick_menu = st.selectbox(
-        "",
-        ["⋯", "Admin"],
-        key="quick_menu",
-        label_visibility="collapsed",
-    )
-    if quick_menu == "Admin":
-        st.session_state["seite"] = "🛠️ Admin"
-        st.session_state["quick_menu"] = "⋯"
-        st.rerun()
+quick_menu = st.selectbox(
+    "",
+    ["⋯", "Admin"],
+    key="quick_menu",
+    label_visibility="collapsed",
+)
+if quick_menu == "Admin":
+    st.session_state["seite"] = "🛠️ Admin"
+    st.session_state["quick_menu"] = "⋯"
+    st.rerun()
 
 nav_options = [
     "❤️ Vitalwerte",
