@@ -916,41 +916,12 @@ if 'seite' not in st.session_state:
 if 'xabcde_selected' not in st.session_state:
     st.session_state['xabcde_selected'] = "A"
 
-st.markdown(
-    """
-    <style>
-    div[data-testid="stSelectbox"]:first-of-type {
-        position: fixed;
-        top: 0.2rem;
-        right: 0.35rem;
-        z-index: 1000;
-        width: 6.2rem;
-        transform: scale(0.86);
-        transform-origin: top right;
-    }
-    div[data-testid="stSelectbox"]:first-of-type div[data-baseweb="select"] {
-        min-height: 1.7rem;
-        font-size: 0.7rem;
-    }
-    div[data-testid="stSelectbox"]:first-of-type svg {
-        width: 0.7rem;
-        height: 0.7rem;
-    }
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-quick_menu = st.selectbox(
-    "",
-    ["⋯", "Admin"],
-    key="quick_menu",
-    label_visibility="collapsed",
-)
-if quick_menu == "Admin":
-    st.session_state["seite"] = "🛠️ Admin"
-    st.session_state["quick_menu"] = "⋯"
-    st.rerun()
+topbar_left, topbar_right = st.columns([14, 2])
+with topbar_right:
+    st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
+    if st.button("Admin", key="top_admin_btn", use_container_width=True, type="secondary"):
+        st.session_state["seite"] = "🛠️ Admin"
+        st.rerun()
 
 nav_options = [
     "❤️ Vitalwerte",
