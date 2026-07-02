@@ -1408,6 +1408,7 @@ elif seite == "💉 Medikamentenrechner":
             "Hypoglykämie",
             "Krampfanfall",
             "Schlaganfall",
+            "Kardiales Lungenödem",
         ],
     )
 
@@ -1725,7 +1726,7 @@ elif seite == "💉 Medikamentenrechner":
             ],
         )
 
-    else:
+    elif sop == "Schlaganfall":
         st.subheader("Klinische Konstellation")
         s1, s2, s3 = st.columns(3)
         with s1:
@@ -1805,6 +1806,75 @@ elif seite == "💉 Medikamentenrechner":
                 f"RR syst.: {rr_syst} mmHg",
                 f"Seit Symptombeginn: {symptombeginn_h} h",
                 f"BE-FAST positiv: {befast_positiv}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    else:
+        st.subheader("Klinische Konstellation")
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            rr_syst = st.number_input("RR syst. (mmHg)", min_value=50, max_value=300, value=160, key="pulm_rr_syst")
+        with c2:
+            keine_besserung_pulm = st.selectbox("Keine Besserung", ["Nein", "Ja"], key="pulm_no_improve")
+        with c3:
+            cpap_moeglich = st.selectbox("CPAP/NIV verfügbar", ["Nein", "Ja"], key="pulm_cpap_available")
+
+        meds = []
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+            "CPAP-Therapie starten",
+        ]
+        hinweise = []
+
+        if cpap_moeglich == "Ja":
+            hinweise.append("CPAP / NIV anwenden (laut SOP frühzeitig vorgesehen).")
+        else:
+            hinweise.append("CPAP/NIV nicht verfügbar: Atemunterstützung bestmöglich mit O2 und Lagerung.")
+
+        if rr_syst > 120:
+            meds.append("Glyceroltrinitrat 0,4-0,8 mg s.l.")
+        else:
+            hinweise.append("Bei RR syst. <= 120 mmHg kein Nitro gemäß SOP-Fluss.")
+
+        meds.append("Furosemid 20 mg i.v. langsam, ggf. einmalige Repetition")
+
+        if rr_syst >= 220:
+            hinweise.append("Hypertensiver Notfall (RR syst. >= 220 mmHg)")
+            handlung.append("Notärztliche Eskalation unmittelbar priorisieren")
+        else:
+            hinweise.append("RR-Ziel im Verlauf: systolisch < 220 mmHg")
+
+        if keine_besserung_pulm == "Ja":
+            handlung.append("Notarztruf auslösen")
+        else:
+            handlung.append("ABCDE-Re-Evaluation")
+
+        handlung.append("Kliniktransport priorisieren")
+
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        for i, med in enumerate(meds, start=1):
+            st.write(f"{i}. {med}")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        st.subheader("Zusätzliche Hinweise")
+        for i, h in enumerate(hinweise, start=1):
+            st.write(f"{i}. {h}")
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"RR syst.: {rr_syst} mmHg",
+                f"CPAP/NIV verfügbar: {cpap_moeglich}",
+                f"Keine Besserung: {keine_besserung_pulm}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
