@@ -850,14 +850,15 @@ SUPABASE_ANON_KEY = "sb_publishable_87egwyr4tTwLh3tnZTDjkQ_eJh2eRZw"
 SUPABASE_ADMIN_EMAIL = "admin@rd-protokoll-generator.local"
 SOP_ADMIN_CONFIG_FILE = "sop_admin_config.json"
 WORKFLOW_STEPS = [
-    {"page": "❤️ Vitalwerte", "label": "Patient"},
-    {"page": "🩺 xABCDE", "label": "Untersuchung"},
-    {"page": "📋 SAMPLERS", "label": "Anamnese"},
-    {"page": "🔥 OPQRST", "label": "Schmerzbild"},
-    {"page": "⏱️ Maßnahmen", "label": "Maßnahmen"},
-    {"page": "🔎 Verdacht", "label": "Verdacht"},
-    {"page": "🗣️ Übergabe", "label": "Übergabe"},
-    {"page": "📄 Protokoll", "label": "Protokoll"},
+    {"page": "❤️ Vitalwerte", "label": "Patient", "short_label": "Patient"},
+    {"page": "🩺 xABCDE", "label": "Untersuchung", "short_label": "Untersuchung"},
+    {"page": "📋 SAMPLERS", "label": "Anamnese", "short_label": "Anamnese"},
+    {"page": "🔥 OPQRST", "label": "Schmerzbild", "short_label": "Schmerz"},
+    {"page": "⏱️ Maßnahmen", "label": "Maßnahmen", "short_label": "Maßnahmen"},
+    {"page": "🔎 Verdacht", "label": "Verdacht", "short_label": "Verdacht"},
+    {"page": "💉 Med-Rechner", "label": "Med-Rechner", "short_label": "Med"},
+    {"page": "🗣️ Übergabe", "label": "Übergabe", "short_label": "Übergabe"},
+    {"page": "📄 Protokoll", "label": "Protokoll", "short_label": "Protokoll"},
 ]
 ADMIN_SOP_FIELDS = {
     "Anaphylaxie (SOPKB0105)": [
@@ -1318,12 +1319,7 @@ if 'visited_pages' not in st.session_state:
 
 st.session_state['visited_pages'].add(st.session_state['seite'])
 
-topbar_left, topbar_mid, topbar_right = st.columns([12, 2, 2])
-with topbar_mid:
-    st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
-    if st.button("Med-Rechner", key="top_med_calc_btn", use_container_width=True, type="secondary"):
-        st.session_state["seite"] = "💉 Med-Rechner"
-        st.rerun()
+topbar_left, topbar_right = st.columns([14, 2])
 with topbar_right:
     st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
     if st.button("Admin", key="top_admin_btn", use_container_width=True, type="secondary"):
@@ -1354,7 +1350,7 @@ if current_workflow_index is not None:
         unsafe_allow_html=True,
     )
 
-    workflow_cols = st.columns(workflow_total)
+    workflow_cols = st.columns(workflow_total, gap="small")
     for idx, step in enumerate(WORKFLOW_STEPS):
         with workflow_cols[idx]:
             if workflow_completion.get(step["page"]):
@@ -1364,7 +1360,8 @@ if current_workflow_index is not None:
             else:
                 prefix = str(idx + 1)
             button_type = "primary" if idx == current_workflow_index else "secondary"
-            if st.button(f"{prefix} {step['label']}", key=f"workflow_step_{idx}", use_container_width=True, type=button_type):
+            button_label = step.get("short_label", step["label"])
+            if st.button(f"{prefix} {button_label}", key=f"workflow_step_{idx}", use_container_width=True, type=button_type):
                 st.session_state["seite"] = step["page"]
                 st.rerun()
 
