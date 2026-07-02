@@ -5,6 +5,8 @@ from fpdf import FPDF
 from datetime import datetime
 import json
 import os
+import urllib.error
+import urllib.request
 from copy import deepcopy
 from dotenv import load_dotenv
 
@@ -561,12 +563,10 @@ patient["massnahmen"].setdefault("medikation", [])
 # Admin-Konfiguration
 # --------------------------------------------------
 
-ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
-print(f"DEBUG: env_path = {env_path}")
-print(f"DEBUG: env_path exists = {os.path.exists(env_path)}")
-print(f"DEBUG: ADMIN_PASSWORD = '{ADMIN_PASSWORD}'")
-if not ADMIN_PASSWORD:
-    st.warning("⚠️ Admin-Passwort nicht in .env gesetzt. Adminbereich deaktiviert.")
+LOCAL_ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "").strip()
+SUPABASE_URL = "https://ottkgqhtmjvhhtnwphmc.supabase.co"
+SUPABASE_ANON_KEY = "sb_publishable_87egwyr4tTwLh3tnZTDjkQ_eJh2eRZw"
+SUPABASE_ADMIN_EMAIL = "admin@rd-protokoll-generator.local"
 SOP_ADMIN_CONFIG_FILE = "sop_admin_config.json"
 ADMIN_SOP_FIELDS = {
     "Anaphylaxie (SOPKB0105)": [
@@ -639,6 +639,40 @@ ADMIN_SOP_FIELDS = {
         {"key": "pao_pain_threshold", "label": "NRS-Schwelle starke Schmerzen", "default": 3.0, "min": 0.0, "max": 10.0, "step": 1.0},
     ],
 }
+
+
+def check_admin_password(candidate_password):
+    if LOCAL_ADMIN_PASSWORD:
+        return candidate_password == LOCAL_ADMIN_PASSWORD
+
+    if not candidate_password:
+        return False
+
+    auth_url = f"{SUPABASE_URL}/auth/v1/token?grant_type=password"
+    payload = json.dumps({
+        "email": SUPABASE_ADMIN_EMAIL,
+        "password": candidate_password,
+    }).encode("utf-8")
+
+    request = urllib.request.Request(
+        auth_url,
+        data=payload,
+        headers={
+            "apikey": SUPABASE_ANON_KEY,
+            "Authorization": f"Bearer {SUPABASE_ANON_KEY}",
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=10) as response:
+            return response.status == 200
+    except urllib.error.HTTPError:
+        return False
+    except urllib.error.URLError as error:
+        st.error(f"Supabase-Anmeldung nicht erreichbar: {error.reason}")
+        return False
 
 
 def _build_default_value_overrides():
@@ -949,7 +983,7 @@ if seite == "🛠️ Admin":
     if not st.session_state.get("admin_unlocked", False):
         admin_pw = st.text_input("Admin-Passwort", type="password", key="admin_password_input")
         if st.button("🔓 Admin freischalten", key="admin_unlock_btn", use_container_width=True, type="primary"):
-            if admin_pw == ADMIN_PASSWORD:
+            if check_admin_password(admin_pw):
                 st.session_state["admin_unlocked"] = True
                 st.success("Adminbereich freigeschaltet")
                 st.rerun()
