@@ -343,22 +343,27 @@ st.caption("Dokumentationshilfe für den Rettungsdienst")
 st.markdown(
         """
         <style>
-        :root { --bg:#0b1020; --card:#0f1724; --muted:#9aa4b2; --accent:#0b66ff; --accent-2:#ff6b6b; --text:#e6eef8 }
-        .stApp { background: linear-gradient(180deg,var(--bg) 0%, #071025 100%); color:var(--text) }
-        .header { background: linear-gradient(90deg,var(--accent) 0%, #08306b 100%); color: white; padding: 14px 22px; border-radius:10px }
-        .card { background: var(--card); padding: 14px; border-radius: 10px; box-shadow: 0 6px 20px rgba(2,6,23,0.6); color:var(--text) }
-        .nav-button button { background: transparent; border:2px solid rgba(255,255,255,0.06); color:var(--text); padding:22px 30px; border-radius:12px; font-size:18px; font-weight:700; min-width:160px }
-        .nav-button button:hover { border-color: rgba(255,255,255,0.18); transform:translateY(-3px) }
-        .nav-active-badge { background: linear-gradient(90deg,var(--accent) 0%, var(--accent-2) 100%); color:#fff; padding:18px 26px; border-radius:12px; text-align:center; font-weight:700 }
-        .stButton>button { height:64px; font-size:16px; }
-        .css-1q8dd3e { color:var(--muted) }
-        .stTextInput>div>input, textarea, .stNumberInput input { background:#0b1220; color:var(--text); border:1px solid rgba(255,255,255,0.06) }
+        :root { --bg:#071026; --card:#0f1724; --muted:#9aa4b2; --accent:#1e73ff; --accent-2:#ff6b6b; --text:#e6eef8 }
+        html, body, [class*="css"]  { background: linear-gradient(180deg,var(--bg) 0%, #051123 100%) !important; color:var(--text) }
+        .header { background: linear-gradient(90deg,var(--accent) 0%, #0950b0 100%); color: white; padding: 14px 22px; border-radius:10px }
+        .card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding: 18px; border-radius: 12px; box-shadow: 0 10px 30px rgba(2,6,23,0.6); color:var(--text); margin-top:18px }
+        /* Nav styling: large centered pills */
+        .stButton>button { background: rgba(255,255,255,0.03); color:var(--text); padding:18px 28px; border-radius:28px; border:1px solid rgba(255,255,255,0.06); font-weight:700; box-shadow: 0 6px 20px rgba(2,6,23,0.6); transition: transform .12s ease, box-shadow .12s ease }
+        .stButton>button:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.12) }
+        .nav-active-badge { display:block; margin:8px auto 0 auto; width:fit-content; background: linear-gradient(90deg,var(--accent) 0%, var(--accent-2) 100%); color:#fff; padding:10px 22px; border-radius:22px; font-weight:800; box-shadow:0 10px 30px rgba(12,50,120,0.35) }
+        /* Tighter spacing between nav buttons */
+        .stContainer .row-widget.stButton { display:inline-block; margin: 0 10px }
+        /* Inputs */
+        input, textarea { background:#081029; color:var(--text) !important; border:1px solid rgba(255,255,255,0.04) }
+        /* Hide sidebar completely */
         section[data-testid='stSidebar']{ display:none; }
+        /* Main content padding */
+        main .block-container { padding-top: 12px; padding-left: 80px; padding-right:80px }
         </style>
         <div class='header'>
             <div style='display:flex; align-items:center; gap:14px'>
-                <div style='font-size:22px; font-weight:700'>🚑 RD-Protokoll Generator</div>
-                <div style='opacity:0.85; color:var(--muted)'>— Hochwertige, ausfüllbare Einsatzdokumentation (anonym)</div>
+                <div style='font-size:20px; font-weight:800'>🚑 RD-Protokoll Generator</div>
+                <div style='opacity:0.9; color:var(--muted); margin-left:8px'>— Hochwertige, ausfüllbare Einsatzdokumentation (anonym)</div>
             </div>
         </div>
         """,
