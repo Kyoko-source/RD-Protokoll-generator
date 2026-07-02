@@ -399,13 +399,17 @@ st.caption("Dokumentationshilfe für den Rettungsdienst")
 st.markdown(
         """
         <style>
-        :root { --bg:#07111f; --panel:#101b30; --panel-2:#16233c; --muted:#91a0b8; --accent:#4b8cff; --accent-2:#ff7a7a; --accent-3:#30d4a1; --text:#eef5ff; --line:rgba(255,255,255,0.08); }
-        html, body, [class*="css"] { background: radial-gradient(circle at top left, rgba(75,140,255,0.18), transparent 28%), linear-gradient(135deg, var(--bg) 0%, #081426 100%) !important; color: var(--text); }
-        .header { background: linear-gradient(135deg, rgba(75,140,255,0.95) 0%, rgba(255,122,122,0.9) 100%); color: white; padding: 20px 24px; border-radius: 18px; box-shadow: 0 16px 40px rgba(4,10,24,0.35); border: 1px solid rgba(255,255,255,0.16); }
+    :root { --bg:#070f1f; --panel:#0f1b31; --panel-2:#1a2c4a; --muted:#9aa9c2; --accent:#57a4ff; --accent-2:#ff7d66; --accent-3:#35d8a6; --text:#eef5ff; --line:rgba(255,255,255,0.09); }
+    html, body, [class*="css"] { background: radial-gradient(circle at 18% 0%, rgba(87,164,255,0.22), transparent 34%), radial-gradient(circle at 92% 12%, rgba(255,125,102,0.18), transparent 34%), linear-gradient(135deg, var(--bg) 0%, #081327 100%) !important; color: var(--text); }
+    .header { position: relative; overflow:hidden; background: linear-gradient(125deg, rgba(68,132,240,0.95) 0%, rgba(98,126,217,0.92) 34%, rgba(209,117,137,0.9) 100%); color: white; padding: 22px 26px; border-radius: 20px; box-shadow: 0 18px 44px rgba(3,10,26,0.42); border: 1px solid rgba(255,255,255,0.2); }
+    .header::before { content:""; position:absolute; inset:-20% auto auto -10%; width:220px; height:220px; background: radial-gradient(circle, rgba(255,255,255,0.25), transparent 70%); pointer-events:none; }
+    .header-title { font-size:1.6rem; font-weight:900; letter-spacing:0.01em; }
+    .header-sub { opacity:0.92; color:rgba(255,255,255,0.92); font-size:1.01rem; font-weight:600; }
         [data-testid="column"]:nth-child(n+2):nth-child(-n+6) { padding: 0 2px; }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: var(--text); font-weight: 700; margin:0; box-shadow: 0 8px 24px rgba(2,6,23,0.22); transition: all 0.2s ease; }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button:hover { background: rgba(255,255,255,0.08); transform: translateY(-2px); }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.13); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)); color: var(--text); font-weight: 800; margin:0; box-shadow: 0 12px 24px rgba(2,8,24,0.28); transition: all 0.22s ease; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
         [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button:focus { outline:none; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button[kind='primary'] { color:#fff; border:none; box-shadow: 0 15px 30px rgba(64,124,255,0.3); }
         input, textarea, select { background:#0c1628 !important; color:var(--text) !important; border:1px solid rgba(255,255,255,0.08) !important; border-radius:12px !important; padding:10px 12px !important; font-size:0.95rem !important; }
         input:focus, textarea:focus, select:focus { border-color:var(--accent) !important; box-shadow: 0 0 0 3px rgba(75,140,255,0.18) !important; }
         [data-testid="stSelectbox"] { margin: 10px 0; }
@@ -420,32 +424,10 @@ st.markdown(
         section[data-testid='stSidebar']{ display:none; }
         main .block-container { padding-top: 12px; padding-left: 80px; padding-right:80px }
         </style>
-        <script>
-        setTimeout(function() {
-            const navButtons = document.querySelectorAll('[data-testid="column"]:nth-child(n+2):nth-child(-n+6) button');
-            navButtons.forEach((btn) => {
-                const text = btn.textContent.trim();
-                if (text === '❤️ Vitalwerte' || text === '🩺 xABCDE' || text === '📋 SAMPLERS' || text === '🔥 OPQRST' || text === '📄 Protokoll') {
-                    btn.addEventListener('click', function() {
-                        navButtons.forEach(b => {
-                            b.style.background = 'rgba(255,255,255,0.04)';
-                            b.style.color = '#eef5ff';
-                            b.style.border = '1px solid rgba(255,255,255,0.08)';
-                            b.style.boxShadow = '0 8px 24px rgba(2,6,23,0.22)';
-                        });
-                        btn.style.background = 'linear-gradient(135deg, #4b8cff 0%, #ff7a7a 100%)';
-                        btn.style.color = '#fff';
-                        btn.style.border = 'none';
-                        btn.style.boxShadow = '0 12px 32px rgba(75,140,255,0.28)';
-                    });
-                }
-            });
-        }, 100);
-        </script>
         <div class='header'>
             <div style='display:flex; align-items:center; gap:14px; flex-wrap:wrap;'>
-                <div style='font-size:20px; font-weight:800'>🚑 RD-Protokoll Generator</div>
-                <div style='opacity:0.95; color:rgba(255,255,255,0.9);'>Helfende, strukturierte Einsatzdokumentation in wenigen Schritten</div>
+                <div class='header-title'>🚑 RD-Protokoll Generator</div>
+                <div class='header-sub'>Schnell. Klar. Einsatzbereit.</div>
             </div>
         </div>
         """,
@@ -546,10 +528,31 @@ with nav_container:
     cols_nav = st.columns([1, 1, 1, 1, 1, 1, 1])
     for i, opt in enumerate(nav_options):
         with cols_nav[i+1]:
-            if st.button(opt, key=f"nav_{i}", use_container_width=True):
+            nav_type = "primary" if st.session_state['seite'] == opt else "secondary"
+            if st.button(opt, key=f"nav_{i}", use_container_width=True, type=nav_type):
                 st.session_state['seite'] = opt
+                st.rerun()
 
 seite = st.session_state['seite']
+
+active_nav_palette = {
+    "❤️ Vitalwerte": ("#ff5b86", "#ff9a5a"),
+    "🩺 xABCDE": ("#4b8cff", "#35d8a6"),
+    "📋 SAMPLERS": ("#5f89ff", "#7a67f8"),
+    "🔥 OPQRST": ("#ff8a4d", "#ff4f7b"),
+    "📄 Protokoll": ("#4e72ff", "#5ac8ff"),
+}
+start_color, end_color = active_nav_palette.get(seite, ("#4b8cff", "#ff7a7a"))
+st.markdown(
+    f"""
+    <style>
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button[kind='primary'] {{
+        background: linear-gradient(135deg, {start_color} 0%, {end_color} 100%);
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
 
 # --------------------------------------------------
 # VITALWERTE
