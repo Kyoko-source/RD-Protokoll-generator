@@ -374,95 +374,6 @@ def generate_protocol():
         protocol += "=" * 50 + "\n"
         protocol += xabcde + "\n"
 
-    # SAMPLERS
-    samplers = ""
-    if s.get("symptome"):
-        samplers += f"SYMPTOME: {s.get('symptome')}\n"
-
-    allergien = s.get("allergien")
-    if allergien == "Keine bekannt":
-        samplers += "ALLERGIEN: Keine bekannt\n"
-    elif allergien == "Vorhanden":
-        samplers += f"ALLERGIEN: {s.get('allergien_text','')}\n"
-
-    medopt = s.get("medikamente_option")
-    if medopt == "Siehe Medikamentenplan":
-        samplers += "MEDIKAMENTE: Siehe Medikamentenplan\n"
-    elif medopt == "Medikamente eingeben":
-        samplers += f"MEDIKAMENTE: {s.get('medikamente','')}\n"
-
-    if s.get("vorgeschichte"):
-        samplers += f"VORGESCHICHTE: {s.get('vorgeschichte')}\n"
-
-    letzte = s.get('letzte_mahlzeit')
-    if letzte and letzte != "Keine Angabe":
-        if letzte == 'Eigene Eingabe':
-            samplers += f"LETZTE MAHLZEIT: {s.get('letzte_mahlzeit_text','')}\n"
-        else:
-            samplers += f"LETZTE MAHLZEIT: {letzte}\n"
-
-    if s.get('ereignis'):
-        samplers += f"EREIGNIS: {s.get('ereignis')}\n"
-
-    # Risiken
-    risks = []
-    for k in ['raucher','alkohol','drogen','diabetes','hypertonie','antikoagulation']:
-        if s.get(k):
-            risks.append(k.upper())
-    if s.get('risiken_sonstige'):
-        risks.append(s.get('risiken_sonstige'))
-    if risks:
-        samplers += "RISIKOFAKTOREN: " + ", ".join(map(str, risks)) + "\n"
-
-    schw = s.get('schwangerschaft')
-    if schw and schw != 'Nicht relevant':
-        samplers += f"SCHWANGERSCHAFT: {schw}\n"
-
-    if samplers:
-        protocol += "PATIENTENGESCHICHTE (SAMPLERS)\n"
-        protocol += "=" * 50 + "\n"
-        protocol += samplers + "\n"
-
-    # OPQRST - Schmerzassessment ausführlich
-    if o.get('schmerz_vorhanden') == 'Ja' or o.get('nrs'):
-        opqrst = ""
-        if o.get('onset'):
-            opqrst += f"\nONSET (Beginn): {o.get('onset')}"
-            if o.get('onset_text'):
-                opqrst += f" — {o.get('onset_text')}"
-            opqrst += "\n"
-        if o.get('provocation'):
-            opqrst += f"PROVOCATION (Auslöser/Linderung): {o.get('provocation')}"
-            if o.get('provocation_text'):
-                opqrst += f" — {o.get('provocation_text')}"
-            opqrst += "\n"
-        if o.get('quality'):
-            opqrst += f"QUALITY (Charakteristik): {o.get('quality')}"
-            if o.get('quality_text'):
-                opqrst += f" — {o.get('quality_text')}"
-            opqrst += "\n"
-        if o.get('region'):
-            opqrst += f"REGION (Lokalisation): {o.get('region')}\n"
-        if o.get('radiation'):
-            opqrst += f"  Ausstrahlung: {o.get('radiation')}\n"
-        if o.get('nrs'):
-            try:
-                n = int(o.get('nrs'))
-                if n > 0:
-                    opqrst += f"SEVERITY (Stärke): {n}/10 (Numerische Ratingskala)\n"
-                    if o.get('severity_desc'):
-                        opqrst += f"  Auswirkung: {o.get('severity_desc')}\n"
-            except Exception:
-                pass
-        if o.get('zeitverlauf'):
-            opqrst += f"TIME (Zeitverlauf): {o.get('zeitverlauf')}\n"
-            if o.get('dauer'):
-                opqrst += f"  Dauer: {o.get('dauer')}\n"
-        if opqrst:
-            protocol += "SCHMERZASSESSMENT (OPQRST)\n"
-            protocol += "=" * 50 + "\n"
-            protocol += opqrst + "\n"
-
     # Kurzbericht
     kurzbericht = v.get('kurzbericht', '').strip()
     if kurzbericht:
@@ -856,12 +767,27 @@ elif seite == "🩺 xABCDE":
     if "xabcde_selected" not in st.session_state:
         st.session_state["xabcde_selected"] = "A"
 
+    x = patient.get("xabcde", {})
+
+    section_complete = {
+        "A": x.get("atemweg") not in [None, "", "Keine Angabe"] and x.get("hws") not in [None, "", "Keine Angabe"],
+        "B": x.get("atmung") not in [None, "", "Keine Angabe"] and x.get("atemgeraeusche") not in [None, "", "Keine Angabe"],
+        "C": x.get("haut") not in [None, "", "Keine Angabe"] and x.get("rekap") not in [None, "", "Keine Angabe"] and x.get("pulsqualitaet") not in [None, "", "Keine Angabe"],
+        "D": x.get("avpu") not in [None, "", "Keine Angabe"] and x.get("pupillen") not in [None, "", "Keine Angabe"],
+        "E": x.get("bodycheck") not in [None, "", "Keine Angabe"] and (
+            x.get("bodycheck") != "Auffällig" or x.get("bodycheck_text") not in [None, ""]
+        ),
+    }
+
+    incomplete_letters = [letter for letter, is_done in section_complete.items() if not is_done]
+
     col1, col2, col3, col4, col5 = st.columns(5, gap="large")
     buttons = ["A", "B", "C", "D", "E"]
     cols = [col1, col2, col3, col4, col5]
     for label, col in zip(buttons, cols):
+        button_label = f"{label} !" if label in incomplete_letters else label
         with col:
-            if st.button(label, key=f"xabcde_{label}", use_container_width=True):
+            if st.button(button_label, key=f"xabcde_{label}", use_container_width=True):
                 st.session_state["xabcde_selected"] = label
 
     selected = st.session_state["xabcde_selected"]
@@ -873,7 +799,46 @@ elif seite == "🩺 xABCDE":
         unsafe_allow_html=True,
     )
 
-    st.info(f"Aktive Sektion: {selected} — klicke einen Buchstaben, um die Eingaben zu wechseln.")
+    st.markdown(
+        f"""
+        <script>
+        setTimeout(function() {{
+            const selected = "{selected}";
+            const incomplete = {incomplete_letters};
+            const xButtons = Array.from(document.querySelectorAll('button')).filter((btn) => {{
+                const t = (btn.innerText || '').trim();
+                return ['A', 'B', 'C', 'D', 'E', 'A !', 'B !', 'C !', 'D !', 'E !'].includes(t);
+            }});
+
+            xButtons.forEach((btn) => {{
+                const raw = (btn.innerText || '').trim();
+                const letter = raw.charAt(0);
+
+                btn.style.border = '1px solid rgba(255,255,255,0.18)';
+                btn.style.background = 'rgba(255,255,255,0.03)';
+                btn.style.color = '#e7efff';
+                btn.style.boxShadow = 'none';
+
+                if (incomplete.includes(letter)) {{
+                    btn.style.border = '1px solid rgba(255,90,90,0.9)';
+                    btn.style.boxShadow = '0 0 14px rgba(255,70,70,0.45), inset 0 0 10px rgba(255,70,70,0.14)';
+                    btn.style.color = '#ffd3d3';
+                }}
+
+                if (letter === selected) {{
+                    btn.style.border = '1px solid rgba(120,190,255,0.9)';
+                    btn.style.background = 'linear-gradient(135deg, rgba(75,140,255,0.95), rgba(48,212,161,0.75))';
+                    btn.style.color = '#ffffff';
+                    btn.style.boxShadow = '0 0 16px rgba(75,140,255,0.45)';
+                }}
+            }});
+        }}, 60);
+        </script>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.info(f"Aktive Sektion: {selected} — rote Reiter mit ! sind noch unvollständig.")
 
     if selected == "A":
         st.subheader("A – Airway")
