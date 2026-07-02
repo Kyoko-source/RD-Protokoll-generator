@@ -1419,6 +1419,7 @@ elif seite == "💉 Medikamentenrechner":
             "Intoxikation: Benzodiazepine",
             "Intoxikation: Opiate / Opioide",
             "Lungenarterienembolie",
+            "Akuter Verschluss peripherer Arterien",
         ],
     )
 
@@ -2604,7 +2605,7 @@ elif seite == "💉 Medikamentenrechner":
             ],
         )
 
-    else:
+    elif sop == "Lungenarterienembolie":
         st.subheader("Klinische Konstellation")
 
         w1, w2, w3 = st.columns(3)
@@ -2701,6 +2702,92 @@ elif seite == "💉 Medikamentenrechner":
                 f"Wells-Score: {wells_score:.1f}",
                 f"sPESI-Score: {spesi_score}",
                 f"Heparin empfohlen: {'Ja' if len(meds) > 0 else 'Nein'}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    else:
+        st.subheader("Klinische Konstellation")
+
+        a1, a2, a3 = st.columns(3)
+        with a1:
+            schmerzen_ge3 = st.selectbox("Schmerzen NRS >= 3", ["Nein", "Ja"], key="pao_pain_ge3")
+        with a2:
+            instabilitaetszeichen = st.selectbox("Instabilitätszeichen (Schock/Prostration)", ["Nein", "Ja"], key="pao_instability")
+        with a3:
+            pulslosigkeit = st.selectbox("Pulselessness (Pulslosigkeit)", ["Nein", "Ja"], key="pao_pulseless")
+
+        s1, s2, s3 = st.columns(3)
+        with s1:
+            pallor = st.selectbox("Pallor (Blässe)", ["Nein", "Ja"], key="pao_pallor")
+        with s2:
+            paresthesia = st.selectbox("Paresthesia", ["Nein", "Ja"], key="pao_paresthesia")
+        with s3:
+            paralysis = st.selectbox("Paralysis", ["Nein", "Ja"], key="pao_paralysis")
+
+        risikofaktoren = st.multiselect(
+            "Risikofaktoren",
+            [
+                "Vorhofflimmern",
+                "kürzlicher Myokardinfarkt",
+                "andere kardiale Morbiditäten",
+                "Atherosklerose der Aorta",
+                "prothetischer Aortenersatz",
+                "Aorten-/Poplitealaneurysmen",
+                "Zustand nach Revaskularisation",
+                "arterielles Trauma (Unfall, iatrogen)",
+                "Hyperkoagulabilität",
+                "tiefe Venenthrombose bei persistierendem Foramen ovale",
+            ],
+            key="pao_risk_factors",
+        )
+
+        meds = ["Heparin 5.000 I.E. i.v."]
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+        ]
+        hinweise = [
+            "Leitsymptome der 6 P beachten: Pain, Pallor, Pulselessness, Paresthesia, Paralysis, Prostration",
+        ]
+
+        if schmerzen_ge3 == "Ja":
+            handlung.append("Starke Schmerzen (NRS >= 3): Analgesiepfad gemäß SOP Starke Schmerzen berücksichtigen")
+        else:
+            handlung.append("Keine starken Schmerzen (NRS < 3)")
+
+        handlung.append("Heparin 5.000 I.E. i.v. verabreichen")
+        handlung.append("Immobilisation und Tieflagerung der betroffenen Extremität")
+        handlung.append("Klinik / Ende")
+
+        if instabilitaetszeichen == "Ja":
+            hinweise.append("Instabilitätszeichen vorhanden: notärztliche Eskalation priorisieren.")
+        if pulslosigkeit == "Nein":
+            hinweise.append("Pulslosigkeit nicht gesichert: Differenzialdiagnosen und Verlauf engmaschig prüfen.")
+        if len(risikofaktoren) > 0:
+            hinweise.append(f"Risikofaktoren markiert: {len(risikofaktoren)}")
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        for i, med in enumerate(meds, start=1):
+            st.write(f"{i}. {med}")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        st.subheader("Zusätzliche Hinweise")
+        for i, h in enumerate(hinweise, start=1):
+            st.write(f"{i}. {h}")
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"Schmerzen NRS >= 3: {schmerzen_ge3}",
+                f"Pulslosigkeit: {pulslosigkeit}",
+                f"Risikofaktoren: {len(risikofaktoren)}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
