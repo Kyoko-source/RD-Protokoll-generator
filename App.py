@@ -468,8 +468,38 @@ st.markdown(
     [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
         [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button:focus { outline:none; }
     [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button[kind='primary'] { color:#fff; border:none; box-shadow: 0 15px 30px rgba(64,124,255,0.3); }
-        input, textarea, select { background:#0c1628 !important; color:var(--text) !important; border:1px solid rgba(255,255,255,0.08) !important; border-radius:12px !important; padding:10px 12px !important; font-size:0.95rem !important; }
-        input:focus, textarea:focus, select:focus { border-color:var(--accent) !important; box-shadow: 0 0 0 3px rgba(75,140,255,0.18) !important; }
+        [data-testid="stTextInput"] input,
+        [data-testid="stNumberInput"] input,
+        [data-testid="stTextArea"] textarea {
+            background:#0c1628 !important;
+            color:var(--text) !important;
+            border:1px solid rgba(255,255,255,0.08) !important;
+            border-radius:12px !important;
+            font-size:0.95rem !important;
+        }
+        [data-testid="stTextInput"] input:focus,
+        [data-testid="stNumberInput"] input:focus,
+        [data-testid="stTextArea"] textarea:focus {
+            border-color:var(--accent) !important;
+            box-shadow: 0 0 0 3px rgba(75,140,255,0.18) !important;
+        }
+        [data-testid="stSelectbox"] div[data-baseweb="select"] > div {
+            background:#0c1628 !important;
+            color:var(--text) !important;
+            border:1px solid rgba(255,255,255,0.08) !important;
+            border-radius:12px !important;
+        }
+        [data-testid="stSelectbox"] div[data-baseweb="select"] input {
+            background: transparent !important;
+            box-shadow: none !important;
+            border: none !important;
+        }
+        [data-testid="stWidgetLabel"] p,
+        [data-testid="stWidgetLabel"] span {
+            font-weight: 800 !important;
+            letter-spacing: 0.01em;
+            color: #f4f8ff !important;
+        }
         [data-testid="stSelectbox"] { margin: 10px 0; }
         [data-testid="stRadio"] > label { padding:8px 10px; border-radius:10px; cursor:pointer; transition: all 0.2s ease; }
         [data-testid="stRadio"] > label:hover { background: rgba(255,255,255,0.03); }
