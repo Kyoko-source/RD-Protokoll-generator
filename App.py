@@ -1412,6 +1412,7 @@ elif seite == "💉 Medikamentenrechner":
             "Hypertensiver Notfall",
             "Nichttraumatischer Brustschmerz: ACS",
             "Abdominelle Schmerzen / Koliken",
+            "Massive Übelkeit / Erbrechen",
             "Starke Schmerzen",
         ],
     )
@@ -2132,7 +2133,7 @@ elif seite == "💉 Medikamentenrechner":
             ],
         )
 
-    else:
+    elif sop == "Starke Schmerzen":
         st.subheader("Klinische Konstellation")
         p1, p2, p3 = st.columns(3)
         with p1:
@@ -2232,6 +2233,74 @@ elif seite == "💉 Medikamentenrechner":
                 f"NRS: {nrs}",
                 f"Trauma/andere Ursache: {trauma_andere_ursache}",
                 f"Keine deutliche Besserung: {keine_deutliche_besserung}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    else:
+        st.subheader("Klinische Konstellation")
+        m1, m2, m3 = st.columns(3)
+        with m1:
+            stillzeit = st.selectbox("Stillzeit", ["Nein", "Ja"], key="nausea_lactation")
+        with m2:
+            dehydration = st.selectbox("Dehydratation", ["Nein", "Ja"], key="nausea_dehydration")
+        with m3:
+            c2_intox = st.selectbox("C2-Intoxikation", ["Nein", "Ja"], key="nausea_c2_intox")
+
+        n1, n2 = st.columns(2)
+        with n1:
+            neuro_defizit = st.selectbox("Neurologische Defizite", ["Nein", "Ja"], key="nausea_neuro_def")
+        with n2:
+            krampfleiden_bekannt = st.selectbox("Bekanntes Krampfleiden", ["Nein", "Ja"], key="nausea_known_seizure")
+
+        meds = []
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+        ]
+        hinweise = []
+
+        if schwanger == "Ja" or stillzeit == "Ja":
+            handlung.append("Keine Gabe von Antiemetika")
+            handlung.append("ABCDE-Re-Evaluation")
+            handlung.append("Kliniktransport")
+        elif dehydration == "Ja" or c2_intox == "Ja":
+            handlung.append("ABCDE-Re-Evaluation")
+            handlung.append("Kliniktransport")
+            hinweise.append("Bei Dehydratation oder C2-Intoxikation in diesem SOP-Zweig keine Antiemetika-Gabe.")
+        else:
+            if alter > 60 or neuro_defizit == "Ja" or krampfleiden_bekannt == "Ja":
+                meds.append("Ondansetron 4 mg i.v., einmalige Repetition möglich")
+            else:
+                meds.append("Dimenhydrinat 31 mg i.v. und 31 mg als Zusatz in die Infusion")
+            handlung.append("Kliniktransport")
+
+        if schwanger == "Unbekannt":
+            hinweise.append("Schwangerschaftsstatus unklar: vor Antiemetika-Gabe engmaschig abklären.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        if meds:
+            for i, med in enumerate(meds, start=1):
+                st.write(f"{i}. {med}")
+        else:
+            st.write("Keine medikamentöse Antiemese in diesem Entscheidungszweig.")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        if hinweise:
+            st.subheader("Zusätzliche Hinweise")
+            for i, h in enumerate(hinweise, start=1):
+                st.write(f"{i}. {h}")
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"Schwangerschaft/Stillzeit: {schwanger}/{stillzeit}",
+                f"Dehydratation: {dehydration}",
+                f"C2-Intoxikation: {c2_intox}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
