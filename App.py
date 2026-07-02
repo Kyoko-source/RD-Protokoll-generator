@@ -1411,6 +1411,7 @@ elif seite == "💉 Medikamentenrechner":
             "Kardiales Lungenödem",
             "Hypertensiver Notfall",
             "Nichttraumatischer Brustschmerz: ACS",
+            "Abdominelle Schmerzen / Koliken",
             "Starke Schmerzen",
         ],
     )
@@ -2045,6 +2046,88 @@ elif seite == "💉 Medikamentenrechner":
                 f"NRS: {nrs_acs}",
                 f"AF: {af}/min",
                 f"ST-Hebung persistierend: {st_hebung_persist}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    elif sop == "Abdominelle Schmerzen / Koliken":
+        st.subheader("Klinische Konstellation")
+        a1, a2, a3 = st.columns(3)
+        with a1:
+            nrs_abd_1 = st.number_input("NRS initial (0-10)", min_value=0, max_value=10, value=6, key="abd_nrs_1")
+        with a2:
+            nrs_abd_2 = st.number_input("NRS nach Paracetamol", min_value=0, max_value=10, value=6, key="abd_nrs_2")
+        with a3:
+            nrs_abd_3 = st.number_input("NRS nach Butylscopolamin", min_value=0, max_value=10, value=5, key="abd_nrs_3")
+
+        meds = []
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+        ]
+        hinweise = []
+
+        if nrs_abd_1 >= 3:
+            if alter > 12:
+                if float(gewicht) <= 50:
+                    paracetamol_mg = round(15.0 * float(gewicht), 0)
+                    meds.append(f"Paracetamol {int(paracetamol_mg)} mg i.v. (15 mg/kgKG)")
+                else:
+                    meds.append("Paracetamol 1 g i.v.")
+            else:
+                hinweise.append("Paracetamol-Stufe im SOP-Fluss explizit für Erw./Kind >12 Jahre angegeben.")
+        else:
+            handlung.append("ABCDE-Re-Evaluation")
+
+        if nrs_abd_2 > 6:
+            butyl_mg = min(round(0.3 * float(gewicht), 1), 40.0)
+            if alter > 12:
+                meds.append(f"Butylscopolamin {butyl_mg} mg langsam i.v. (0,3 mg/kgKG, max. 40 mg)")
+            else:
+                hinweise.append("Butylscopolamin-Stufe im SOP-Fluss explizit für Erw./Kind >12 Jahre angegeben.")
+        else:
+            handlung.append("ABCDE-Re-Evaluation")
+
+        if nrs_abd_3 > 6:
+            if float(gewicht) > 30:
+                meds.append("Fentanyl i.v.: 0,05 mg Einmalgaben alle 4 Minuten, Maximaldosis 2 µg/kgKG")
+                hinweise.append("BTM-Dokumentation beachten")
+            else:
+                hinweise.append("Fentanyl-Stufe laut SOP erst ab >30 kg.")
+        else:
+            handlung.append("ABCDE-Re-Evaluation")
+
+        handlung.append("Kliniktransport")
+
+        hinweise.append(
+            "Hinweis aus SOP-Grafik: Von Butylscopolamin im Rahmen der Nierenkolik wird in der aktuellen S2k-Leitlinie in der Fachliteratur abgeraten."
+        )
+
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        if meds:
+            for i, med in enumerate(meds, start=1):
+                st.write(f"{i}. {med}")
+        else:
+            st.write("Keine stufenspezifische medikamentöse Empfehlung bei aktueller NRS-Konstellation.")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        st.subheader("Zusätzliche Hinweise")
+        for i, h in enumerate(hinweise, start=1):
+            st.write(f"{i}. {h}")
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"NRS initial: {nrs_abd_1}",
+                f"NRS nach Paracetamol: {nrs_abd_2}",
+                f"NRS nach Butylscopolamin: {nrs_abd_3}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
