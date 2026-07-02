@@ -767,32 +767,33 @@ if seite == "❤️ Vitalwerte":
 elif seite == "🩺 xABCDE":
 
     st.header("🩺 xABCDE")
+
+    params = st.experimental_get_query_params()
+    selected = params.get("xabcde", ["A"])[0]
+    if selected not in ["A", "B", "C", "D", "E"]:
+        selected = "A"
+
     st.markdown(
-        "<div style='display:flex; justify-content:center; gap:20px; margin-bottom:24px;'>"
-        "<button id='xabcde_A' style='cursor:pointer; border:none; background:transparent; color:#bbe1ff; font-size:46px; font-weight:800; letter-spacing:0.18em; padding:0 8px; transition: color 0.2s ease;'>A</button>"
-        "<button id='xabcde_B' style='cursor:pointer; border:none; background:transparent; color:#bbe1ff; font-size:46px; font-weight:800; letter-spacing:0.18em; padding:0 8px; transition: color 0.2s ease;'>B</button>"
-        "<button id='xabcde_C' style='cursor:pointer; border:none; background:transparent; color:#bbe1ff; font-size:46px; font-weight:800; letter-spacing:0.18em; padding:0 8px; transition: color 0.2s ease;'>C</button>"
-        "<button id='xabcde_D' style='cursor:pointer; border:none; background:transparent; color:#bbe1ff; font-size:46px; font-weight:800; letter-spacing:0.18em; padding:0 8px; transition: color 0.2s ease;'>D</button>"
-        "<button id='xabcde_E' style='cursor:pointer; border:none; background:transparent; color:#bbe1ff; font-size:46px; font-weight:800; letter-spacing:0.18em; padding:0 8px; transition: color 0.2s ease;'>E</button>"
-        "</div>"
-        "<script>"
-        "[...document.querySelectorAll('button[id^=xabcde_]')].forEach((letterBtn) => {"
-        "  letterBtn.addEventListener('mouseover', () => letterBtn.style.color = '#e0f2ff');"
-        "  letterBtn.addEventListener('mouseout', () => letterBtn.style.color = '#bbe1ff');"
-        "  letterBtn.addEventListener('click', () => {"
-        "    const letter = letterBtn.innerText.trim();"
-        "    const expanderButton = Array.from(document.querySelectorAll('button')).find((btn) => btn.innerText && btn.innerText.trim().startsWith(letter + ' – '));"
-        "    if (expanderButton) {"
-        "      expanderButton.click();"
-        "      expanderButton.scrollIntoView({behavior:'smooth', block:'center'});"
-        "    }"
-        "  });"
-        "});"
-        "</script>",
-        unsafe_allow_html=True
+        "<style>"
+        "  .xabcde-buttons { display:flex; justify-content:center; gap:22px; flex-wrap:wrap; margin-bottom:20px; }"
+        "  .xabcde-buttons button { min-width:78px; min-height:78px; border-radius:20px; border:1px solid rgba(187,225,255,0.3); background:rgba(255,255,255,0.04); color:#bbe1ff; font-size:42px; font-weight:900; letter-spacing:0.18em; cursor:pointer; transition:transform .15s ease, border-color .15s ease, background .15s ease; }"
+        "  .xabcde-buttons button:hover { transform:translateY(-2px); background:rgba(187,225,255,0.14); }"
+        "  .xabcde-buttons button.active { background:linear-gradient(135deg, rgba(75,140,255,0.95), rgba(187,225,255,0.95)); color:#07111f; border-color:rgba(255,255,255,0.55); }"
+        "</style>"
+        "<div class='xabcde-buttons'>"
+        f"<button class='{'active' if selected == 'A' else ''}' onclick=\"window.location.search='?xabcde=A'\">A</button>"
+        f"<button class='{'active' if selected == 'B' else ''}' onclick=\"window.location.search='?xabcde=B'\">B</button>"
+        f"<button class='{'active' if selected == 'C' else ''}' onclick=\"window.location.search='?xabcde=C'\">C</button>"
+        f"<button class='{'active' if selected == 'D' else ''}' onclick=\"window.location.search='?xabcde=D'\">D</button>"
+        f"<button class='{'active' if selected == 'E' else ''}' onclick=\"window.location.search='?xabcde=E'\">E</button>"
+        "</div>",
+        unsafe_allow_html=True,
     )
 
-    with st.expander("A – Airway", expanded=False):
+    st.info("Klicke einen Buchstaben, um direkt zum entsprechenden xABCDE-Untermenü zu gelangen.")
+
+    if selected == "A":
+        st.subheader("A – Airway")
         patient["xabcde"]["atemweg"] = st.radio(
             "Atemweg",
             ["Keine Angabe", "Frei", "Gefährdet", "Verlegt"],
@@ -804,7 +805,8 @@ elif seite == "🩺 xABCDE":
             key="hws"
         )
 
-    with st.expander("B – Breathing", expanded=False):
+    elif selected == "B":
+        st.subheader("B – Breathing")
         patient["xabcde"]["atmung"] = st.radio(
             "Atmung",
             ["Keine Angabe", "Unauffällig", "Dyspnoe", "Bradypnoe", "Tachypnoe", "Apnoe"],
@@ -821,7 +823,8 @@ elif seite == "🩺 xABCDE":
             key="sauerstoff"
         )
 
-    with st.expander("C – Circulation", expanded=False):
+    elif selected == "C":
+        st.subheader("C – Circulation")
         patient["xabcde"]["haut"] = st.radio(
             "Haut",
             ["Keine Angabe", "Rosig / warm", "Blass", "Kalt / schweißig", "Zyanotisch"],
@@ -838,7 +841,8 @@ elif seite == "🩺 xABCDE":
             key="pulsqualitaet"
         )
 
-    with st.expander("D – Disability", expanded=False):
+    elif selected == "D":
+        st.subheader("D – Disability")
         patient["xabcde"]["avpu"] = st.radio(
             "AVPU",
             ["Keine Angabe", "A", "V", "P", "U"],
@@ -850,7 +854,8 @@ elif seite == "🩺 xABCDE":
             key="pupillen"
         )
 
-    with st.expander("E – Exposure", expanded=False):
+    elif selected == "E":
+        st.subheader("E – Exposure")
         patient["xabcde"]["bodycheck"] = st.radio(
             "Bodycheck",
             ["Keine Angabe", "Unauffällig", "Auffällig"],
