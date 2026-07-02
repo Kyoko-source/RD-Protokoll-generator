@@ -1405,6 +1405,7 @@ elif seite == "💉 Medikamentenrechner":
         [
             "Anaphylaxie (SOPKB0105)",
             "Asthma/COPD Bronchialobstruktion (SOPKB0207)",
+            "Hypoglykämie",
         ],
     )
 
@@ -1500,7 +1501,7 @@ elif seite == "💉 Medikamentenrechner":
             ],
         )
 
-    else:
+    elif sop == "Asthma/COPD Bronchialobstruktion (SOPKB0207)":
         st.subheader("Klinische Konstellation")
         k1, k2, k3 = st.columns(3)
         with k1:
@@ -1578,6 +1579,72 @@ elif seite == "💉 Medikamentenrechner":
                 f"Alter/Gewicht: {alter} J / {gewicht} kg",
                 f"Symptomatische Tachykardie: {sympt_tachy}",
                 f"O2-Ziel: {o2_ziel}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    else:
+        st.subheader("Klinische Konstellation")
+        h1, h2, h3 = st.columns(3)
+        with h1:
+            bz_mg = st.number_input("BZ (mg/dl)", min_value=10, max_value=1000, value=55, key="hypo_bz_mg")
+        with h2:
+            bewusstseinsstoerung = st.selectbox("Bewusstseinsstörung", ["Nein", "Ja"], key="hypo_conscious")
+        with h3:
+            keine_besserung_hypo = st.selectbox("Keine Besserung (5 Min.)", ["Nein", "Ja"], key="hypo_no_improve")
+
+        bz_mmol = round(float(bz_mg) / 18.0, 1)
+        kriterium_hypo = float(bz_mg) < 60 or bz_mmol < 3.3
+
+        st.caption(f"Umgerechnet: {bz_mmol} mmol/l")
+
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+        ]
+        meds = []
+        hinweise = []
+
+        if kriterium_hypo:
+            if bewusstseinsstoerung == "Ja":
+                meds.append("Glucose bis zu 16 g i.v.")
+            else:
+                meds.append("Glucose oral")
+        else:
+            hinweise.append("Schwellenwert für SOP-Hypoglykämie aktuell nicht erfüllt (BZ <60 mg/dl oder <3,3 mmol/l).")
+
+        if keine_besserung_hypo == "Ja":
+            handlung.append("Notarztruf auslösen")
+            handlung.append("Kliniktransport priorisieren")
+        else:
+            handlung.append("Weiterbeobachtung und anschließend Klinik / Ende gemäß Gesamtlage")
+
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühzeitige ärztliche Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        if meds:
+            for i, med in enumerate(meds, start=1):
+                st.write(f"{i}. {med}")
+        else:
+            st.write("Keine unmittelbare Glucose-Gabe nach diesem SOP-Schwellenwert.")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        if hinweise:
+            st.subheader("Zusätzliche Hinweise")
+            for i, h in enumerate(hinweise, start=1):
+                st.write(f"{i}. {h}")
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"BZ: {bz_mg} mg/dl ({bz_mmol} mmol/l)",
+                f"Bewusstseinsstörung: {bewusstseinsstoerung}",
+                f"Keine Besserung (5 Min.): {keine_besserung_hypo}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
