@@ -101,23 +101,7 @@ def generate_protocol():
     protocol = ""
     patient = st.session_state.get("patient", {})
 
-    # Header / Meta
-    meta = patient.get("meta", {})
-    if meta:
-        header_lines = []
-        if meta.get("name"):
-            header_lines.append(f"Patient: {meta.get('name')}")
-        if meta.get("geburtsdatum"):
-            header_lines.append(f"Geburtsdatum: {meta.get('geburtsdatum')}")
-        if meta.get("einsatzdatum"):
-            header_lines.append(f"Einsatzdatum: {meta.get('einsatzdatum')}")
-        if meta.get("ort"):
-            header_lines.append(f"Ort: {meta.get('ort')}")
-        if meta.get("einsatznummer"):
-            header_lines.append(f"Einsatz-Nr.: {meta.get('einsatznummer')}")
-        if header_lines:
-            protocol += " | ".join(header_lines) + "\n"
-            protocol += "=========================\n\n"
+    # Hinweis: Keine personenbezogenen Metadaten werden ausgegeben (Datenschutz)
 
     v = patient.get("vitalwerte", {})
     x = patient.get("xabcde", {})
@@ -348,8 +332,7 @@ if "patient" not in st.session_state:
 
         "samplers": {},
 
-        "opqrst": {},
-        "meta": {}
+        "opqrst": {}
 
     }
 
@@ -407,18 +390,6 @@ def checkbox_field(section, key, label):
 # --------------------------------------------------
 # Navigation
 # --------------------------------------------------
-
-# Sidebar: Patienten- / Einsatz-Metadaten
-with st.sidebar.expander("Patient / Einsatz (Metadaten)", expanded=True):
-    meta = patient.get("meta", {})
-    meta["name"] = st.text_input("Patientenname", value=meta.get("name", ""), key="meta_name")
-    meta["geburtsdatum"] = st.text_input("Geburtsdatum (JJJJ-MM-TT)", value=meta.get("geburtsdatum", ""), key="meta_geb")
-    meta["einsatzdatum"] = st.text_input("Einsatzdatum (JJJJ-MM-TT)", value=meta.get("einsatzdatum", ""), key="meta_einsatz")
-    meta["ort"] = st.text_input("Einsatzort", value=meta.get("ort", ""), key="meta_ort")
-    meta["einsatznummer"] = st.text_input("Einsatznummer", value=meta.get("einsatznummer", ""), key="meta_nr")
-    meta["notiz"] = st.text_input("Kurze Notiz / Einsatzgrund", value=meta.get("notiz", ""), key="meta_notiz")
-    patient["meta"] = meta
-
 
 seite = st.sidebar.radio(
 
@@ -1034,19 +1005,6 @@ elif seite == "📄 Protokoll":
                 pdf.set_font("Arial", 'B', 16)
                 pdf.cell(0, 8, "RD-Protokoll", ln=1, align='C')
                 pdf.ln(2)
-                # Meta / header
-                meta = st.session_state.get('patient', {}).get('meta', {})
-                pdf.set_font("Arial", size=10)
-                if meta:
-                    if meta.get('name'):
-                        pdf.cell(0, 6, f"Patient: {meta.get('name')}", ln=1)
-                    if meta.get('geburtsdatum'):
-                        pdf.cell(0, 6, f"Geburtsdatum: {meta.get('geburtsdatum')}", ln=1)
-                    if meta.get('einsatzdatum'):
-                        pdf.cell(0, 6, f"Einsatzdatum: {meta.get('einsatzdatum')}", ln=1)
-                    if meta.get('ort'):
-                        pdf.cell(0, 6, f"Ort: {meta.get('ort')}", ln=1)
-                    pdf.ln(4)
                 pdf.cell(0, 6, f"Erstellt: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=1)
                 pdf.ln(4)
                 pdf.set_font("Arial", size=12)
