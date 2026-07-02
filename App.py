@@ -1397,7 +1397,7 @@ elif seite == "🔎 Verdacht":
 elif seite == "💉 Medikamentenrechner":
 
     st.header("💉 Medikamentenrechner")
-    st.caption("SOP-Rechner für Anaphylaxie und Asthma/COPD Bronchialobstruktion")
+    st.caption("SOP-Rechner für mehrere Krankheitsbilder")
     st.warning("Sicherheits-Hinweis: Dieses Modul ist eine rechnerische SOP-Unterstützung. Es ersetzt keine klinische Entscheidung oder Freigabe durch Fachpersonal.")
 
     sop = st.selectbox(
@@ -1407,6 +1407,7 @@ elif seite == "💉 Medikamentenrechner":
             "Asthma/COPD Bronchialobstruktion (SOPKB0207)",
             "Hypoglykämie",
             "Krampfanfall",
+            "Schlaganfall",
         ],
     )
 
@@ -1650,7 +1651,7 @@ elif seite == "💉 Medikamentenrechner":
             ],
         )
 
-    else:
+    elif sop == "Krampfanfall":
         st.subheader("Klinische Konstellation")
         k1, k2, k3 = st.columns(3)
         with k1:
@@ -1721,6 +1722,90 @@ elif seite == "💉 Medikamentenrechner":
                 f"Andauernder Anfall initial: {andauernder_anfall_1}",
                 f"i.v. Zugang vorhanden: {iv_zugang}",
                 f"Midazolam i.v.-Rechner: {iv_midazolam_mg} mg",
+            ],
+        )
+
+    else:
+        st.subheader("Klinische Konstellation")
+        s1, s2, s3 = st.columns(3)
+        with s1:
+            rr_syst = st.number_input("RR syst. (mmHg)", min_value=50, max_value=300, value=170, key="stroke_rr_syst")
+        with s2:
+            symptombeginn_h = st.number_input("Stunden seit Symptombeginn", min_value=0.0, max_value=72.0, value=1.5, step=0.5, key="stroke_onset_h")
+        with s3:
+            befast_positiv = st.selectbox("BE-FAST positiv", ["Nein", "Ja"], key="stroke_befast")
+
+        c1, c2, c3 = st.columns(3)
+        with c1:
+            cave_fieber = st.selectbox("CAVE Fieber", ["Nein", "Ja"], key="stroke_cave_fever")
+        with c2:
+            cave_exsikkose = st.selectbox("CAVE Exsikkose", ["Nein", "Ja"], key="stroke_cave_exsiccosis")
+        with c3:
+            cave_hypogly = st.selectbox("CAVE Hypoglykämie", ["Nein", "Ja"], key="stroke_cave_hypo")
+
+        meds = []
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+        ]
+        hinweise = []
+
+        if rr_syst < 120:
+            meds.append("Volumengabe 500 ml Vollelektrolytlösung i.v.")
+            hinweise.append("Ziel: Normotension")
+        elif rr_syst > 220:
+            meds.append("Urapidil 5-15 mg langsam i.v., titrierend")
+            hinweise.append("Ziel: systolischer RR < 220 mmHg")
+        else:
+            hinweise.append("Bei RR syst. 120-220 mmHg keine primäre RR-Senkung gemäß SOP-Fluss.")
+
+        handlung.append("Voranmeldung Neurologie / Stroke Unit")
+        handlung.append("Kliniktransport priorisieren")
+
+        if symptombeginn_h < 6:
+            hinweise.append("Zeitfenster: < 6 h, systemische Lyse möglich.")
+        elif symptombeginn_h <= 8:
+            hinweise.append("Zeitfenster: bis 8 h und mehr, intraarterielle Thrombektomie möglich.")
+        else:
+            hinweise.append("Zeitfenster außerhalb klassischer Akutfenster, trotzdem Stroke-Unit-Voranmeldung.")
+
+        if befast_positiv == "Ja":
+            hinweise.append("BE-FAST passend: Balance/Eyes/Face/Arm/Speech/Time dokumentieren.")
+        if cave_fieber == "Ja" or cave_exsikkose == "Ja" or cave_hypogly == "Ja":
+            hinweise.append("CAVE-Konstellation vorhanden: Differenzialdiagnosen aktiv mitbeurteilen.")
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühe neurologische/geburtshilfliche Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        if meds:
+            for i, med in enumerate(meds, start=1):
+                st.write(f"{i}. {med}")
+        else:
+            st.write("Keine akute medikamentöse RR-Intervention gemäß SOP-Schwelle erforderlich.")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        st.subheader("Zusätzliche Hinweise")
+        for i, h in enumerate(hinweise, start=1):
+            st.write(f"{i}. {h}")
+
+        st.info(
+            "Stroke-Unit Kontakte (laut Vorlage): "
+            "Borken 02861 97 707 77 | Wesel (ev.) 0281 106 5808 (tags) / 0281 106 5800 | "
+            "Dülmen 02594 92 47750 | MST Enschede 0031 53 4873999 | Nordhorn 05921 84 2222 | "
+            "UKM Münster 0251 83 55555"
+        )
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"RR syst.: {rr_syst} mmHg",
+                f"Seit Symptombeginn: {symptombeginn_h} h",
+                f"BE-FAST positiv: {befast_positiv}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
 
