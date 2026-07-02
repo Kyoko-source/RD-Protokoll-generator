@@ -462,9 +462,48 @@ st.markdown(
         <style>
     :root { --bg:#070f1f; --panel:#0f1b31; --panel-2:#1a2c4a; --muted:#9aa9c2; --accent:#57a4ff; --accent-2:#ff7d66; --accent-3:#35d8a6; --text:#eef5ff; --line:rgba(255,255,255,0.09); }
     html, body, [class*="css"] { background: radial-gradient(circle at 18% 0%, rgba(87,164,255,0.22), transparent 34%), radial-gradient(circle at 92% 12%, rgba(255,125,102,0.18), transparent 34%), linear-gradient(135deg, var(--bg) 0%, #081327 100%) !important; color: var(--text); }
-    .header { position: relative; overflow:hidden; background: linear-gradient(120deg, rgba(62,136,245,0.98) 0%, rgba(92,122,220,0.95) 33%, rgba(196,108,140,0.92) 100%); color: white; padding: 30px 30px 34px; border-radius: 22px; min-height: 112px; margin-bottom: 20px; box-shadow: 0 24px 52px rgba(3,10,26,0.5); border: 1px solid rgba(255,255,255,0.24); }
-    .header::before { content:""; position:absolute; inset:-20% auto auto -10%; width:220px; height:220px; background: radial-gradient(circle, rgba(255,255,255,0.25), transparent 70%); pointer-events:none; }
-    .header::after { content:""; position:absolute; left:22px; right:22px; bottom:10px; height:1px; background: linear-gradient(90deg, rgba(255,255,255,0.22), rgba(255,255,255,0.03)); pointer-events:none; }
+    .hero-card {
+        position: relative;
+        overflow: hidden;
+        margin: 10px 0 18px;
+        padding: 24px 26px 22px;
+        border-radius: 28px;
+        border: 1px solid rgba(255,255,255,0.14);
+        background:
+            radial-gradient(circle at 12% 18%, rgba(88,166,255,0.26), transparent 24%),
+            radial-gradient(circle at 90% 10%, rgba(255,127,142,0.18), transparent 22%),
+            linear-gradient(135deg, rgba(17,28,52,0.96) 0%, rgba(16,27,49,0.92) 100%);
+        box-shadow: 0 26px 54px rgba(3,10,26,0.45);
+    }
+    .hero-card::before {
+        content:"";
+        position:absolute;
+        inset:-40% auto auto -10%;
+        width:260px;
+        height:260px;
+        background: radial-gradient(circle, rgba(87,164,255,0.22), transparent 70%);
+        pointer-events:none;
+    }
+    .hero-card::after {
+        content:"";
+        position:absolute;
+        inset:auto 18px 12px 18px;
+        height:1px;
+        background: linear-gradient(90deg, rgba(255,255,255,0.20), rgba(255,255,255,0.02));
+        pointer-events:none;
+    }
+    .hero-row { display:flex; justify-content:space-between; align-items:flex-start; gap:18px; flex-wrap:wrap; position:relative; z-index:1; }
+    .hero-kicker { display:inline-flex; align-items:center; gap:8px; font-size:0.78rem; letter-spacing:0.12em; text-transform:uppercase; color:rgba(231,241,255,0.76); font-weight:800; }
+    .hero-kicker-badge { width:10px; height:10px; border-radius:999px; background: linear-gradient(135deg, #61b6ff 0%, #ff7b8f 100%); box-shadow: 0 0 0 4px rgba(97,182,255,0.14); }
+    .hero-title { margin-top:8px; font-size:2.15rem; line-height:1.05; font-weight:950; letter-spacing:-0.03em; color:#f7fbff; }
+    .hero-sub { margin-top:8px; max-width:760px; color:rgba(231,241,255,0.82); font-size:0.98rem; line-height:1.45; }
+    .hero-meta { display:flex; gap:10px; flex-wrap:wrap; margin-top:18px; }
+    .hero-chip { display:inline-flex; align-items:center; gap:8px; padding:9px 12px; border-radius:999px; background: rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.11); color:#eef5ff; font-size:0.82rem; font-weight:800; box-shadow: 0 10px 18px rgba(2,8,24,0.18); }
+    .hero-chip span { opacity:0.76; font-weight:700; }
+    .hero-cta { display:flex; align-items:flex-start; justify-content:flex-end; min-width:180px; }
+    .hero-status { display:inline-flex; align-items:center; gap:8px; padding:10px 14px; border-radius:16px; background: linear-gradient(135deg, rgba(87,164,255,0.18), rgba(255,125,102,0.16)); border:1px solid rgba(255,255,255,0.12); color:#f4f8ff; font-size:0.84rem; font-weight:800; }
+    .hero-status-dot { width:8px; height:8px; border-radius:999px; background: #5cffb1; box-shadow: 0 0 0 4px rgba(92,255,177,0.12); }
+    .header { position: relative; overflow:hidden; }
     .header-title { font-size:2rem; font-weight:900; letter-spacing:0.01em; text-shadow: 0 2px 12px rgba(6,20,44,0.35); }
     .header-sub { opacity:0.96; color:rgba(255,255,255,0.95); font-size:1.05rem; font-weight:700; }
         [data-testid="column"]:nth-child(n+2):nth-child(-n+11) { padding: 0 2px; }
@@ -520,7 +559,30 @@ st.markdown(
         unsafe_allow_html=True,
 )
 
-st.markdown("""<div class='header'><div style='display:flex; align-items:center; gap:14px; flex-wrap:wrap;'><div class='header-title'>🚑 RD-Protokoll Generator</div><div class='header-sub'>Schnell. Klar. Einsatzbereit.</div></div></div>""", unsafe_allow_html=True)
+st.markdown(
+    """
+    <div class='hero-card'>
+        <div class='hero-row'>
+            <div>
+                <div class='hero-kicker'><span class='hero-kicker-badge'></span> RD-Protokoll Generator</div>
+                <div class='hero-title'>Schnell. Klar. Einsatzbereit.</div>
+                <div class='hero-sub'>
+                    Eine kompakte, strukturierte Dokumentationshilfe für den Rettungsdienst mit SOP-gestützter Unterstützung, schnellen Eingaben und sauberem Protokoll-Export.
+                </div>
+                <div class='hero-meta'>
+                    <div class='hero-chip'>17 SOPs <span>zentral steuerbar</span></div>
+                    <div class='hero-chip'>Admin <span>passwortgeschützt</span></div>
+                    <div class='hero-chip'>Protokoll <span>in Sekunden erzeugt</span></div>
+                </div>
+            </div>
+            <div class='hero-cta'>
+                <div class='hero-status'><span class='hero-status-dot'></span> Einsatzbereit</div>
+            </div>
+        </div>
+    </div>
+    """,
+    unsafe_allow_html=True,
+)
 
 # --------------------------------------------------
 # Patientenobjekt anlegen
