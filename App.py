@@ -402,10 +402,6 @@ st.markdown(
         :root { --bg:#07111f; --panel:#101b30; --panel-2:#16233c; --muted:#91a0b8; --accent:#4b8cff; --accent-2:#ff7a7a; --accent-3:#30d4a1; --text:#eef5ff; --line:rgba(255,255,255,0.08); }
         html, body, [class*="css"] { background: radial-gradient(circle at top left, rgba(75,140,255,0.18), transparent 28%), linear-gradient(135deg, var(--bg) 0%, #081426 100%) !important; color: var(--text); }
         .header { background: linear-gradient(135deg, rgba(75,140,255,0.95) 0%, rgba(255,122,122,0.9) 100%); color: white; padding: 20px 24px; border-radius: 18px; box-shadow: 0 16px 40px rgba(4,10,24,0.35); border: 1px solid rgba(255,255,255,0.16); }
-        .welcome-card { margin-top: 16px; padding: 18px 20px; border-radius: 16px; background: linear-gradient(135deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03)); border: 1px solid var(--line); box-shadow: 0 12px 30px rgba(2,6,23,0.18); }
-        .badge { display:inline-block; padding:6px 10px; border-radius:999px; background: rgba(48,212,161,0.18); color:#bff7e4; font-size:0.8rem; font-weight:700; letter-spacing:0.04em; margin-bottom:10px; }
-        .welcome-title { font-size:1.15rem; font-weight:800; color:var(--text); margin-bottom:6px; }
-        .welcome-copy { color:var(--muted); font-size:0.95rem; line-height:1.45; }
         [data-testid="column"]:nth-child(n+2):nth-child(-n+6) { padding: 0 2px; }
         [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 999px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.04); color: var(--text); font-weight: 700; margin:0; box-shadow: 0 8px 24px rgba(2,6,23,0.22); transition: all 0.2s ease; }
         [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button:hover { background: rgba(255,255,255,0.08); transform: translateY(-2px); }
@@ -451,11 +447,6 @@ st.markdown(
                 <div style='font-size:20px; font-weight:800'>🚑 RD-Protokoll Generator</div>
                 <div style='opacity:0.95; color:rgba(255,255,255,0.9);'>Helfende, strukturierte Einsatzdokumentation in wenigen Schritten</div>
             </div>
-        </div>
-        <div class='welcome-card'>
-            <div class='badge'>✨ Schnell • sicher • klar</div>
-            <div class='welcome-title'>Ihr Protokoll entsteht direkt aus den wichtigsten Angaben.</div>
-            <div class='welcome-copy'>Die Eingaben sind bewusst einfach gehalten, aber trotzdem so aufgebaut, dass ein professionelles Rettungsdienst-Protokoll entsteht.</div>
         </div>
         """,
         unsafe_allow_html=True,
