@@ -1,9 +1,11 @@
-import streamlit as st
+﻿import streamlit as st
 import streamlit.components.v1 as components
 from io import BytesIO
 from fpdf import FPDF
 from datetime import datetime
 import json
+import os
+from copy import deepcopy
 
 
 def add_line(text, value):
@@ -463,11 +465,11 @@ st.markdown(
     .header::after { content:""; position:absolute; left:22px; right:22px; bottom:10px; height:1px; background: linear-gradient(90deg, rgba(255,255,255,0.22), rgba(255,255,255,0.03)); pointer-events:none; }
     .header-title { font-size:2rem; font-weight:900; letter-spacing:0.01em; text-shadow: 0 2px 12px rgba(6,20,44,0.35); }
     .header-sub { opacity:0.96; color:rgba(255,255,255,0.95); font-size:1.05rem; font-weight:700; }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+10) { padding: 0 2px; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.13); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)); color: var(--text); font-weight: 800; margin:0; box-shadow: 0 12px 24px rgba(2,8,24,0.28); transition: all 0.22s ease; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button:focus { outline:none; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button[kind='primary'] { color:#fff; border:none; box-shadow: 0 15px 30px rgba(64,124,255,0.3); }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+11) { padding: 0 2px; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.13); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)); color: var(--text); font-weight: 800; margin:0; box-shadow: 0 12px 24px rgba(2,8,24,0.28); transition: all 0.22s ease; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button:focus { outline:none; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button[kind='primary'] { color:#fff; border:none; box-shadow: 0 15px 30px rgba(64,124,255,0.3); }
         [data-testid="stTextInput"] input,
         [data-testid="stNumberInput"] input,
         [data-testid="stTextArea"] textarea {
@@ -549,6 +551,58 @@ patient.setdefault("opqrst", {})
 patient.setdefault("massnahmen", {"timeline": [], "medikation": []})
 patient["massnahmen"].setdefault("timeline", [])
 patient["massnahmen"].setdefault("medikation", [])
+
+# --------------------------------------------------
+# Admin-Konfiguration
+# --------------------------------------------------
+
+ADMIN_PASSWORD = "RD112BOR"
+SOP_ADMIN_CONFIG_FILE = "sop_admin_config.json"
+DEFAULT_SOP_ADMIN_CONFIG = {
+    "value_overrides": {
+        "lae_wells_threshold": 5.0,
+        "lae_spesi_threshold": 1.0,
+    }
+}
+
+
+def _deep_merge_dict(base_dict, update_dict):
+    merged = deepcopy(base_dict)
+    for key, value in update_dict.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge_dict(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _load_sop_admin_config():
+    config = deepcopy(DEFAULT_SOP_ADMIN_CONFIG)
+    if os.path.exists(SOP_ADMIN_CONFIG_FILE):
+        try:
+            with open(SOP_ADMIN_CONFIG_FILE, "r", encoding="utf-8") as file_obj:
+                disk_config = json.load(file_obj)
+            if isinstance(disk_config, dict):
+                config = _deep_merge_dict(config, disk_config)
+        except Exception:
+            pass
+    return config
+
+
+def _save_sop_admin_config(config):
+    with open(SOP_ADMIN_CONFIG_FILE, "w", encoding="utf-8") as file_obj:
+        json.dump(config, file_obj, ensure_ascii=False, indent=2)
+
+
+if "admin_unlocked" not in st.session_state:
+    st.session_state["admin_unlocked"] = False
+
+if "sop_admin_config" not in st.session_state:
+    st.session_state["sop_admin_config"] = _load_sop_admin_config()
+
+
+def sop_value(key, default_value):
+    return st.session_state.get("sop_admin_config", {}).get("value_overrides", {}).get(key, default_value)
 # --------------------------------------------------
 # Hilfsfunktionen
 # --------------------------------------------------
@@ -746,6 +800,7 @@ if 'xabcde_selected' not in st.session_state:
     st.session_state['xabcde_selected'] = "A"
 
 nav_options = [
+    "🛠️ Admin",
     "❤️ Vitalwerte",
     "🩺 xABCDE",
     "📋 SAMPLERS",
@@ -760,7 +815,7 @@ nav_options = [
 # Navigation mit Streamlit-Buttons und Session-State
 nav_container = st.container()
 with nav_container:
-    cols_nav = st.columns([1] + [1]*9 + [1])
+    cols_nav = st.columns([1] + [1]*10 + [1])
     for i, opt in enumerate(nav_options):
         with cols_nav[i+1]:
             nav_type = "primary" if st.session_state['seite'] == opt else "secondary"
@@ -771,6 +826,7 @@ with nav_container:
 seite = st.session_state['seite']
 
 active_nav_palette = {
+    "🛠️ Admin": ("#6d7dff", "#8e9dff"),
     "❤️ Vitalwerte": ("#ff5b86", "#ff9a5a"),
     "🩺 xABCDE": ("#4b8cff", "#35d8a6"),
     "📋 SAMPLERS": ("#5f89ff", "#7a67f8"),
@@ -785,7 +841,7 @@ start_color, end_color = active_nav_palette.get(seite, ("#4b8cff", "#ff7a7a"))
 st.markdown(
     f"""
     <style>
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button[kind='primary'] {{
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button[kind='primary'] {{
         background: linear-gradient(135deg, {start_color} 0%, {end_color} 100%);
     }}
     </style>
@@ -797,7 +853,62 @@ st.markdown(
 # VITALWERTE
 # --------------------------------------------------
 
-if seite == "❤️ Vitalwerte":
+if seite == "🛠️ Admin":
+
+    st.header("🛠️ Adminbereich")
+    st.caption("Passwortgeschützt: SOP-Schwellenwerte zentral pflegen")
+
+    if not st.session_state.get("admin_unlocked", False):
+        admin_pw = st.text_input("Admin-Passwort", type="password", key="admin_password_input")
+        if st.button("🔓 Admin freischalten", key="admin_unlock_btn", use_container_width=True, type="primary"):
+            if admin_pw == ADMIN_PASSWORD:
+                st.session_state["admin_unlocked"] = True
+                st.success("Adminbereich freigeschaltet")
+                st.rerun()
+            else:
+                st.error("Falsches Passwort")
+    else:
+        current_values = st.session_state["sop_admin_config"].get("value_overrides", {})
+
+        lae_wells = st.number_input(
+            "LAE: Wells-Schwelle",
+            min_value=0.0,
+            max_value=20.0,
+            value=float(current_values.get("lae_wells_threshold", 5.0)),
+            step=0.5,
+            key="admin_lae_wells_threshold",
+        )
+
+        lae_spesi = st.number_input(
+            "LAE: sPESI-Schwelle",
+            min_value=0.0,
+            max_value=10.0,
+            value=float(current_values.get("lae_spesi_threshold", 1.0)),
+            step=1.0,
+            key="admin_lae_spesi_threshold",
+        )
+
+        c1, c2 = st.columns(2)
+        with c1:
+            if st.button("💾 Einstellungen speichern", use_container_width=True, type="primary"):
+                st.session_state["sop_admin_config"] = {
+                    "value_overrides": {
+                        "lae_wells_threshold": float(lae_wells),
+                        "lae_spesi_threshold": float(lae_spesi),
+                    }
+                }
+                _save_sop_admin_config(st.session_state["sop_admin_config"])
+                st.success("Admin-Einstellungen gespeichert")
+
+        with c2:
+            if st.button("🔒 Admin sperren", use_container_width=True):
+                st.session_state["admin_unlocked"] = False
+                st.rerun()
+
+        st.subheader("Aktive Konfiguration")
+        st.code(json.dumps(st.session_state.get("sop_admin_config", {}), indent=2, ensure_ascii=False), language="json")
+
+elif seite == "❤️ Vitalwerte":
 
     st.header("❤️ Vitalwerte & Demographie")
     
@@ -2697,13 +2808,16 @@ elif seite == "💉 Med-Rechner":
             f"sPESI-Score berechnet: {spesi_score} Punkte",
         ]
 
-        if wells_score >= 5.0:
-            if spesi_score >= 1:
+        wells_threshold = float(sop_value("lae_wells_threshold", 5.0))
+        spesi_threshold = float(sop_value("lae_spesi_threshold", 1.0))
+
+        if wells_score >= wells_threshold:
+            if spesi_score >= spesi_threshold:
                 meds.append("Heparin 5000 I.E. i.v.")
             else:
-                hinweise.append("sPESI < 1: in diesem SOP-Pfad keine Heparin-Gabe.")
+                hinweise.append(f"sPESI < {spesi_threshold:g}: in diesem SOP-Pfad keine Heparin-Gabe.")
         else:
-            hinweise.append("Wells-Score < 5: in diesem SOP-Pfad keine Heparin-Gabe.")
+            hinweise.append(f"Wells-Score < {wells_threshold:g}: in diesem SOP-Pfad keine Heparin-Gabe.")
 
         handlung.append("ABCDE-Re-Evaluation")
         handlung.append("Klinik / Ende")
