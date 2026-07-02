@@ -1397,13 +1397,10 @@ elif seite == "🔎 Verdacht":
 elif seite == "💉 Medikamentenrechner":
 
     st.header("💉 Medikamentenrechner")
-    st.caption("Aktuell implementiert: SOP-Krankheitsbild Anaphylaxie (SOPKB0105)")
+    st.caption("Aktuell implementiert: SOP-Krankheitsbild Asthma/COPD Bronchialobstruktion (SOPKB0207)")
     st.warning("Sicherheits-Hinweis: Dieses Modul ist eine rechnerische SOP-Unterstützung. Es ersetzt keine klinische Entscheidung oder Freigabe durch Fachpersonal.")
 
-    sop = st.selectbox(
-        "SOP auswählen",
-        ["Anaphylaxie (SOPKB0105)"]
-    )
+    sop = st.selectbox("SOP auswählen", ["Asthma/COPD Bronchialobstruktion (SOPKB0207)"])
 
     c1, c2, c3 = st.columns(3)
     with c1:
@@ -1416,84 +1413,81 @@ elif seite == "💉 Medikamentenrechner":
     st.subheader("Klinische Konstellation")
     k1, k2, k3 = st.columns(3)
     with k1:
-        grad = st.selectbox("Anaphylaxiegrad", ["I", "II", "III", "IV"], key="ana_grade")
-        abcd_problem = st.checkbox("A/B/C/D Problem (Grad II/III)", key="ana_abcd_problem")
+        sympt_tachy = st.selectbox("Symptomatische Tachykardie", ["Nein", "Ja"], key="asthma_sympt_tachy")
+        copd_bekannt = st.selectbox("Bekannte COPD", ["Nein", "Ja"], key="asthma_copd_known")
     with k2:
-        stridor = st.checkbox("Dysphonie / Uvulaschwellung / inspiratorischer Stridor", key="ana_stridor")
-        bronch_obstr = st.checkbox("Dyspnoe / bronchiale Obstruktion", key="ana_bronch")
+        keine_besserung = st.selectbox("Keine Besserung nach 5 Min.", ["Nein", "Ja"], key="asthma_no_improve")
+        cpap_relevant = st.selectbox("CPAP/NIV erwägen", ["Nein", "Ja"], key="asthma_cpap")
     with k3:
-        schock = st.checkbox("Hypotonie / Schock / Bewusstlosigkeit", key="ana_shock")
-        kreislaufstillstand = st.checkbox("Kreislaufstillstand", key="ana_cpr")
+        spo2_aktuell = st.number_input("Aktuelle SpO₂ (%)", min_value=50, max_value=100, value=92, key="asthma_spo2")
 
-    # SOP-Dosierungen
-    if alter >= 12:
-        adrenalin_im_mg = 0.5
-        clemastin_mg = 2.0
-        prednisolon_mg = 250.0
-        salbutamol_mg = 2.5
-    elif alter >= 6:
-        adrenalin_im_mg = 0.3
-        clemastin_mg = round(0.03 * float(gewicht), 2)
-        prednisolon_mg = round(2.0 * float(gewicht), 1)
-        salbutamol_mg = 1.25 if alter <= 12 else 2.5
-    else:
-        adrenalin_im_mg = 0.15
-        clemastin_mg = round(0.03 * float(gewicht), 2)
-        prednisolon_mg = round(2.0 * float(gewicht), 1)
-        salbutamol_mg = None
-
-    volumen_ml = round(20.0 * float(gewicht), 0)
-
-    st.subheader("Berechnete SOP-Dosierungen")
-    d1, d2, d3 = st.columns(3)
-    with d1:
-        st.metric("Adrenalin i.m. (pur)", f"{adrenalin_im_mg} mg")
-        st.caption("SOP: alle 5 Minuten wiederholbar bei fehlender Stabilisierung")
-    with d2:
-        st.metric("Clemastin i.v.", f"{clemastin_mg} mg")
-        st.metric("Prednisolon i.v.", f"{prednisolon_mg} mg")
-    with d3:
-        st.metric("Volumenbolus Vollelektrolyt", f"{int(volumen_ml)} ml")
-        if salbutamol_mg is not None:
-            st.metric("Salbutamol verneb.", f"{salbutamol_mg} mg")
-        else:
-            st.metric("Salbutamol verneb.", "keine SOP-Angabe <4 Jahre")
-
-    st.info("Adrenalin-Verneblung laut SOP bei Dysphonie/Uvulaschwellung/Stridor: 4 mg pur verneb.")
-
+    meds = []
     handlung = []
-    if kreislaufstillstand or grad == "IV":
-        handlung.append("Grad IV / Kreislaufstillstand: Reanimationsalgorithmus (SOP CPR) priorisieren.")
+    hinweise = []
+
+    if sympt_tachy == "Ja":
+        hinweise.append("Laut SOP: bei symptomatischer Tachykardie Notarztindikation prüfen / Notarztruf.")
     else:
-        handlung.append("Basismaßnahmen: Auslöser entfernen, ABCDE, Monitoring, O2, i.v.-Zugang, Blutzucker, SAMPLER.")
-        if abcd_problem or grad in ["II", "III"]:
-            handlung.append(f"Unverzüglich Adrenalin i.m. {adrenalin_im_mg} mg (auch ohne vorliegenden i.v.-Zugang).")
-        if stridor:
-            handlung.append("Atemwegsproblem: Adrenalin 4 mg pur verneb + Clemastin i.v. + Prednisolon i.v.")
-        if bronch_obstr:
-            if salbutamol_mg is not None:
-                handlung.append(f"Bronchiale Obstruktion: Salbutamol {salbutamol_mg} mg verneb.")
-            else:
-                handlung.append("Bronchiale Obstruktion: Salbutamol-Dosis für <4 Jahre nicht in dieser SOP angegeben.")
-        if schock:
-            handlung.append(f"Schockzeichen: Volumenbolus Vollelektrolyt {int(volumen_ml)} ml.")
-        handlung.append("Bei fehlender Stabilisierung Adrenalin i.m. alle 5 Minuten wiederholen und Notarztindikation prüfen.")
+        if alter < 4:
+            meds.append("Adrenalin 4 mg pur vernebelt")
+        elif 4 <= alter <= 6:
+            meds.append("Salbutamol 1,25 mg vernebelt")
+        elif alter > 6:
+            meds.append("Salbutamol 2,5 mg vernebelt")
+            meds.append("Ipratropiumbromid 500 µg vernebelt")
+
+    if alter > 12:
+        meds.append("Prednisolon 100 mg i.v.")
+    else:
+        pred_mg = round(2.0 * float(gewicht), 1)
+        meds.append(f"Prednisolon {pred_mg} mg i.v. (2 mg/kgKG)")
+        meds.append("Alternative: Prednisolon 100 mg rektal")
+
+    if copd_bekannt == "Ja":
+        o2_ziel = "SpO₂ 88-92 %"
+    else:
+        o2_ziel = "SpO₂ > 92 %"
+
+    handlung.extend([
+        "Basismaßnahmen: Beruhigen, Oberkörper hoch, Lippenbremse, vollständiges Monitoring",
+        "Sauerstoffgabe 2-6 l/min (bei schwerer Dyspnoe initial höher), Zielbereich beachten",
+        "Medikation gemäß SOP verabreichen und Wirkung nach 5 Minuten re-evaluieren",
+    ])
+
+    if cpap_relevant == "Ja" or alter > 12:
+        handlung.append("CPAP / NIV erwägen (v. a. bei persistierender Ateminsuffizienz)")
+    if keine_besserung == "Ja":
+        handlung.append("Keine Besserung nach 5 Minuten: Notarztruf auslösen")
 
     if schwanger == "Ja":
-        handlung.append("Schwangerschaft: Risiko-Nutzen eng abwägen, frühzeitige notärztliche/klinische Einbindung.")
+        hinweise.append("Schwangerschaft: SOP enthält keine gesonderte Dosisanpassung; frühe ärztliche Rücksprache einplanen.")
+
+    if spo2_aktuell < 88:
+        hinweise.append("Kritische Oxygenierung: Eskalation und engmaschige Kontrolle priorisieren.")
+
+    st.subheader("Berechnete SOP-Dosierungen")
+    for i, med in enumerate(meds, start=1):
+        st.write(f"{i}. {med}")
+
+    st.info(f"Sauerstoffziel laut SOP: {o2_ziel}")
 
     st.subheader("SOP-Handlungshilfe")
     for i, step in enumerate(handlung, start=1):
         st.write(f"{i}. {step}")
+
+    if hinweise:
+        st.subheader("Zusätzliche Hinweise")
+        for i, h in enumerate(hinweise, start=1):
+            st.write(f"{i}. {h}")
 
     render_live_summary(
         "Live-Zusammenfassung Medikamentenrechner",
         [
             f"SOP: {sop}",
             f"Alter/Gewicht: {alter} J / {gewicht} kg",
-            f"Adrenalin i.m.: {adrenalin_im_mg} mg",
-            f"Prednisolon i.v.: {prednisolon_mg} mg",
-            f"Volumen: {int(volumen_ml)} ml",
+            f"Symptomatische Tachykardie: {sympt_tachy}",
+            f"O2-Ziel: {o2_ziel}",
+            f"Empfohlene Medikation: {len(meds)} Position(en)",
         ],
     )
 
