@@ -792,6 +792,7 @@ elif seite == "🩺 xABCDE":
         with col:
             if st.button(button_label, key=f"xabcde_{label}", use_container_width=True, type=button_type):
                 st.session_state["xabcde_selected"] = label
+                st.rerun()
 
     selected = st.session_state["xabcde_selected"]
     st.markdown(
