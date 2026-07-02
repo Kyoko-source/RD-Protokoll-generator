@@ -780,65 +780,30 @@ elif seite == "🩺 xABCDE":
     }
 
     incomplete_letters = [letter for letter, is_done in section_complete.items() if not is_done]
+    selected = st.session_state["xabcde_selected"]
 
     col1, col2, col3, col4, col5 = st.columns(5, gap="large")
     buttons = ["A", "B", "C", "D", "E"]
     cols = [col1, col2, col3, col4, col5]
     for label, col in zip(buttons, cols):
-        button_label = f"{label} !" if label in incomplete_letters else label
+        is_incomplete = label in incomplete_letters
+        button_label = f"🔴 {label} !" if is_incomplete else label
+        button_type = "primary" if label == selected else "secondary"
         with col:
-            if st.button(button_label, key=f"xabcde_{label}", use_container_width=True):
+            if st.button(button_label, key=f"xabcde_{label}", use_container_width=True, type=button_type):
                 st.session_state["xabcde_selected"] = label
 
     selected = st.session_state["xabcde_selected"]
     st.markdown(
         "<style>"
         "div[data-testid='stButton'] > button { min-height: 88px; font-size: 42px; font-weight: 900; letter-spacing: 0.18em; border-radius: 18px; }"
+        "div[data-testid='stButton'] > button[kind='primary'] { background: linear-gradient(135deg, rgba(75,140,255,0.95), rgba(48,212,161,0.75)); border: 1px solid rgba(120,190,255,0.9); box-shadow: 0 0 16px rgba(75,140,255,0.45); color: #ffffff; }"
         "div[data-testid='stButton'] > button:hover { transform: translateY(-1px); }"
         "</style>",
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        f"""
-        <script>
-        setTimeout(function() {{
-            const selected = "{selected}";
-            const incomplete = {incomplete_letters};
-            const xButtons = Array.from(document.querySelectorAll('button')).filter((btn) => {{
-                const t = (btn.innerText || '').trim();
-                return ['A', 'B', 'C', 'D', 'E', 'A !', 'B !', 'C !', 'D !', 'E !'].includes(t);
-            }});
-
-            xButtons.forEach((btn) => {{
-                const raw = (btn.innerText || '').trim();
-                const letter = raw.charAt(0);
-
-                btn.style.border = '1px solid rgba(255,255,255,0.18)';
-                btn.style.background = 'rgba(255,255,255,0.03)';
-                btn.style.color = '#e7efff';
-                btn.style.boxShadow = 'none';
-
-                if (incomplete.includes(letter)) {{
-                    btn.style.border = '1px solid rgba(255,90,90,0.9)';
-                    btn.style.boxShadow = '0 0 14px rgba(255,70,70,0.45), inset 0 0 10px rgba(255,70,70,0.14)';
-                    btn.style.color = '#ffd3d3';
-                }}
-
-                if (letter === selected) {{
-                    btn.style.border = '1px solid rgba(120,190,255,0.9)';
-                    btn.style.background = 'linear-gradient(135deg, rgba(75,140,255,0.95), rgba(48,212,161,0.75))';
-                    btn.style.color = '#ffffff';
-                    btn.style.boxShadow = '0 0 16px rgba(75,140,255,0.45)';
-                }}
-            }});
-        }}, 60);
-        </script>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    st.info(f"Aktive Sektion: {selected} — rote Reiter mit ! sind noch unvollständig.")
+    st.info(f"Aktive Sektion: {selected} — offene Reiter sind mit 🔴 und ! markiert.")
 
     if selected == "A":
         st.subheader("A – Airway")
