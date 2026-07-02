@@ -621,6 +621,16 @@ SUPABASE_URL = "https://ottkgqhtmjvhhtnwphmc.supabase.co"
 SUPABASE_ANON_KEY = "sb_publishable_87egwyr4tTwLh3tnZTDjkQ_eJh2eRZw"
 SUPABASE_ADMIN_EMAIL = "admin@rd-protokoll-generator.local"
 SOP_ADMIN_CONFIG_FILE = "sop_admin_config.json"
+WORKFLOW_STEPS = [
+    {"page": "❤️ Vitalwerte", "label": "Patient"},
+    {"page": "🩺 xABCDE", "label": "Untersuchung"},
+    {"page": "📋 SAMPLERS", "label": "Anamnese"},
+    {"page": "🔥 OPQRST", "label": "Schmerzbild"},
+    {"page": "⏱️ Maßnahmen", "label": "Maßnahmen"},
+    {"page": "🔎 Verdacht", "label": "Verdacht"},
+    {"page": "🗣️ Übergabe", "label": "Übergabe"},
+    {"page": "📄 Protokoll", "label": "Protokoll"},
+]
 ADMIN_SOP_FIELDS = {
     "Anaphylaxie (SOPKB0105)": [
         {"key": "ana_adult_age_threshold", "label": "Altersschwelle Erwachsene (Jahre)", "default": 12.0, "min": 0.0, "max": 21.0, "step": 1.0},
@@ -726,6 +736,80 @@ def check_admin_password(candidate_password):
     except urllib.error.URLError as error:
         st.error(f"Supabase-Anmeldung nicht erreichbar: {error.reason}")
         return False
+
+
+def _has_content(values):
+    for value in values.values():
+        if isinstance(value, dict) and _has_content(value):
+            return True
+        if isinstance(value, list) and value:
+            return True
+        if value not in [None, "", 0, "Keine Angabe", [], {}]:
+            return True
+    return False
+
+
+def workflow_completion_state(patient_data):
+    vital = patient_data.get("vitalwerte", {})
+    xabcde = patient_data.get("xabcde", {})
+    samplers = patient_data.get("samplers", {})
+    opqrst = patient_data.get("opqrst", {})
+    massnahmen = patient_data.get("massnahmen", {})
+
+    return {
+        "❤️ Vitalwerte": _has_content(vital),
+        "🩺 xABCDE": _has_content(xabcde),
+        "📋 SAMPLERS": _has_content(samplers),
+        "🔥 OPQRST": _has_content(opqrst),
+        "⏱️ Maßnahmen": bool(massnahmen.get("timeline") or massnahmen.get("medikation")),
+        "🔎 Verdacht": _has_content(vital) or _has_content(xabcde) or _has_content(samplers) or _has_content(opqrst),
+        "🗣️ Übergabe": bool(massnahmen.get("timeline") or massnahmen.get("medikation") or _has_content(vital)),
+        "📄 Protokoll": st.session_state.get("protocol_generated", False),
+    }
+
+
+def workflow_step_index(page_name):
+    for idx, step in enumerate(WORKFLOW_STEPS):
+        if step["page"] == page_name:
+            return idx
+    return None
+
+
+def workflow_missing_hint(page_name, patient_data):
+    vital = patient_data.get("vitalwerte", {})
+    xabcde = patient_data.get("xabcde", {})
+    samplers = patient_data.get("samplers", {})
+    opqrst = patient_data.get("opqrst", {})
+    massnahmen = patient_data.get("massnahmen", {})
+
+    hints = {
+        "❤️ Vitalwerte": "Demographie oder erste Vitalwerte ergänzen.",
+        "🩺 xABCDE": "Primärbefund in xABCDE dokumentieren.",
+        "📋 SAMPLERS": "Ereignis, Allergien oder Vorgeschichte ergänzen.",
+        "🔥 OPQRST": "Schmerzqualität, Region oder NRS erfassen.",
+        "⏱️ Maßnahmen": "Mindestens eine Maßnahme oder Medikation dokumentieren.",
+        "🔎 Verdacht": "Vorher Vitalwerte, xABCDE oder Anamnese ausfüllen.",
+        "🗣️ Übergabe": "Vor Übergabe Maßnahmen und Kernbefunde vervollständigen.",
+        "📄 Protokoll": "Protokoll generieren, damit der Schritt abgeschlossen ist.",
+    }
+
+    if page_name == "❤️ Vitalwerte" and _has_content(vital):
+        return ""
+    if page_name == "🩺 xABCDE" and _has_content(xabcde):
+        return ""
+    if page_name == "📋 SAMPLERS" and _has_content(samplers):
+        return ""
+    if page_name == "🔥 OPQRST" and _has_content(opqrst):
+        return ""
+    if page_name == "⏱️ Maßnahmen" and (massnahmen.get("timeline") or massnahmen.get("medikation")):
+        return ""
+    if page_name == "🔎 Verdacht" and (_has_content(vital) or _has_content(xabcde) or _has_content(samplers) or _has_content(opqrst)):
+        return ""
+    if page_name == "🗣️ Übergabe" and (massnahmen.get("timeline") or massnahmen.get("medikation") or _has_content(vital)):
+        return ""
+    if page_name == "📄 Protokoll" and st.session_state.get("protocol_generated", False):
+        return ""
+    return hints.get(page_name, "")
 
 
 def _build_default_value_overrides():
@@ -974,12 +1058,59 @@ if 'seite' not in st.session_state:
 if 'xabcde_selected' not in st.session_state:
     st.session_state['xabcde_selected'] = "A"
 
+if 'visited_pages' not in st.session_state:
+    st.session_state['visited_pages'] = set()
+
+st.session_state['visited_pages'].add(st.session_state['seite'])
+
 topbar_left, topbar_right = st.columns([14, 2])
 with topbar_right:
     st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
     if st.button("Admin", key="top_admin_btn", use_container_width=True, type="secondary"):
         st.session_state["seite"] = "🛠️ Admin"
         st.rerun()
+
+workflow_completion = workflow_completion_state(patient)
+workflow_total = len(WORKFLOW_STEPS)
+workflow_completed = sum(1 for step in WORKFLOW_STEPS if workflow_completion.get(step["page"]))
+current_workflow_index = workflow_step_index(st.session_state["seite"])
+
+if current_workflow_index is not None:
+    st.markdown(
+        f"""
+        <div style="margin: 8px 0 14px; padding: 16px 18px; border-radius: 22px; border: 1px solid rgba(255,255,255,0.09); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02)); box-shadow: 0 16px 34px rgba(2,8,24,0.18);">
+            <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+                <div>
+                    <div style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.14em; color:rgba(238,245,255,0.62); font-weight:800;">Einsatz-Workflow</div>
+                    <div style="font-size:1.1rem; font-weight:900; color:#f5f9ff;">Schritt {current_workflow_index + 1} von {workflow_total}: {WORKFLOW_STEPS[current_workflow_index]['label']}</div>
+                </div>
+                <div style="padding:8px 12px; border-radius:999px; background:rgba(255,255,255,0.05); color:#dce9ff; font-weight:800; font-size:0.84rem;">{workflow_completed}/{workflow_total} abgeschlossen</div>
+            </div>
+            <div style="height:8px; border-radius:999px; background:rgba(255,255,255,0.08); overflow:hidden; margin-bottom:12px;">
+                <div style="width:{(workflow_completed / workflow_total) * 100:.0f}%; height:100%; background:linear-gradient(90deg, #4c8dff 0%, #43d7b4 100%);"></div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    workflow_cols = st.columns(workflow_total)
+    for idx, step in enumerate(WORKFLOW_STEPS):
+        with workflow_cols[idx]:
+            if workflow_completion.get(step["page"]):
+                prefix = "✓"
+            elif idx == current_workflow_index:
+                prefix = "•"
+            else:
+                prefix = str(idx + 1)
+            button_type = "primary" if idx == current_workflow_index else "secondary"
+            if st.button(f"{prefix} {step['label']}", key=f"workflow_step_{idx}", use_container_width=True, type=button_type):
+                st.session_state["seite"] = step["page"]
+                st.rerun()
+
+    missing_hint = workflow_missing_hint(st.session_state["seite"], patient)
+    if missing_hint:
+        st.caption(f"Offen in diesem Schritt: {missing_hint}")
 
 nav_options = [
     "❤️ Vitalwerte",
@@ -3225,6 +3356,8 @@ elif seite == "📄 Protokoll":
 
         else:
 
+            st.session_state["protocol_generated"] = True
+
             st.success("Protokoll erstellt.")
 
             st.text_area(
@@ -3281,3 +3414,28 @@ elif seite == "📄 Protokoll":
                 """,
                 height=95,
             )
+
+if seite != "🛠️ Admin" and current_workflow_index is not None:
+    st.divider()
+    nav_prev_col, nav_info_col, nav_next_col = st.columns([1.2, 2.6, 1.2])
+    previous_step = WORKFLOW_STEPS[current_workflow_index - 1] if current_workflow_index > 0 else None
+    next_step = WORKFLOW_STEPS[current_workflow_index + 1] if current_workflow_index < workflow_total - 1 else None
+
+    with nav_prev_col:
+        if previous_step:
+            if st.button(f"← {previous_step['label']}", key="workflow_prev_btn", use_container_width=True):
+                st.session_state["seite"] = previous_step["page"]
+                st.rerun()
+
+    with nav_info_col:
+        current_done = workflow_completion.get(seite, False)
+        if current_done:
+            st.success("Schritt wirkt vollständig. Du kannst direkt weitergehen.")
+        else:
+            st.info(workflow_missing_hint(seite, patient) or "Schritt prüfen und dann fortfahren.")
+
+    with nav_next_col:
+        if next_step:
+            if st.button(f"{next_step['label']} →", key="workflow_next_btn", use_container_width=True, type="primary"):
+                st.session_state["seite"] = next_step["page"]
+                st.rerun()
