@@ -1418,6 +1418,7 @@ elif seite == "💉 Medikamentenrechner":
             "Instabile Tachykardie",
             "Intoxikation: Benzodiazepine",
             "Intoxikation: Opiate / Opioide",
+            "Lungenarterienembolie",
         ],
     )
 
@@ -2528,7 +2529,7 @@ elif seite == "💉 Medikamentenrechner":
             ],
         )
 
-    else:
+    elif sop == "Intoxikation: Opiate / Opioide":
         st.subheader("Klinische Konstellation")
         o1, o2, o3 = st.columns(3)
         with o1:
@@ -2599,6 +2600,107 @@ elif seite == "💉 Medikamentenrechner":
                 f"Somnolenz/Atemdepression/Hypoxie: {somnolenz}/{atemdepression}/{hypoxie}",
                 f"Vital bedroht: {vital_bedroht}",
                 f"Keine Reaktion: {keine_reaktion}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    else:
+        st.subheader("Klinische Konstellation")
+
+        w1, w2, w3 = st.columns(3)
+        with w1:
+            wells_thrombose_anamnese = st.selectbox(
+                "Thrombose/LE in Anamnese", ["Nein", "Ja"], key="pe_wells_history"
+            )
+            wells_op_immobil = st.selectbox(
+                "Frische OP oder Immobilisation", ["Nein", "Ja"], key="pe_wells_operation"
+            )
+            wells_tumor = st.selectbox("Tumorerkrankung", ["Nein", "Ja"], key="pe_wells_tumor")
+        with w2:
+            wells_haemoptyse = st.selectbox("Hämoptyse", ["Nein", "Ja"], key="pe_wells_hemoptysis")
+            wells_puls_hoch = st.selectbox("Herzfrequenz > 100/min", ["Nein", "Ja"], key="pe_wells_hr")
+            wells_dvt = st.selectbox("Zeichen einer tiefen Venenthrombose", ["Nein", "Ja"], key="pe_wells_dvt")
+        with w3:
+            wells_alternative_unwahrs = st.selectbox(
+                "Alternative Diagnose unwahrscheinlicher", ["Nein", "Ja"], key="pe_wells_alt_diag"
+            )
+
+        s1, s2, s3 = st.columns(3)
+        with s1:
+            spesi_alter_80 = st.selectbox("Alter > 80 Jahre", ["Nein", "Ja"], key="pe_spesi_age")
+            spesi_tumor = st.selectbox("Tumorerkrankung (sPESI)", ["Nein", "Ja"], key="pe_spesi_tumor")
+        with s2:
+            spesi_hf_100 = st.selectbox("Herzfrequenz >= 100/min", ["Nein", "Ja"], key="pe_spesi_hr")
+            spesi_rr_100 = st.selectbox("RR syst. < 100 mmHg", ["Nein", "Ja"], key="pe_spesi_sbp")
+        with s3:
+            spesi_spo2_90 = st.selectbox("SpO2 < 90%", ["Nein", "Ja"], key="pe_spesi_spo2")
+            spesi_chronic = st.selectbox(
+                "Chron. Herzinsuff. und/oder Lungenerkrankung", ["Nein", "Ja"], key="pe_spesi_chronic"
+            )
+
+        wells_score = 0.0
+        wells_score += 1.5 if wells_thrombose_anamnese == "Ja" else 0.0
+        wells_score += 1.5 if wells_op_immobil == "Ja" else 0.0
+        wells_score += 1.0 if wells_tumor == "Ja" else 0.0
+        wells_score += 1.0 if wells_haemoptyse == "Ja" else 0.0
+        wells_score += 1.5 if wells_puls_hoch == "Ja" else 0.0
+        wells_score += 3.0 if wells_dvt == "Ja" else 0.0
+        wells_score += 3.0 if wells_alternative_unwahrs == "Ja" else 0.0
+
+        spesi_score = 0
+        spesi_score += 1 if spesi_alter_80 == "Ja" else 0
+        spesi_score += 1 if spesi_tumor == "Ja" else 0
+        spesi_score += 1 if spesi_hf_100 == "Ja" else 0
+        spesi_score += 1 if spesi_rr_100 == "Ja" else 0
+        spesi_score += 1 if spesi_spo2_90 == "Ja" else 0
+        spesi_score += 1 if spesi_chronic == "Ja" else 0
+
+        meds = []
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+        ]
+        hinweise = [
+            f"Wells-Score berechnet: {wells_score:.1f} Punkte",
+            f"sPESI-Score berechnet: {spesi_score} Punkte",
+        ]
+
+        if wells_score >= 5.0:
+            if spesi_score >= 1:
+                meds.append("Heparin 5000 I.E. i.v.")
+            else:
+                hinweise.append("sPESI < 1: in diesem SOP-Pfad keine Heparin-Gabe.")
+        else:
+            hinweise.append("Wells-Score < 5: in diesem SOP-Pfad keine Heparin-Gabe.")
+
+        handlung.append("ABCDE-Re-Evaluation")
+        handlung.append("Klinik / Ende")
+
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        if meds:
+            for i, med in enumerate(meds, start=1):
+                st.write(f"{i}. {med}")
+        else:
+            st.write("Keine medikamentöse Empfehlung in diesem Entscheidungszweig.")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        st.subheader("Zusätzliche Hinweise")
+        for i, h in enumerate(hinweise, start=1):
+            st.write(f"{i}. {h}")
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"Wells-Score: {wells_score:.1f}",
+                f"sPESI-Score: {spesi_score}",
+                f"Heparin empfohlen: {'Ja' if len(meds) > 0 else 'Nein'}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
