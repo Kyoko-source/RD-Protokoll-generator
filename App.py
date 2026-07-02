@@ -1417,6 +1417,7 @@ elif seite == "💉 Medikamentenrechner":
             "Instabile Bradykardie",
             "Instabile Tachykardie",
             "Intoxikation: Benzodiazepine",
+            "Intoxikation: Opiate / Opioide",
         ],
     )
 
@@ -2452,7 +2453,7 @@ elif seite == "💉 Medikamentenrechner":
             ],
         )
 
-    else:
+    elif sop == "Intoxikation: Benzodiazepine":
         st.subheader("Klinische Konstellation")
         i1, i2, i3 = st.columns(3)
         with i1:
@@ -2495,6 +2496,81 @@ elif seite == "💉 Medikamentenrechner":
                     handlung.append("Weiteres Vorgehen nach Befund, engmaschiges Monitoring")
             else:
                 handlung.append("Weiteres Vorgehen nach Befund, engmaschiges Monitoring")
+
+            handlung.append("Klinik / Ende")
+
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        if meds:
+            for i, med in enumerate(meds, start=1):
+                st.write(f"{i}. {med}")
+        else:
+            st.write("Keine medikamentöse Antidot-Therapie in diesem Entscheidungszweig.")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        st.subheader("Zusätzliche Hinweise")
+        for i, h in enumerate(hinweise, start=1):
+            st.write(f"{i}. {h}")
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"Somnolenz/Atemdepression/Hypoxie: {somnolenz}/{atemdepression}/{hypoxie}",
+                f"Vital bedroht: {vital_bedroht}",
+                f"Keine Reaktion: {keine_reaktion}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    else:
+        st.subheader("Klinische Konstellation")
+        o1, o2, o3 = st.columns(3)
+        with o1:
+            somnolenz = st.selectbox("Somnolenz", ["Nein", "Ja"], key="opioid_somnolence")
+        with o2:
+            atemdepression = st.selectbox("Atemdepression", ["Nein", "Ja"], key="opioid_resp_depression")
+        with o3:
+            hypoxie = st.selectbox("Hypoxie", ["Nein", "Ja"], key="opioid_hypoxia")
+
+        p1, p2 = st.columns(2)
+        with p1:
+            vital_bedroht = st.selectbox("Vital bedrohter Patient", ["Nein", "Ja"], key="opioid_vital_threat")
+        with p2:
+            keine_reaktion = st.selectbox("Keine ausreichende Reaktion", ["Nein", "Ja"], key="opioid_no_response")
+
+        meds = []
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+        ]
+        hinweise = [
+            "Verdacht: Atemdepression, Somnolenz, Einstichstellen, Opiatpflaster",
+            "Ziel: ausreichende Spontanatmung",
+            "CAVE: Entzug möglich",
+        ]
+
+        symptome_vorhanden = (somnolenz == "Ja") or (atemdepression == "Ja") or (hypoxie == "Ja")
+
+        if not symptome_vorhanden:
+            handlung.append("ABCDE-Re-Evaluation")
+            handlung.append("Klinik / Ende")
+        else:
+            handlung.append("Kopf überstrecken, Esmarch-Handgriff, Guedel-/Wendel-Tubus, Seitenlage")
+
+            if vital_bedroht == "Ja":
+                meds.append("Naloxon titriert 0,4 mg i.v. (auf 10 ml aufziehen)")
+                if keine_reaktion == "Ja":
+                    handlung.append("Notarztruf auslösen")
+                else:
+                    handlung.append("ABCDE-Re-Evaluation")
+            else:
+                handlung.append("ABCDE-Re-Evaluation")
 
             handlung.append("Klinik / Ende")
 
