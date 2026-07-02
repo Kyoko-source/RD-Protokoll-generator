@@ -856,7 +856,7 @@ WORKFLOW_STEPS = [
     {"page": "🔥 OPQRST", "label": "Schmerzbild", "short_label": "Schmerz"},
     {"page": "⏱️ Maßnahmen", "label": "Maßnahmen", "short_label": "Maßnahmen"},
     {"page": "🔎 Verdacht", "label": "Verdacht", "short_label": "Verdacht"},
-    {"page": "💉 Med-Rechner", "label": "Med-Rechner", "short_label": "Med"},
+    {"page": "💉 Med-Rechner", "label": "Rechner", "short_label": "Rechner"},
     {"page": "🗣️ Übergabe", "label": "Übergabe", "short_label": "Übergabe"},
     {"page": "📄 Protokoll", "label": "Protokoll", "short_label": "Protokoll"},
 ]
