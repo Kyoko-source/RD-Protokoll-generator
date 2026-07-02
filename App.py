@@ -9,7 +9,7 @@ from copy import deepcopy
 from dotenv import load_dotenv
 
 # Load environment variables from .env
-load_dotenv()
+load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), ".env"))
 
 
 def add_line(text, value):
