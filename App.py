@@ -3,6 +3,7 @@ import streamlit.components.v1 as components
 from io import BytesIO
 from fpdf import FPDF
 from datetime import datetime
+import html
 import json
 import os
 import urllib.error
@@ -460,76 +461,240 @@ st.caption("Dokumentationshilfe für den Rettungsdienst")
 st.markdown(
         """
         <style>
-    :root { --bg:#070f1f; --panel:#0f1b31; --panel-2:#1a2c4a; --muted:#9aa9c2; --accent:#57a4ff; --accent-2:#ff7d66; --accent-3:#35d8a6; --text:#eef5ff; --line:rgba(255,255,255,0.09); }
-    html, body, [class*="css"] { background: radial-gradient(circle at 18% 0%, rgba(87,164,255,0.22), transparent 34%), radial-gradient(circle at 92% 12%, rgba(255,125,102,0.18), transparent 34%), linear-gradient(135deg, var(--bg) 0%, #081327 100%) !important; color: var(--text); }
+    :root {
+        --bg:#07111f;
+        --bg-2:#0b1730;
+        --panel:rgba(15,27,49,0.62);
+        --panel-strong:rgba(16,28,52,0.84);
+        --panel-soft:rgba(255,255,255,0.055);
+        --muted:#9fb2ce;
+        --accent:#5ea8ff;
+        --accent-2:#ff7c88;
+        --accent-3:#4be0bb;
+        --accent-4:#ffb86a;
+        --text:#eef5ff;
+        --line:rgba(255,255,255,0.10);
+        --shadow:0 30px 70px rgba(2,8,24,0.36);
+    }
+    @keyframes riseIn {
+        from { opacity:0; transform:translateY(18px); }
+        to { opacity:1; transform:translateY(0); }
+    }
+    @keyframes softPulse {
+        0%, 100% { box-shadow: 0 0 0 0 rgba(94,168,255,0.16); }
+        50% { box-shadow: 0 0 0 14px rgba(94,168,255,0); }
+    }
+    @keyframes glassSheen {
+        0% { transform: translateX(-130%) rotate(10deg); }
+        100% { transform: translateX(240%) rotate(10deg); }
+    }
+    html, body, [class*="css"] {
+        background:
+            radial-gradient(circle at 10% -4%, rgba(78,143,255,0.26), transparent 28%),
+            radial-gradient(circle at 88% 8%, rgba(255,108,139,0.18), transparent 26%),
+            radial-gradient(circle at 50% 100%, rgba(75,224,187,0.10), transparent 28%),
+            linear-gradient(140deg, var(--bg) 0%, var(--bg-2) 54%, #071220 100%) !important;
+        color: var(--text);
+        font-family: "Aptos", "Segoe UI Variable", "Segoe UI", sans-serif;
+    }
+    .stApp { background: transparent; }
+    h1, h2, h3 { letter-spacing:-0.02em; }
+    h3 {
+        color:#b8dcff;
+        margin-top:24px;
+        margin-bottom:12px;
+        border-bottom:1px solid rgba(141,199,255,0.14);
+        padding-bottom:9px;
+    }
+    p, li, label { color: rgba(236,244,255,0.94); }
     .hero-card {
         position: relative;
         overflow: hidden;
-        margin: 10px 0 18px;
-        padding: 22px 24px 20px;
-        border-radius: 30px;
-        border: 1px solid rgba(255,255,255,0.12);
+        margin: 12px 0 20px;
+        padding: 26px 28px 24px;
+        border-radius: 34px;
+        border: 1px solid rgba(255,255,255,0.14);
         background:
-            radial-gradient(circle at 10% 18%, rgba(88,166,255,0.25), transparent 22%),
-            radial-gradient(circle at 88% 8%, rgba(255,127,142,0.16), transparent 20%),
-            linear-gradient(135deg, rgba(16,25,46,0.98) 0%, rgba(12,22,40,0.95) 100%);
-        box-shadow: 0 22px 48px rgba(3,10,26,0.40);
+            radial-gradient(circle at 10% 14%, rgba(96,175,255,0.26), transparent 24%),
+            radial-gradient(circle at 92% 10%, rgba(255,120,156,0.16), transparent 22%),
+            linear-gradient(135deg, rgba(18,32,58,0.88) 0%, rgba(10,22,40,0.84) 100%);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px) saturate(150%);
+        -webkit-backdrop-filter: blur(18px) saturate(150%);
+        animation: riseIn 0.7s ease-out;
     }
     .hero-card::before {
         content:"";
         position:absolute;
-        inset:-42% auto auto -12%;
-        width:240px;
-        height:240px;
-        background: radial-gradient(circle, rgba(87,164,255,0.20), transparent 70%);
+        inset:-40% auto auto -10%;
+        width:260px;
+        height:260px;
+        background: radial-gradient(circle, rgba(87,164,255,0.24), transparent 72%);
         pointer-events:none;
     }
     .hero-card::after {
         content:"";
         position:absolute;
-        inset:auto 20px 12px 20px;
-        height:1px;
-        background: linear-gradient(90deg, rgba(255,255,255,0.18), rgba(255,255,255,0.02));
+        top:-40%;
+        left:-16%;
+        width:34%;
+        height:180%;
+        background: linear-gradient(90deg, rgba(255,255,255,0), rgba(255,255,255,0.09), rgba(255,255,255,0));
+        transform: rotate(10deg);
+        animation: glassSheen 10s linear infinite;
         pointer-events:none;
     }
-    .hero-row { display:flex; justify-content:space-between; align-items:flex-start; gap:18px; flex-wrap:wrap; position:relative; z-index:1; }
-    .hero-kicker { display:inline-flex; align-items:center; gap:8px; font-size:0.75rem; letter-spacing:0.16em; text-transform:uppercase; color:rgba(231,241,255,0.70); font-weight:900; }
-    .hero-kicker-badge { width:9px; height:9px; border-radius:999px; background: linear-gradient(135deg, #61b6ff 0%, #ff7b8f 100%); box-shadow: 0 0 0 4px rgba(97,182,255,0.12); }
-    .hero-title { margin-top:8px; font-size:2.02rem; line-height:1.02; font-weight:950; letter-spacing:-0.035em; color:#f7fbff; }
-    .hero-meta { display:flex; gap:10px; flex-wrap:wrap; margin-top:16px; }
-    .hero-chip { display:inline-flex; align-items:center; gap:8px; padding:8px 11px; border-radius:999px; background: rgba(255,255,255,0.055); border:1px solid rgba(255,255,255,0.10); color:#eef5ff; font-size:0.80rem; font-weight:850; box-shadow: 0 10px 18px rgba(2,8,24,0.16); }
+    .hero-row { display:flex; justify-content:space-between; align-items:flex-start; gap:22px; flex-wrap:wrap; position:relative; z-index:1; }
+    .hero-kicker { display:inline-flex; align-items:center; gap:10px; font-size:0.74rem; letter-spacing:0.18em; text-transform:uppercase; color:rgba(231,241,255,0.68); font-weight:900; }
+    .hero-kicker-badge { width:10px; height:10px; border-radius:999px; background: linear-gradient(135deg, #61b6ff 0%, #ff7b8f 100%); box-shadow: 0 0 0 5px rgba(97,182,255,0.10); animation: softPulse 3.4s ease-in-out infinite; }
+    .hero-title { margin-top:10px; font-size:2.28rem; line-height:0.98; font-weight:950; letter-spacing:-0.05em; color:#fbfdff; text-shadow: 0 10px 28px rgba(5,14,30,0.22); }
+    .hero-meta { display:flex; gap:12px; flex-wrap:wrap; margin-top:18px; }
+    .hero-chip {
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding:10px 13px;
+        border-radius:999px;
+        background: rgba(255,255,255,0.06);
+        border:1px solid rgba(255,255,255,0.10);
+        color:#eef5ff;
+        font-size:0.80rem;
+        font-weight:850;
+        box-shadow: 0 10px 22px rgba(2,8,24,0.16);
+        transition: transform 0.22s ease, border-color 0.22s ease, background 0.22s ease;
+    }
+    .hero-chip:hover {
+        transform: translateY(-2px);
+        border-color: rgba(255,255,255,0.20);
+        background: rgba(255,255,255,0.09);
+    }
     .hero-chip span { opacity:0.72; font-weight:700; }
-    .hero-cta { display:flex; align-items:flex-start; justify-content:flex-end; min-width:160px; }
-    .hero-status { display:inline-flex; align-items:center; gap:8px; padding:9px 12px; border-radius:14px; background: linear-gradient(135deg, rgba(87,164,255,0.16), rgba(255,125,102,0.14)); border:1px solid rgba(255,255,255,0.10); color:#f4f8ff; font-size:0.80rem; font-weight:850; }
-    .hero-status-dot { width:8px; height:8px; border-radius:999px; background: #5cffb1; box-shadow: 0 0 0 4px rgba(92,255,177,0.12); }
-    .header { position: relative; overflow:hidden; }
-    .header-title { font-size:2rem; font-weight:900; letter-spacing:0.01em; text-shadow: 0 2px 12px rgba(6,20,44,0.35); }
-    .header-sub { opacity:0.96; color:rgba(255,255,255,0.95); font-size:1.05rem; font-weight:700; }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+11) { padding: 0 2px; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.13); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)); color: var(--text); font-weight: 800; margin:0; box-shadow: 0 12px 24px rgba(2,8,24,0.28); transition: all 0.22s ease; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button:focus { outline:none; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button[kind='primary'] { color:#fff; border:none; box-shadow: 0 15px 30px rgba(64,124,255,0.3); }
+    .hero-cta { display:flex; align-items:flex-start; justify-content:flex-end; min-width:170px; }
+    .hero-status {
+        display:inline-flex;
+        align-items:center;
+        gap:8px;
+        padding:11px 14px;
+        border-radius:16px;
+        background: linear-gradient(135deg, rgba(87,164,255,0.16), rgba(255,125,102,0.14));
+        border:1px solid rgba(255,255,255,0.10);
+        color:#f4f8ff;
+        font-size:0.80rem;
+        font-weight:850;
+        box-shadow: 0 14px 26px rgba(2,8,24,0.20);
+    }
+    .hero-status-dot { width:8px; height:8px; border-radius:999px; background: #5cffb1; box-shadow: 0 0 0 5px rgba(92,255,177,0.10); }
+    .workflow-shell {
+        margin: 10px 0 16px;
+        padding: 18px 18px 16px;
+        border-radius: 26px;
+        border: 1px solid rgba(255,255,255,0.10);
+        background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.02));
+        backdrop-filter: blur(16px) saturate(150%);
+        -webkit-backdrop-filter: blur(16px) saturate(150%);
+        box-shadow: 0 18px 40px rgba(2,8,24,0.22);
+        animation: riseIn 0.85s ease-out;
+    }
+    .workflow-head { display:flex; justify-content:space-between; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:12px; }
+    .workflow-kicker { font-size:0.76rem; text-transform:uppercase; letter-spacing:0.16em; color:rgba(238,245,255,0.58); font-weight:900; }
+    .workflow-title { font-size:1.12rem; font-weight:900; color:#f5f9ff; }
+    .workflow-count { padding:9px 13px; border-radius:999px; background:rgba(255,255,255,0.055); color:#dce9ff; font-weight:800; font-size:0.84rem; border:1px solid rgba(255,255,255,0.08); }
+    .workflow-progress { height:10px; border-radius:999px; background:rgba(255,255,255,0.08); overflow:hidden; margin-bottom:12px; }
+    .workflow-progress-bar { height:100%; border-radius:999px; background:linear-gradient(90deg, #5ea8ff 0%, #44ddbd 52%, #ff9c7c 100%); box-shadow: 0 0 18px rgba(94,168,255,0.22); }
+    .rd-summary-card {
+        margin: 14px 0 10px;
+        padding: 14px 16px;
+        border-radius: 18px;
+        background: linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.025));
+        border: 1px solid rgba(255,255,255,0.09);
+        box-shadow: 0 14px 30px rgba(2,8,24,0.18);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        animation: riseIn 0.45s ease-out;
+    }
+    .rd-summary-head { font-size:0.74rem; text-transform:uppercase; letter-spacing:0.16em; color:rgba(235,244,255,0.58); font-weight:900; margin-bottom:10px; }
+    .rd-summary-row { display:flex; flex-wrap:wrap; gap:8px; }
+    .rd-summary-chip {
+        display:inline-flex;
+        align-items:center;
+        padding:8px 10px;
+        border-radius:999px;
+        background: rgba(7,17,31,0.34);
+        border:1px solid rgba(255,255,255,0.08);
+        color:#eef5ff;
+        font-size:0.82rem;
+        line-height:1.2;
+    }
+    .rd-summary-empty .rd-summary-muted { color: rgba(234,243,255,0.62); font-size:0.88rem; }
+    [data-testid="stButton"] > button {
+        position: relative;
+        overflow: hidden;
+        width:100%;
+        padding: 12px 18px;
+        border-radius: 16px;
+        border: 1px solid rgba(255,255,255,0.12);
+        background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
+        color: var(--text);
+        font-weight: 850;
+        margin:0;
+        box-shadow: 0 14px 28px rgba(2,8,24,0.20);
+        transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+    }
+    [data-testid="stButton"] > button::before {
+        content:"";
+        position:absolute;
+        inset:0;
+        background: linear-gradient(120deg, rgba(255,255,255,0), rgba(255,255,255,0.11), rgba(255,255,255,0));
+        transform: translateX(-150%);
+        transition: transform 0.55s ease;
+    }
+    [data-testid="stButton"] > button:hover {
+        border-color: rgba(255,255,255,0.24);
+        transform: translateY(-3px);
+        box-shadow: 0 18px 36px rgba(2,8,24,0.28);
+        background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.035));
+    }
+    [data-testid="stButton"] > button:hover::before { transform: translateX(150%); }
+    [data-testid="stButton"] > button:focus,
+    [data-testid="stButton"] > button:focus-visible {
+        outline:none;
+        border-color: rgba(94,168,255,0.44);
+        box-shadow: 0 0 0 4px rgba(94,168,255,0.16), 0 18px 36px rgba(2,8,24,0.26);
+    }
+    [data-testid="stButton"] > button[kind='primary'] {
+        color:#fff;
+        border: none;
+        background: linear-gradient(135deg, rgba(95,137,255,0.98) 0%, rgba(255,94,114,0.96) 100%);
+        box-shadow: 0 18px 32px rgba(112,102,255,0.24);
+    }
+    [data-testid="stButton"] > button[kind='primary']:hover {
+        box-shadow: 0 24px 40px rgba(112,102,255,0.30);
+        filter: saturate(1.08) brightness(1.03);
+    }
         [data-testid="stTextInput"] input,
         [data-testid="stNumberInput"] input,
         [data-testid="stTextArea"] textarea {
-            background:#0c1628 !important;
+            background:rgba(8,20,38,0.72) !important;
             color:var(--text) !important;
-            border:1px solid rgba(255,255,255,0.08) !important;
-            border-radius:12px !important;
+            border:1px solid rgba(255,255,255,0.10) !important;
+            border-radius:14px !important;
             font-size:0.95rem !important;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 20px rgba(2,8,24,0.12) !important;
         }
         [data-testid="stTextInput"] input:focus,
         [data-testid="stNumberInput"] input:focus,
         [data-testid="stTextArea"] textarea:focus {
             border-color:var(--accent) !important;
-            box-shadow: 0 0 0 3px rgba(75,140,255,0.18) !important;
+            box-shadow: 0 0 0 3px rgba(75,140,255,0.16), 0 16px 28px rgba(2,8,24,0.16) !important;
         }
         [data-testid="stSelectbox"] div[data-baseweb="select"] > div {
-            background:#0c1628 !important;
+            background:rgba(8,20,38,0.72) !important;
             color:var(--text) !important;
-            border:1px solid rgba(255,255,255,0.08) !important;
-            border-radius:12px !important;
+            border:1px solid rgba(255,255,255,0.10) !important;
+            border-radius:14px !important;
+            box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 20px rgba(2,8,24,0.12) !important;
         }
         [data-testid="stSelectbox"] div[data-baseweb="select"] input {
             background: transparent !important;
@@ -543,16 +708,46 @@ st.markdown(
             color: #f4f8ff !important;
         }
         [data-testid="stSelectbox"] { margin: 10px 0; }
-        [data-testid="stRadio"] > label { padding:8px 10px; border-radius:10px; cursor:pointer; transition: all 0.2s ease; }
-        [data-testid="stRadio"] > label:hover { background: rgba(255,255,255,0.03); }
+        [data-testid="stRadio"] > label {
+            padding:10px 12px;
+            border-radius:14px;
+            cursor:pointer;
+            transition: all 0.22s ease;
+            background: rgba(255,255,255,0.02);
+            border: 1px solid rgba(255,255,255,0.04);
+        }
+        [data-testid="stRadio"] > label:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.08); }
         [data-testid="stSlider"] > div > div > div { border-radius:10px; }
         [data-testid="stCheckbox"] > label { cursor:pointer; }
         [data-testid="stNumberInput"] { margin: 10px 0; }
         [data-testid="stTextArea"] { margin: 10px 0; }
-        h3 { color:#8dc7ff; margin-top:20px; margin-bottom:10px; border-bottom:1px solid rgba(141,199,255,0.2); padding-bottom:8px; }
         hr { border-color: rgba(255,255,255,0.06) !important; margin: 22px 0; }
+        [data-testid="stAlert"] {
+            border-radius: 18px;
+            border: 1px solid rgba(255,255,255,0.10);
+            background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03)) !important;
+            backdrop-filter: blur(14px);
+            -webkit-backdrop-filter: blur(14px);
+            box-shadow: 0 18px 34px rgba(2,8,24,0.16);
+        }
+        [data-testid="stExpander"] {
+            border-radius: 18px !important;
+            border: 1px solid rgba(255,255,255,0.08) !important;
+            background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02)) !important;
+            box-shadow: 0 14px 28px rgba(2,8,24,0.14);
+            overflow: hidden;
+        }
+        [data-testid="stExpander"]:hover { border-color: rgba(255,255,255,0.14) !important; }
+        [data-testid="stExpander"] summary { padding-top: 0.2rem; padding-bottom: 0.2rem; }
+        [data-testid="stCodeBlock"], code { border-radius: 16px !important; }
         section[data-testid='stSidebar']{ display:none; }
         main .block-container { padding-top: 12px; padding-left: 80px; padding-right:80px }
+        @media (max-width: 900px) {
+            main .block-container { padding-left: 18px; padding-right: 18px; }
+            .hero-card { padding: 20px 18px 18px; border-radius: 24px; }
+            .hero-title { font-size: 1.72rem; }
+            .workflow-shell { padding: 14px 14px 12px; border-radius: 20px; }
+        }
         </style>
         """,
         unsafe_allow_html=True,
@@ -567,12 +762,12 @@ st.markdown(
                 <div class='hero-title'>Schnell. Klar. Einsatzbereit.</div>
                 <div class='hero-meta'>
                     <div class='hero-chip'>17 SOPs <span>zentral steuerbar</span></div>
-                    <div class='hero-chip'>Admin <span>passwortgeschützt</span></div>
-                    <div class='hero-chip'>Protokoll <span>in Sekunden erzeugt</span></div>
+                    <div class='hero-chip'>Workflow <span>schrittgeführt</span></div>
+                    <div class='hero-chip'>Protokoll <span>einsatzbereit</span></div>
                 </div>
             </div>
             <div class='hero-cta'>
-                <div class='hero-status'><span class='hero-status-dot'></span> Einsatzbereit</div>
+                <div class='hero-status'><span class='hero-status-dot'></span> Live-System</div>
             </div>
         </div>
     </div>
@@ -926,10 +1121,31 @@ def _is_valid_value(value):
 
 def render_live_summary(title, lines):
     valid_lines = [line for line in lines if line]
+    escaped_title = html.escape(title)
     if valid_lines:
-        st.caption(f"{title}: " + " | ".join(valid_lines[:5]))
+        chip_markup = "".join(
+            f"<span class='rd-summary-chip'>{html.escape(str(line))}</span>"
+            for line in valid_lines[:5]
+        )
+        st.markdown(
+            f"""
+            <div class="rd-summary-card">
+                <div class="rd-summary-head">{escaped_title}</div>
+                <div class="rd-summary-row">{chip_markup}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
     else:
-        st.caption(f"{title}: Noch keine relevanten Angaben")
+        st.markdown(
+            f"""
+            <div class="rd-summary-card rd-summary-empty">
+                <div class="rd-summary-head">{escaped_title}</div>
+                <div class="rd-summary-muted">Noch keine relevanten Angaben</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 
 def build_handover_text(patient_data):
@@ -1084,16 +1300,16 @@ current_workflow_index = workflow_step_index(st.session_state["seite"])
 if current_workflow_index is not None:
     st.markdown(
         f"""
-        <div style="margin: 8px 0 14px; padding: 16px 18px; border-radius: 22px; border: 1px solid rgba(255,255,255,0.09); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02)); box-shadow: 0 16px 34px rgba(2,8,24,0.18);">
-            <div style="display:flex; justify-content:space-between; gap:12px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
+        <div class="workflow-shell">
+            <div class="workflow-head">
                 <div>
-                    <div style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.14em; color:rgba(238,245,255,0.62); font-weight:800;">Einsatz-Workflow</div>
-                    <div style="font-size:1.1rem; font-weight:900; color:#f5f9ff;">Schritt {current_workflow_index + 1} von {workflow_total}: {WORKFLOW_STEPS[current_workflow_index]['label']}</div>
+                    <div class="workflow-kicker">Einsatz-Workflow</div>
+                    <div class="workflow-title">Schritt {current_workflow_index + 1} von {workflow_total}: {WORKFLOW_STEPS[current_workflow_index]['label']}</div>
                 </div>
-                <div style="padding:8px 12px; border-radius:999px; background:rgba(255,255,255,0.05); color:#dce9ff; font-weight:800; font-size:0.84rem;">{workflow_completed}/{workflow_total} abgeschlossen</div>
+                <div class="workflow-count">{workflow_completed}/{workflow_total} abgeschlossen</div>
             </div>
-            <div style="height:8px; border-radius:999px; background:rgba(255,255,255,0.08); overflow:hidden; margin-bottom:12px;">
-                <div style="width:{(workflow_completed / workflow_total) * 100:.0f}%; height:100%; background:linear-gradient(90deg, #4c8dff 0%, #43d7b4 100%);"></div>
+            <div class="workflow-progress">
+                <div class="workflow-progress-bar" style="width:{(workflow_completed / workflow_total) * 100:.0f}%;"></div>
             </div>
         </div>
         """,
