@@ -755,16 +755,17 @@ def workflow_completion_state(patient_data):
     samplers = patient_data.get("samplers", {})
     opqrst = patient_data.get("opqrst", {})
     massnahmen = patient_data.get("massnahmen", {})
+    manual_done = st.session_state.get("workflow_manual_completion", {})
 
     return {
-        "❤️ Vitalwerte": _has_content(vital),
-        "🩺 xABCDE": _has_content(xabcde),
-        "📋 SAMPLERS": _has_content(samplers),
-        "🔥 OPQRST": _has_content(opqrst),
-        "⏱️ Maßnahmen": bool(massnahmen.get("timeline") or massnahmen.get("medikation")),
-        "🔎 Verdacht": _has_content(vital) or _has_content(xabcde) or _has_content(samplers) or _has_content(opqrst),
-        "🗣️ Übergabe": bool(massnahmen.get("timeline") or massnahmen.get("medikation") or _has_content(vital)),
-        "📄 Protokoll": st.session_state.get("protocol_generated", False),
+        "❤️ Vitalwerte": _has_content(vital) or manual_done.get("❤️ Vitalwerte", False),
+        "🩺 xABCDE": _has_content(xabcde) or manual_done.get("🩺 xABCDE", False),
+        "📋 SAMPLERS": _has_content(samplers) or manual_done.get("📋 SAMPLERS", False),
+        "🔥 OPQRST": _has_content(opqrst) or manual_done.get("🔥 OPQRST", False),
+        "⏱️ Maßnahmen": bool(massnahmen.get("timeline") or massnahmen.get("medikation")) or manual_done.get("⏱️ Maßnahmen", False),
+        "🔎 Verdacht": _has_content(vital) or _has_content(xabcde) or _has_content(samplers) or _has_content(opqrst) or manual_done.get("🔎 Verdacht", False),
+        "🗣️ Übergabe": bool(massnahmen.get("timeline") or massnahmen.get("medikation") or _has_content(vital)) or manual_done.get("🗣️ Übergabe", False),
+        "📄 Protokoll": st.session_state.get("protocol_generated", False) or manual_done.get("📄 Protokoll", False),
     }
 
 
@@ -858,6 +859,15 @@ if "admin_unlocked" not in st.session_state:
 
 if "sop_admin_config" not in st.session_state:
     st.session_state["sop_admin_config"] = _load_sop_admin_config()
+
+if "workflow_manual_completion" not in st.session_state:
+    st.session_state["workflow_manual_completion"] = {}
+
+if "protocol_generated" not in st.session_state:
+    st.session_state["protocol_generated"] = False
+
+if "generated_protocol_text" not in st.session_state:
+    st.session_state["generated_protocol_text"] = ""
 
 
 def sop_value(key, default_value):
@@ -1752,6 +1762,16 @@ elif seite == "⏱️ Maßnahmen":
     st.header("⏱️ Maßnahmen & Timeline")
 
     m = patient["massnahmen"]
+
+    step_done_col, step_reset_col = st.columns(2)
+    with step_done_col:
+        if st.button("✓ Maßnahmen-Schritt abschließen", key="complete_measures_step", use_container_width=True):
+            st.session_state["workflow_manual_completion"]["⏱️ Maßnahmen"] = True
+            st.success("Maßnahmen als abgeschlossen markiert.")
+    with step_reset_col:
+        if st.button("↺ Abschluss zurücksetzen", key="reset_measures_step", use_container_width=True):
+            st.session_state["workflow_manual_completion"]["⏱️ Maßnahmen"] = False
+            st.info("Abschlussmarkierung für Maßnahmen entfernt.")
 
     st.subheader("🕒 Maßnahmen-Timeline")
     t1, t2, t3 = st.columns([1, 2, 2])
@@ -3335,6 +3355,17 @@ elif seite == "📄 Protokoll":
 
     st.header("📄 Fertiges Protokoll")
 
+    protocol_done_col, protocol_reset_col = st.columns(2)
+    with protocol_done_col:
+        if st.button("✓ Protokoll-Schritt abschließen", key="complete_protocol_step", use_container_width=True):
+            st.session_state["workflow_manual_completion"]["📄 Protokoll"] = True
+            st.success("Protokoll-Schritt als abgeschlossen markiert.")
+    with protocol_reset_col:
+        if st.button("↺ Abschluss zurücksetzen", key="reset_protocol_step", use_container_width=True):
+            st.session_state["workflow_manual_completion"]["📄 Protokoll"] = False
+            st.session_state["protocol_generated"] = False
+            st.info("Abschlussmarkierung für Protokoll entfernt.")
+
     st.write(
         "Nach Klick auf **Protokoll generieren** wird automatisch "
         "ein RD-Protokoll aus den eingegebenen Daten erstellt."
@@ -3357,63 +3388,57 @@ elif seite == "📄 Protokoll":
         else:
 
             st.session_state["protocol_generated"] = True
+            st.session_state["workflow_manual_completion"]["📄 Protokoll"] = True
+            st.session_state["generated_protocol_text"] = protocol
 
             st.success("Protokoll erstellt.")
 
-            st.text_area(
+    if st.session_state.get("generated_protocol_text"):
+        st.text_area(
+            "RD-Protokoll",
+            st.session_state["generated_protocol_text"],
+            height=600
+        )
 
-                "RD-Protokoll",
+        st.download_button(
+            "💾 Protokoll als TXT herunterladen",
+            st.session_state["generated_protocol_text"],
+            file_name="RD_Protokoll.txt",
+            mime="text/plain"
+        )
 
-                protocol,
-
-                height=600
-
-            )
-
-            st.download_button(
-
-                "💾 Protokoll als TXT herunterladen",
-
-                protocol,
-
-                file_name="RD_Protokoll.txt",
-
-                mime="text/plain"
-
-            )
-
-            escaped_protocol = json.dumps(protocol)
-            components.html(
-                f"""
-                <div style=\"margin-top:10px;\">
-                    <button id=\"copy-protocol-btn\" style=\"
-                        width:100%;
-                        padding:12px 16px;
-                        border-radius:10px;
-                        border:none;
-                        background:linear-gradient(135deg, #4e72ff 0%, #5ac8ff 100%);
-                        color:#fff;
-                        font-weight:700;
-                        cursor:pointer;
-                    \">📋 Protokoll kopieren</button>
-                    <div id=\"copy-status\" style=\"margin-top:8px; color:#b7d7ff; font-size:0.92rem;\"></div>
-                </div>
-                <script>
-                const text = {escaped_protocol};
-                const btn = document.getElementById('copy-protocol-btn');
-                const status = document.getElementById('copy-status');
-                btn.addEventListener('click', async () => {{
-                    try {{
-                        await navigator.clipboard.writeText(text);
-                        status.textContent = 'Protokoll wurde in die Zwischenablage kopiert.';
-                    }} catch (err) {{
-                        status.textContent = 'Kopieren fehlgeschlagen. Bitte manuell markieren und kopieren.';
-                    }}
-                }});
-                </script>
-                """,
-                height=95,
-            )
+        escaped_protocol = json.dumps(st.session_state["generated_protocol_text"])
+        components.html(
+            f"""
+            <div style=\"margin-top:10px;\">
+                <button id=\"copy-protocol-btn\" style=\"
+                    width:100%;
+                    padding:12px 16px;
+                    border-radius:10px;
+                    border:none;
+                    background:linear-gradient(135deg, #4e72ff 0%, #5ac8ff 100%);
+                    color:#fff;
+                    font-weight:700;
+                    cursor:pointer;
+                \">📋 Protokoll kopieren</button>
+                <div id=\"copy-status\" style=\"margin-top:8px; color:#b7d7ff; font-size:0.92rem;\"></div>
+            </div>
+            <script>
+            const text = {escaped_protocol};
+            const btn = document.getElementById('copy-protocol-btn');
+            const status = document.getElementById('copy-status');
+            btn.addEventListener('click', async () => {{
+                try {{
+                    await navigator.clipboard.writeText(text);
+                    status.textContent = 'Protokoll wurde in die Zwischenablage kopiert.';
+                }} catch (err) {{
+                    status.textContent = 'Kopieren fehlgeschlagen. Bitte manuell markieren und kopieren.';
+                }}
+            }});
+            </script>
+            """,
+            height=95,
+        )
 
 if seite != "🛠️ Admin" and current_workflow_index is not None:
     st.divider()
