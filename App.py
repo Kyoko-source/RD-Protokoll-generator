@@ -750,22 +750,18 @@ def _has_content(values):
 
 
 def workflow_completion_state(patient_data):
-    vital = patient_data.get("vitalwerte", {})
-    xabcde = patient_data.get("xabcde", {})
-    samplers = patient_data.get("samplers", {})
-    opqrst = patient_data.get("opqrst", {})
-    massnahmen = patient_data.get("massnahmen", {})
+    visited_pages = st.session_state.get("visited_pages", set())
     manual_done = st.session_state.get("workflow_manual_completion", {})
 
     return {
-        "❤️ Vitalwerte": _has_content(vital) or manual_done.get("❤️ Vitalwerte", False),
-        "🩺 xABCDE": _has_content(xabcde) or manual_done.get("🩺 xABCDE", False),
-        "📋 SAMPLERS": _has_content(samplers) or manual_done.get("📋 SAMPLERS", False),
-        "🔥 OPQRST": _has_content(opqrst) or manual_done.get("🔥 OPQRST", False),
-        "⏱️ Maßnahmen": bool(massnahmen.get("timeline") or massnahmen.get("medikation")) or manual_done.get("⏱️ Maßnahmen", False),
-        "🔎 Verdacht": _has_content(vital) or _has_content(xabcde) or _has_content(samplers) or _has_content(opqrst) or manual_done.get("🔎 Verdacht", False),
-        "🗣️ Übergabe": bool(massnahmen.get("timeline") or massnahmen.get("medikation") or _has_content(vital)) or manual_done.get("🗣️ Übergabe", False),
-        "📄 Protokoll": st.session_state.get("protocol_generated", False) or manual_done.get("📄 Protokoll", False),
+        "❤️ Vitalwerte": "❤️ Vitalwerte" in visited_pages or manual_done.get("❤️ Vitalwerte", False),
+        "🩺 xABCDE": "🩺 xABCDE" in visited_pages or manual_done.get("🩺 xABCDE", False),
+        "📋 SAMPLERS": "📋 SAMPLERS" in visited_pages or manual_done.get("📋 SAMPLERS", False),
+        "🔥 OPQRST": "🔥 OPQRST" in visited_pages or manual_done.get("🔥 OPQRST", False),
+        "⏱️ Maßnahmen": "⏱️ Maßnahmen" in visited_pages or manual_done.get("⏱️ Maßnahmen", False),
+        "🔎 Verdacht": "🔎 Verdacht" in visited_pages or manual_done.get("🔎 Verdacht", False),
+        "🗣️ Übergabe": "🗣️ Übergabe" in visited_pages or manual_done.get("🗣️ Übergabe", False),
+        "📄 Protokoll": "📄 Protokoll" in visited_pages or manual_done.get("📄 Protokoll", False),
     }
 
 
