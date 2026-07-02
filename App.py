@@ -1318,7 +1318,12 @@ if 'visited_pages' not in st.session_state:
 
 st.session_state['visited_pages'].add(st.session_state['seite'])
 
-topbar_left, topbar_right = st.columns([14, 2])
+topbar_left, topbar_mid, topbar_right = st.columns([12, 2, 2])
+with topbar_mid:
+    st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
+    if st.button("Med-Rechner", key="top_med_calc_btn", use_container_width=True, type="secondary"):
+        st.session_state["seite"] = "💉 Med-Rechner"
+        st.rerun()
 with topbar_right:
     st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
     if st.button("Admin", key="top_admin_btn", use_container_width=True, type="secondary"):
