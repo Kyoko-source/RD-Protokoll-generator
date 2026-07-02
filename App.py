@@ -1,7 +1,9 @@
 import streamlit as st
+import streamlit.components.v1 as components
 from io import BytesIO
 from fpdf import FPDF
 from datetime import datetime
+import json
 
 
 def add_line(text, value):
@@ -460,11 +462,11 @@ st.markdown(
     .header::before { content:""; position:absolute; inset:-20% auto auto -10%; width:220px; height:220px; background: radial-gradient(circle, rgba(255,255,255,0.25), transparent 70%); pointer-events:none; }
     .header-title { font-size:1.6rem; font-weight:900; letter-spacing:0.01em; }
     .header-sub { opacity:0.92; color:rgba(255,255,255,0.92); font-size:1.01rem; font-weight:600; }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+9) { padding: 0 2px; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+9) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.13); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)); color: var(--text); font-weight: 800; margin:0; box-shadow: 0 12px 24px rgba(2,8,24,0.28); transition: all 0.22s ease; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+9) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+9) > [data-testid="stButton"] > button:focus { outline:none; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+9) > [data-testid="stButton"] > button[kind='primary'] { color:#fff; border:none; box-shadow: 0 15px 30px rgba(64,124,255,0.3); }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+10) { padding: 0 2px; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.13); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)); color: var(--text); font-weight: 800; margin:0; box-shadow: 0 12px 24px rgba(2,8,24,0.28); transition: all 0.22s ease; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button:focus { outline:none; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button[kind='primary'] { color:#fff; border:none; box-shadow: 0 15px 30px rgba(64,124,255,0.3); }
         input, textarea, select { background:#0c1628 !important; color:var(--text) !important; border:1px solid rgba(255,255,255,0.08) !important; border-radius:12px !important; padding:10px 12px !important; font-size:0.95rem !important; }
         input:focus, textarea:focus, select:focus { border-color:var(--accent) !important; box-shadow: 0 0 0 3px rgba(75,140,255,0.18) !important; }
         [data-testid="stSelectbox"] { margin: 10px 0; }
@@ -719,6 +721,7 @@ nav_options = [
     "🔥 OPQRST",
     "⏱️ Maßnahmen",
     "🔎 Verdacht",
+    "💉 Medikamentenrechner",
     "🗣️ Übergabe",
     "📄 Protokoll"
 ]
@@ -726,7 +729,7 @@ nav_options = [
 # Navigation mit Streamlit-Buttons und Session-State
 nav_container = st.container()
 with nav_container:
-    cols_nav = st.columns([1] + [1]*8 + [1])
+    cols_nav = st.columns([1] + [1]*9 + [1])
     for i, opt in enumerate(nav_options):
         with cols_nav[i+1]:
             nav_type = "primary" if st.session_state['seite'] == opt else "secondary"
@@ -743,6 +746,7 @@ active_nav_palette = {
     "🔥 OPQRST": ("#ff8a4d", "#ff4f7b"),
     "⏱️ Maßnahmen": ("#2ac4df", "#3de99a"),
     "🔎 Verdacht": ("#f3b33d", "#ff6f4a"),
+    "💉 Medikamentenrechner": ("#22b8cf", "#4c6fff"),
     "🗣️ Übergabe": ("#7d6bff", "#5bbdff"),
     "📄 Protokoll": ("#4e72ff", "#5ac8ff"),
 }
@@ -750,7 +754,7 @@ start_color, end_color = active_nav_palette.get(seite, ("#4b8cff", "#ff7a7a"))
 st.markdown(
     f"""
     <style>
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+9) > [data-testid="stButton"] > button[kind='primary'] {{
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button[kind='primary'] {{
         background: linear-gradient(135deg, {start_color} 0%, {end_color} 100%);
     }}
     </style>
@@ -1387,6 +1391,113 @@ elif seite == "🔎 Verdacht":
     )
 
 # --------------------------------------------------
+# MEDIKAMENTENRECHNER
+# --------------------------------------------------
+
+elif seite == "💉 Medikamentenrechner":
+
+    st.header("💉 Medikamentenrechner")
+    st.caption("Aktuell implementiert: SOP-Krankheitsbild Anaphylaxie (SOPKB0105)")
+    st.warning("Sicherheits-Hinweis: Dieses Modul ist eine rechnerische SOP-Unterstützung. Es ersetzt keine klinische Entscheidung oder Freigabe durch Fachpersonal.")
+
+    sop = st.selectbox(
+        "SOP auswählen",
+        ["Anaphylaxie (SOPKB0105)"]
+    )
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        alter = st.number_input("Alter (Jahre)", min_value=0, max_value=120, value=30, key="med_age")
+    with c2:
+        gewicht = st.number_input("Gewicht (kg)", min_value=1.0, max_value=250.0, value=70.0, step=0.1, key="med_weight")
+    with c3:
+        schwanger = st.selectbox("Schwangerschaft", ["Nein", "Ja", "Unbekannt"], key="med_pregnant")
+
+    st.subheader("Klinische Konstellation")
+    k1, k2, k3 = st.columns(3)
+    with k1:
+        grad = st.selectbox("Anaphylaxiegrad", ["I", "II", "III", "IV"], key="ana_grade")
+        abcd_problem = st.checkbox("A/B/C/D Problem (Grad II/III)", key="ana_abcd_problem")
+    with k2:
+        stridor = st.checkbox("Dysphonie / Uvulaschwellung / inspiratorischer Stridor", key="ana_stridor")
+        bronch_obstr = st.checkbox("Dyspnoe / bronchiale Obstruktion", key="ana_bronch")
+    with k3:
+        schock = st.checkbox("Hypotonie / Schock / Bewusstlosigkeit", key="ana_shock")
+        kreislaufstillstand = st.checkbox("Kreislaufstillstand", key="ana_cpr")
+
+    # SOP-Dosierungen
+    if alter >= 12:
+        adrenalin_im_mg = 0.5
+        clemastin_mg = 2.0
+        prednisolon_mg = 250.0
+        salbutamol_mg = 2.5
+    elif alter >= 6:
+        adrenalin_im_mg = 0.3
+        clemastin_mg = round(0.03 * float(gewicht), 2)
+        prednisolon_mg = round(2.0 * float(gewicht), 1)
+        salbutamol_mg = 1.25 if alter <= 12 else 2.5
+    else:
+        adrenalin_im_mg = 0.15
+        clemastin_mg = round(0.03 * float(gewicht), 2)
+        prednisolon_mg = round(2.0 * float(gewicht), 1)
+        salbutamol_mg = None
+
+    volumen_ml = round(20.0 * float(gewicht), 0)
+
+    st.subheader("Berechnete SOP-Dosierungen")
+    d1, d2, d3 = st.columns(3)
+    with d1:
+        st.metric("Adrenalin i.m. (pur)", f"{adrenalin_im_mg} mg")
+        st.caption("SOP: alle 5 Minuten wiederholbar bei fehlender Stabilisierung")
+    with d2:
+        st.metric("Clemastin i.v.", f"{clemastin_mg} mg")
+        st.metric("Prednisolon i.v.", f"{prednisolon_mg} mg")
+    with d3:
+        st.metric("Volumenbolus Vollelektrolyt", f"{int(volumen_ml)} ml")
+        if salbutamol_mg is not None:
+            st.metric("Salbutamol verneb.", f"{salbutamol_mg} mg")
+        else:
+            st.metric("Salbutamol verneb.", "keine SOP-Angabe <4 Jahre")
+
+    st.info("Adrenalin-Verneblung laut SOP bei Dysphonie/Uvulaschwellung/Stridor: 4 mg pur verneb.")
+
+    handlung = []
+    if kreislaufstillstand or grad == "IV":
+        handlung.append("Grad IV / Kreislaufstillstand: Reanimationsalgorithmus (SOP CPR) priorisieren.")
+    else:
+        handlung.append("Basismaßnahmen: Auslöser entfernen, ABCDE, Monitoring, O2, i.v.-Zugang, Blutzucker, SAMPLER.")
+        if abcd_problem or grad in ["II", "III"]:
+            handlung.append(f"Unverzüglich Adrenalin i.m. {adrenalin_im_mg} mg (auch ohne vorliegenden i.v.-Zugang).")
+        if stridor:
+            handlung.append("Atemwegsproblem: Adrenalin 4 mg pur verneb + Clemastin i.v. + Prednisolon i.v.")
+        if bronch_obstr:
+            if salbutamol_mg is not None:
+                handlung.append(f"Bronchiale Obstruktion: Salbutamol {salbutamol_mg} mg verneb.")
+            else:
+                handlung.append("Bronchiale Obstruktion: Salbutamol-Dosis für <4 Jahre nicht in dieser SOP angegeben.")
+        if schock:
+            handlung.append(f"Schockzeichen: Volumenbolus Vollelektrolyt {int(volumen_ml)} ml.")
+        handlung.append("Bei fehlender Stabilisierung Adrenalin i.m. alle 5 Minuten wiederholen und Notarztindikation prüfen.")
+
+    if schwanger == "Ja":
+        handlung.append("Schwangerschaft: Risiko-Nutzen eng abwägen, frühzeitige notärztliche/klinische Einbindung.")
+
+    st.subheader("SOP-Handlungshilfe")
+    for i, step in enumerate(handlung, start=1):
+        st.write(f"{i}. {step}")
+
+    render_live_summary(
+        "Live-Zusammenfassung Medikamentenrechner",
+        [
+            f"SOP: {sop}",
+            f"Alter/Gewicht: {alter} J / {gewicht} kg",
+            f"Adrenalin i.m.: {adrenalin_im_mg} mg",
+            f"Prednisolon i.v.: {prednisolon_mg} mg",
+            f"Volumen: {int(volumen_ml)} ml",
+        ],
+    )
+
+# --------------------------------------------------
 # UEBERGABE
 # --------------------------------------------------
 
@@ -1465,32 +1576,35 @@ elif seite == "📄 Protokoll":
 
             )
 
-            # PDF generieren
-            try:
-                pdf = FPDF()
-                pdf.add_page()
-                pdf.set_auto_page_break(auto=True, margin=15)
-                # Title
-                pdf.set_font("Arial", 'B', 16)
-                pdf.cell(0, 8, "RD-Protokoll", ln=1, align='C')
-                pdf.ln(2)
-                pdf.cell(0, 6, f"Erstellt: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=1)
-                pdf.ln(4)
-                pdf.set_font("Arial", size=12)
-                for line in protocol.splitlines():
-                    pdf.multi_cell(0, 6, line)
-                # Footer
-                pdf.set_y(-20)
-                pdf.set_font("Arial", size=8)
-                pdf.cell(0, 6, "Generiert mit RD-Protokoll Generator", align='C')
-                pdf_bytes = pdf.output(dest="S").encode('latin-1')
-                pdf_buffer = BytesIO(pdf_bytes)
-
-                st.download_button(
-                    "💾 Protokoll als PDF herunterladen",
-                    data=pdf_buffer,
-                    file_name="RD_Protokoll.pdf",
-                    mime="application/pdf"
-                )
-            except Exception:
-                st.info("PDF-Export nicht verfügbar (abhängige Bibliothek fehlt).")
+            escaped_protocol = json.dumps(protocol)
+            components.html(
+                f"""
+                <div style=\"margin-top:10px;\">
+                    <button id=\"copy-protocol-btn\" style=\"
+                        width:100%;
+                        padding:12px 16px;
+                        border-radius:10px;
+                        border:none;
+                        background:linear-gradient(135deg, #4e72ff 0%, #5ac8ff 100%);
+                        color:#fff;
+                        font-weight:700;
+                        cursor:pointer;
+                    \">📋 Protokoll kopieren</button>
+                    <div id=\"copy-status\" style=\"margin-top:8px; color:#b7d7ff; font-size:0.92rem;\"></div>
+                </div>
+                <script>
+                const text = {escaped_protocol};
+                const btn = document.getElementById('copy-protocol-btn');
+                const status = document.getElementById('copy-status');
+                btn.addEventListener('click', async () => {{
+                    try {{
+                        await navigator.clipboard.writeText(text);
+                        status.textContent = 'Protokoll wurde in die Zwischenablage kopiert.';
+                    }} catch (err) {{
+                        status.textContent = 'Kopieren fehlgeschlagen. Bitte manuell markieren und kopieren.';
+                    }}
+                }});
+                </script>
+                """,
+                height=95,
+            )
