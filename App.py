@@ -279,6 +279,93 @@ def generate_protocol():
         t_cat, t_val = categorize_temperature(temperatur)
         e_section += f"  Körpertemperatur: {t_cat}\n"
     
+    # SAMPLERS und OPQRST zusätzlich unter E aufführen
+    samplers_under_e = ""
+    if s.get("symptome"):
+        samplers_under_e += f"    S Symptome: {s.get('symptome')}\n"
+
+    allergien = s.get("allergien")
+    if allergien == "Keine bekannt":
+        samplers_under_e += "    A Allergien: Keine bekannt\n"
+    elif allergien == "Vorhanden":
+        samplers_under_e += f"    A Allergien: {s.get('allergien_text','')}\n"
+
+    medopt = s.get("medikamente_option")
+    if medopt == "Siehe Medikamentenplan":
+        samplers_under_e += "    M Medikamente: Siehe Medikamentenplan\n"
+    elif medopt == "Medikamente eingeben":
+        samplers_under_e += f"    M Medikamente: {s.get('medikamente','')}\n"
+
+    if s.get("vorgeschichte"):
+        samplers_under_e += f"    P Vorgeschichte: {s.get('vorgeschichte')}\n"
+
+    letzte = s.get('letzte_mahlzeit')
+    if letzte and letzte != "Keine Angabe":
+        if letzte == 'Eigene Eingabe':
+            samplers_under_e += f"    L Letzte Mahlzeit: {s.get('letzte_mahlzeit_text','')}\n"
+        else:
+            samplers_under_e += f"    L Letzte Mahlzeit: {letzte}\n"
+
+    if s.get('ereignis'):
+        samplers_under_e += f"    E Ereignis: {s.get('ereignis')}\n"
+
+    risks = []
+    for k in ['raucher', 'alkohol', 'drogen', 'diabetes', 'hypertonie', 'antikoagulation']:
+        if s.get(k):
+            risks.append(k.upper())
+    if s.get('risiken_sonstige'):
+        risks.append(s.get('risiken_sonstige'))
+    if risks:
+        samplers_under_e += "    R Risikofaktoren: " + ", ".join(map(str, risks)) + "\n"
+
+    schw = s.get('schwangerschaft')
+    if schw and schw != 'Nicht relevant':
+        samplers_under_e += f"    S Schwangerschaft: {schw}\n"
+
+    opqrst_under_e = ""
+    if o.get('onset'):
+        opqrst_under_e += f"    O Onset: {o.get('onset')}"
+        if o.get('onset_text'):
+            opqrst_under_e += f" — {o.get('onset_text')}"
+        opqrst_under_e += "\n"
+    if o.get('provocation'):
+        opqrst_under_e += f"    P Provocation: {o.get('provocation')}"
+        if o.get('provocation_text'):
+            opqrst_under_e += f" — {o.get('provocation_text')}"
+        opqrst_under_e += "\n"
+    if o.get('quality'):
+        opqrst_under_e += f"    Q Quality: {o.get('quality')}"
+        if o.get('quality_text'):
+            opqrst_under_e += f" — {o.get('quality_text')}"
+        opqrst_under_e += "\n"
+    if o.get('region'):
+        opqrst_under_e += f"    R Region: {o.get('region')}\n"
+    if o.get('radiation'):
+        opqrst_under_e += f"      Ausstrahlung: {o.get('radiation')}\n"
+    if o.get('nrs'):
+        try:
+            n = int(o.get('nrs'))
+            if n > 0:
+                opqrst_under_e += f"    S Severity: {n}/10\n"
+                if o.get('severity_desc'):
+                    opqrst_under_e += f"      Auswirkung: {o.get('severity_desc')}\n"
+        except Exception:
+            pass
+    if o.get('zeitverlauf'):
+        opqrst_under_e += f"    T Time: {o.get('zeitverlauf')}\n"
+        if o.get('dauer'):
+            opqrst_under_e += f"      Dauer: {o.get('dauer')}\n"
+
+    if samplers_under_e:
+        if not e_section:
+            e_section = "E — EXPOSURE (Ganzkörperuntersuchung):\n"
+        e_section += "  SAMPLERS:\n" + samplers_under_e
+
+    if opqrst_under_e:
+        if not e_section:
+            e_section = "E — EXPOSURE (Ganzkörperuntersuchung):\n"
+        e_section += "  OPQRST:\n" + opqrst_under_e
+
     if e_section:
         xabcde += "\n" + e_section
 
@@ -879,184 +966,92 @@ elif seite == "📋 SAMPLERS":
 
     st.header("📋 SAMPLERS")
     st.markdown(
-        "<div style='text-align:center; margin-bottom:18px;'>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>S</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>A</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>M</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>P</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>L</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>E</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>R</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>S</div>"
-        "</div>",
-        unsafe_allow_html=True
+        "<style>"
+        "div[data-testid='stButton'] > button { min-height: 88px; font-size: 34px; font-weight: 900; letter-spacing: 0.10em; border-radius: 18px; }"
+        "div[data-testid='stButton'] > button:hover { transform: translateY(-1px); }"
+        "</style>",
+        unsafe_allow_html=True,
     )
 
-    with st.expander("S – Symptome", expanded=False):
-        textarea_field(
-            "samplers",
-            "symptome",
-            "Beschwerden / Symptome"
-        )
+    if "samplers_selected" not in st.session_state:
+        st.session_state["samplers_selected"] = "S1"
 
-    with st.expander("A – Allergien", expanded=False):
+    s_col1, s_col2, s_col3, s_col4, s_col5, s_col6, s_col7, s_col8 = st.columns(8, gap="small")
+    s_buttons = ["S1", "A", "M", "P", "L", "E", "R", "S2"]
+    s_cols = [s_col1, s_col2, s_col3, s_col4, s_col5, s_col6, s_col7, s_col8]
+    for label, col in zip(s_buttons, s_cols):
+        with col:
+            if st.button(label, key=f"samplers_nav_{label}", use_container_width=True):
+                st.session_state["samplers_selected"] = label
+
+    samplers_selected = st.session_state["samplers_selected"]
+    st.info(f"Aktive SAMPLERS-Sektion: {samplers_selected}")
+
+    if samplers_selected == "S1":
+        st.subheader("S – Symptome")
+        textarea_field("samplers", "symptome", "Beschwerden / Symptome")
+
+    elif samplers_selected == "A":
+        st.subheader("A – Allergien")
         allergien = radio_field(
             "samplers",
             "allergien",
             "Allergien",
-            [
-                "Keine Angabe",
-                "Keine bekannt",
-                "Vorhanden"
-            ]
+            ["Keine Angabe", "Keine bekannt", "Vorhanden"]
         )
         if allergien == "Vorhanden":
-            text_field(
-                "samplers",
-                "allergien_text",
-                "Welche Allergien?"
-            )
+            text_field("samplers", "allergien_text", "Welche Allergien?")
 
-    with st.expander("M – Medikamente", expanded=False):
+    elif samplers_selected == "M":
+        st.subheader("M – Medikamente")
         medikamente = radio_field(
             "samplers",
             "medikamente_option",
             "Medikamente",
-            [
-                "Keine Angabe",
-                "Siehe Medikamentenplan",
-                "Medikamente eingeben"
-            ]
+            ["Keine Angabe", "Siehe Medikamentenplan", "Medikamente eingeben"]
         )
         if medikamente == "Medikamente eingeben":
-            textarea_field(
-                "samplers",
-                "medikamente",
-                "Bitte Medikamente eingeben"
-            )
+            textarea_field("samplers", "medikamente", "Bitte Medikamente eingeben")
 
-    with st.expander("P – Patientenvorgeschichte", expanded=False):
-        textarea_field(
-            "samplers",
-            "vorgeschichte",
-            "Vorerkrankungen"
-        )
+    elif samplers_selected == "P":
+        st.subheader("P – Patientenvorgeschichte")
+        textarea_field("samplers", "vorgeschichte", "Vorerkrankungen")
 
-    with st.expander("L – Letzte Nahrungsaufnahme", expanded=False):
+    elif samplers_selected == "L":
+        st.subheader("L – Letzte Nahrungsaufnahme")
         letzte_mahlzeit = radio_field(
             "samplers",
             "letzte_mahlzeit",
             "Letzte Mahlzeit",
-            [
-                "Keine Angabe",
-                "< 2 Stunden",
-                "2–6 Stunden",
-                "> 6 Stunden",
-                "Unbekannt",
-                "Eigene Eingabe"
-            ]
+            ["Keine Angabe", "< 2 Stunden", "2–6 Stunden", "> 6 Stunden", "Unbekannt", "Eigene Eingabe"]
         )
-
         if letzte_mahlzeit == "Eigene Eingabe":
-            text_field(
-                "samplers",
-                "letzte_mahlzeit_text",
-                "Eigene Eingabe"
-            )
+            text_field("samplers", "letzte_mahlzeit_text", "Eigene Eingabe")
 
-    with st.expander("E – Ereignis", expanded=False):
-        textarea_field(
-            "samplers",
-            "ereignis",
-            "Ereignisbeschreibung",
-            height=180
-        )
+    elif samplers_selected == "E":
+        st.subheader("E – Ereignis")
+        textarea_field("samplers", "ereignis", "Ereignisbeschreibung", height=180)
 
-    with st.expander("R – Risikofaktoren", expanded=False):
+    elif samplers_selected == "R":
+        st.subheader("R – Risikofaktoren")
         col1, col2 = st.columns(2)
         with col1:
-            checkbox_field("samplers","raucher","Raucher")
-            checkbox_field("samplers","alkohol","Alkoholkonsum")
-            checkbox_field("samplers","drogen","Drogen")
-
+            checkbox_field("samplers", "raucher", "Raucher")
+            checkbox_field("samplers", "alkohol", "Alkoholkonsum")
+            checkbox_field("samplers", "drogen", "Drogen")
         with col2:
-            checkbox_field("samplers","diabetes","Diabetes")
-            checkbox_field("samplers","hypertonie","Hypertonie")
-            checkbox_field("samplers","antikoagulation","Antikoagulation")
+            checkbox_field("samplers", "diabetes", "Diabetes")
+            checkbox_field("samplers", "hypertonie", "Hypertonie")
+            checkbox_field("samplers", "antikoagulation", "Antikoagulation")
+        text_field("samplers", "risiken_sonstige", "Weitere Risikofaktoren")
 
-        text_field(
-            "samplers",
-            "risiken_sonstige",
-            "Weitere Risikofaktoren"
-        )
-
-    with st.expander("S – Schwangerschaft", expanded=False):
+    elif samplers_selected == "S2":
+        st.subheader("S – Schwangerschaft")
         radio_field(
             "samplers",
             "schwangerschaft",
             "Schwangerschaft",
-            [
-                "Nicht relevant",
-                "Nein",
-                "Ja",
-                "Unbekannt"
-            ]
-        )
-
-# --------------------------------------------------
-# OPQRST
-
-    textarea_field(
-
-        "samplers",
-
-        "ereignis",
-
-        "Ereignisbeschreibung",
-
-        height=180
-
-    )
-
-    st.divider()
-
-    # -------------------------
-    # R Risikofaktoren
-    # -------------------------
-
-    st.subheader("R – Risikofaktoren")
-
-    col1, col2 = st.columns(2)
-
-    with col1:
-
-        checkbox_field("samplers","raucher","Raucher")
-        checkbox_field("samplers","alkohol","Alkoholkonsum")
-        checkbox_field("samplers","drogen","Drogen")
-
-    with col2:
-
-        checkbox_field("samplers","diabetes","Diabetes")
-        checkbox_field("samplers","hypertonie","Hypertonie")
-        checkbox_field("samplers","antikoagulation","Antikoagulation")
-
-    text_field(
-        "samplers",
-        "risiken_sonstige",
-        "Weitere Risikofaktoren"
-    )
-
-    with st.expander("S – Schwangerschaft", expanded=False):
-        radio_field(
-            "samplers",
-            "schwangerschaft",
-            "Schwangerschaft",
-            [
-                "Nicht relevant",
-                "Nein",
-                "Ja",
-                "Unbekannt"
-            ]
+            ["Nicht relevant", "Nein", "Ja", "Unbekannt"]
         )
 
 # --------------------------------------------------
@@ -1067,30 +1062,37 @@ elif seite == "🔥 OPQRST":
 
     st.header("🔥 OPQRST – Schmerzassessment")
     st.markdown(
-        "<div style='text-align:center; margin-bottom:18px;'>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>O</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>P</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>Q</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>R</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>S</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>T</div>"
-        "</div>",
-        unsafe_allow_html=True
+        "<style>"
+        "div[data-testid='stButton'] > button { min-height: 88px; font-size: 38px; font-weight: 900; letter-spacing: 0.14em; border-radius: 18px; }"
+        "div[data-testid='stButton'] > button:hover { transform: translateY(-1px); }"
+        "</style>",
+        unsafe_allow_html=True,
     )
-    
-    st.write("Detaillierte Schmerzerfassung für Schmerzpatienten")
-    
-    # Schmerz vorhanden?
+
+    if "opqrst_selected" not in st.session_state:
+        st.session_state["opqrst_selected"] = "O"
+
     patient["opqrst"]["schmerz_vorhanden"] = st.radio(
         "Schmerzen vorhanden?",
         ["Nein", "Ja"],
         key="opqrst_schmerz",
         horizontal=True
     )
-    
+
     if patient["opqrst"]["schmerz_vorhanden"] == "Ja":
-        
-        with st.expander("O – Onset (Beginn des Schmerzes)", expanded=False):
+        o_col1, o_col2, o_col3, o_col4, o_col5, o_col6 = st.columns(6, gap="small")
+        o_buttons = ["O", "P", "Q", "R", "S", "T"]
+        o_cols = [o_col1, o_col2, o_col3, o_col4, o_col5, o_col6]
+        for label, col in zip(o_buttons, o_cols):
+            with col:
+                if st.button(label, key=f"opqrst_nav_{label}", use_container_width=True):
+                    st.session_state["opqrst_selected"] = label
+
+        opqrst_selected = st.session_state["opqrst_selected"]
+        st.info(f"Aktive OPQRST-Sektion: {opqrst_selected}")
+
+        if opqrst_selected == "O":
+            st.subheader("O – Onset (Beginn des Schmerzes)")
             patient["opqrst"]["onset"] = st.selectbox(
                 "Beginn",
                 ["", "Plötzlich", "Allmählich", "Progressiv verschlimmernd", "Wiederkehrend"],
@@ -1100,8 +1102,9 @@ elif seite == "🔥 OPQRST":
                 "Zusätzliche Information zu Beginn",
                 key="opqrst_onset_text"
             )
-        
-        with st.expander("P – Provocation/Palliation (Auslöser und Linderung)", expanded=False):
+
+        elif opqrst_selected == "P":
+            st.subheader("P – Provocation/Palliation (Auslöser und Linderung)")
             patient["opqrst"]["provocation"] = st.selectbox(
                 "Was verschlimmert oder lindert den Schmerz?",
                 ["", "Bewegung verschlimmert", "Ruhe lindert", "Tiefe Atmung verschlimmert", "Druck lindert", "Wärme lindert", "Kälte lindert", "Nichts lindert"],
@@ -1111,8 +1114,9 @@ elif seite == "🔥 OPQRST":
                 "Genauere Beschreibung",
                 key="opqrst_provocation_text"
             )
-        
-        with st.expander("Q – Quality (Charakteristik des Schmerzes)", expanded=False):
+
+        elif opqrst_selected == "Q":
+            st.subheader("Q – Quality (Charakteristik des Schmerzes)")
             patient["opqrst"]["quality"] = st.selectbox(
                 "Wie beschreibt der Patient den Schmerz?",
                 ["", "Stechend/Messerscharf", "Dumpf", "Drückend", "Reißend", "Brennend", "Ziehend", "Klopfend", "Rauschhaft"],
@@ -1122,8 +1126,9 @@ elif seite == "🔥 OPQRST":
                 "Patienteneigene Beschreibung",
                 key="opqrst_quality_text"
             )
-        
-        with st.expander("R – Region/Radiation (Ort und Ausbreitung)", expanded=False):
+
+        elif opqrst_selected == "R":
+            st.subheader("R – Region/Radiation (Ort und Ausbreitung)")
             patient["opqrst"]["region"] = st.text_input(
                 "Wo tut es weh?",
                 key="opqrst_region"
@@ -1132,8 +1137,9 @@ elif seite == "🔥 OPQRST":
                 "Ausstrahlung (Breitet sich der Schmerz aus?)",
                 key="opqrst_radiation"
             )
-        
-        with st.expander("S – Severity (Stärke des Schmerzes)", expanded=False):
+
+        elif opqrst_selected == "S":
+            st.subheader("S – Severity (Stärke des Schmerzes)")
             patient["opqrst"]["nrs"] = st.slider(
                 "Numerische Rating-Skala (NRS) 0-10",
                 0, 10, 0,
@@ -1144,8 +1150,9 @@ elif seite == "🔥 OPQRST":
                 ["", "Kein Schmerz (0)", "Minimal (1-3)", "Mäßig (4-6)", "Schwer (7-8)", "Sehr schwer (9-10)"],
                 key="opqrst_severity"
             )
-        
-        with st.expander("T – Time (Zeitverlauf)", expanded=False):
+
+        elif opqrst_selected == "T":
+            st.subheader("T – Time (Zeitverlauf)")
             patient["opqrst"]["zeitverlauf"] = st.selectbox(
                 "Zeitlicher Verlauf",
                 ["", "Konstant", "Intermittierend", "Sich verschlimmernd", "Sich verbessernd", "Gleichbleibend"],
