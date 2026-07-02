@@ -1,14 +1,16 @@
-import streamlit as st
+﻿import streamlit as st
 import streamlit.components.v1 as components
 from io import BytesIO
 from fpdf import FPDF
 from datetime import datetime
 import json
+import os
+from copy import deepcopy
 
 
 def add_line(text, value):
     """
-    Fügt nur Zeilen hinzu, wenn ein Wert vorhanden ist.
+    FÃ¼gt nur Zeilen hinzu, wenn ein Wert vorhanden ist.
     """
     if value not in ["", "Keine Angabe", 0, None]:
         return text + value + "\n"
@@ -21,11 +23,11 @@ def categorize_temperature(temp):
     except Exception:
         return "Unbekannt", None
     if t < 36.0:
-        return "Unterkühlung", t
+        return "UnterkÃ¼hlung", t
     if t < 37.5:
         return "Normal", t
     if t < 38.0:
-        return "Erhöht (subfebril)", t
+        return "ErhÃ¶ht (subfebril)", t
     return "Fieber", t
 
 
@@ -75,10 +77,10 @@ def categorize_bz(bz):
     except Exception:
         return "Unbekannt", None
     if bz < 70:
-        return "Hypoglykämie", bz
+        return "HypoglykÃ¤mie", bz
     if bz <= 140:
         return "Normal", bz
-    return "Hyperglykämie", bz
+    return "HyperglykÃ¤mie", bz
 
 
 def categorize_rr(sys, dia):
@@ -92,7 +94,7 @@ def categorize_rr(sys, dia):
     if s < 120:
         return "Normal", (s, d)
     if s < 140:
-        return "Leicht erhöht", (s, d)
+        return "Leicht erhÃ¶ht", (s, d)
     if s < 180:
         return "Hypertonie", (s, d)
     return "Hypertensive Krise", (s, d)
@@ -114,7 +116,7 @@ def generate_protocol():
     # Narrative Einleitung (anonym, nur nicht-identifizierende Informationen)
     try:
         intro = "PATIENTENSITUATION:\n"
-        intro += "─" * 50 + "\n"
+        intro += "â”€" * 50 + "\n"
         
         sex = v.get('geschlecht')
         age = v.get('alter')
@@ -136,7 +138,7 @@ def generate_protocol():
         if avpu and avpu != "Keine Angabe":
             intro_desc += "\nBewusstseinszustand: "
             if avpu == 'A':
-                intro_desc += "Wach, vollständig ansprechbar und orientiert"
+                intro_desc += "Wach, vollstÃ¤ndig ansprechbar und orientiert"
             elif avpu == 'V':
                 intro_desc += "Verbal ansprechbar"
             elif avpu == 'P':
@@ -152,16 +154,16 @@ def generate_protocol():
     except Exception:
         pass
 
-    # xABCDE - ausführlicher und strukturierter, mit integrierten Vitalwerten
+    # xABCDE - ausfÃ¼hrlicher und strukturierter, mit integrierten Vitalwerten
     xabcde = ""
     blutung = x.get("blutung")
     if blutung and blutung != "Keine Angabe":
-        xabcde += f"\nX — EXSANGUINATION (Blutung):\n  Status: {blutung}\n"
+        xabcde += f"\nX â€” EXSANGUINATION (Blutung):\n  Status: {blutung}\n"
         if x.get("blutung_lokalisation"):
             xabcde += f"  Ort: {x.get('blutung_lokalisation')}\n"
 
     if x.get("atemweg") and x.get("atemweg") != "Keine Angabe":
-        xabcde += f"\nA — ATEMWEG:\n  Status: {x.get('atemweg')}\n"
+        xabcde += f"\nA â€” ATEMWEG:\n  Status: {x.get('atemweg')}\n"
         if x.get("hws"):
             xabcde += f"  HWS-Stabilisierung: {x.get('hws')}\n"
 
@@ -171,25 +173,25 @@ def generate_protocol():
     spo2 = v.get("spo2")
     
     if x.get("atmung") and x.get("atmung") != "Keine Angabe":
-        b_section = f"B — ATMUNG:\n  Status: {x.get('atmung')}\n"
+        b_section = f"B â€” ATMUNG:\n  Status: {x.get('atmung')}\n"
         if x.get("atemgeraeusche"):
-            b_section += f"  Atemgeräusche: {x.get('atemgeraeusche')}\n"
+            b_section += f"  AtemgerÃ¤usche: {x.get('atemgeraeusche')}\n"
         if x.get("sauerstoff"):
             b_section += f"  Sauerstofftherapie: {x.get('sauerstoff')}\n"
     
-    # Atemfrequenz (immer hinzufügen, wenn vorhanden)
+    # Atemfrequenz (immer hinzufÃ¼gen, wenn vorhanden)
     if af and af != 0:
         if not b_section:
-            b_section = f"B — ATMUNG:\n"
+            b_section = f"B â€” ATMUNG:\n"
         af_cat, af_val = categorize_af(af)
         b_section += f"  Atemfrequenz: {af_cat}\n"
     
-    # SpO2 (immer hinzufügen, wenn vorhanden)
+    # SpO2 (immer hinzufÃ¼gen, wenn vorhanden)
     if spo2 and spo2 != 0:
         if not b_section:
-            b_section = f"B — ATMUNG:\n"
+            b_section = f"B â€” ATMUNG:\n"
         s_cat, s_val = categorize_spo2(spo2)
-        b_section += f"  Sauerstoffsättigung: {s_cat}\n"
+        b_section += f"  SauerstoffsÃ¤ttigung: {s_cat}\n"
     
     if b_section:
         xabcde += "\n" + b_section
@@ -201,23 +203,23 @@ def generate_protocol():
     puls = v.get("puls")
     
     if x.get("haut") and x.get("haut") != "Keine Angabe":
-        c_section = f"C — ZIRKULATION (Kreislauf):\n  Hautzeichen: {x.get('haut')}\n"
+        c_section = f"C â€” ZIRKULATION (Kreislauf):\n  Hautzeichen: {x.get('haut')}\n"
         if x.get("rekap"):
-            c_section += f"  Kapillare Füllung: {x.get('rekap')}\n"
+            c_section += f"  Kapillare FÃ¼llung: {x.get('rekap')}\n"
         if x.get("pulsqualitaet"):
-            c_section += f"  Pulsqualität: {x.get('pulsqualitaet')}\n"
+            c_section += f"  PulsqualitÃ¤t: {x.get('pulsqualitaet')}\n"
     
-    # Blutdruck (immer hinzufügen, wenn vorhanden)
+    # Blutdruck (immer hinzufÃ¼gen, wenn vorhanden)
     if rr_sys and rr_dia:
         if not c_section:
-            c_section = f"C — ZIRKULATION (Kreislauf):\n"
+            c_section = f"C â€” ZIRKULATION (Kreislauf):\n"
         rr_cat, rr_vals = categorize_rr(rr_sys, rr_dia)
         c_section += f"  Blutdruck: {rr_cat}\n"
     
-    # Pulsfrequenz (immer hinzufügen, wenn vorhanden)
+    # Pulsfrequenz (immer hinzufÃ¼gen, wenn vorhanden)
     if puls and puls != 0:
         if not c_section:
-            c_section = f"C — ZIRKULATION (Kreislauf):\n"
+            c_section = f"C â€” ZIRKULATION (Kreislauf):\n"
         p_cat, p_val = categorize_puls(puls)
         c_section += f"  Pulsfrequenz: {p_cat}\n"
     
@@ -230,32 +232,32 @@ def generate_protocol():
     bz = v.get("bz")
     
     if x.get("avpu") and x.get("avpu") != "Keine Angabe":
-        d_section = f"D — DISABILITY (Neurologischer Status):\n  Bewusstsein (AVPU): {x.get('avpu')}\n"
+        d_section = f"D â€” DISABILITY (Neurologischer Status):\n  Bewusstsein (AVPU): {x.get('avpu')}\n"
         if x.get("pupillen"):
             d_section += f"  Pupillen: {x.get('pupillen')}\n"
     
-    # GCS (immer hinzufügen, wenn vorhanden)
+    # GCS (immer hinzufÃ¼gen, wenn vorhanden)
     if gcs:
         if not d_section:
-            d_section = f"D — DISABILITY (Neurologischer Status):\n"
+            d_section = f"D â€” DISABILITY (Neurologischer Status):\n"
         try:
             g = int(gcs)
             if g == 15:
-                g_cat = "Normal (vollständig orientiert)"
+                g_cat = "Normal (vollstÃ¤ndig orientiert)"
             elif g >= 13:
-                g_cat = "Leicht eingeschränkt"
+                g_cat = "Leicht eingeschrÃ¤nkt"
             elif g >= 9:
-                g_cat = "Mäßig eingeschränkt"
+                g_cat = "MÃ¤ÃŸig eingeschrÃ¤nkt"
             else:
-                g_cat = "Schwer eingeschränkt / Intubationskriterium"
+                g_cat = "Schwer eingeschrÃ¤nkt / Intubationskriterium"
         except Exception:
             g_cat = "Unbekannt"
         d_section += f"  Glasgow Coma Scale: {g_cat}\n"
     
-    # Blutzucker (immer hinzufügen, wenn vorhanden)
+    # Blutzucker (immer hinzufÃ¼gen, wenn vorhanden)
     if bz and bz != 0:
         if not d_section:
-            d_section = f"D — DISABILITY (Neurologischer Status):\n"
+            d_section = f"D â€” DISABILITY (Neurologischer Status):\n"
         bz_cat, bz_val = categorize_bz(bz)
         d_section += f"  Blutzucker: {bz_cat}\n"
     
@@ -267,22 +269,22 @@ def generate_protocol():
     temperatur = v.get("temperatur")
     
     if x.get("bodycheck") and x.get("bodycheck") != "Keine Angabe":
-        e_section = f"E — EXPOSURE (Ganzkörperuntersuchung):\n  Status: {x.get('bodycheck')}\n"
+        e_section = f"E â€” EXPOSURE (GanzkÃ¶rperuntersuchung):\n  Status: {x.get('bodycheck')}\n"
         if x.get("bodycheck_text"):
-            e_section += f"  Auffälligkeiten: {x.get('bodycheck_text')}\n"
+            e_section += f"  AuffÃ¤lligkeiten: {x.get('bodycheck_text')}\n"
         if x.get("unterkuehlung"):
-            e_section += f"  Unterkühlung: {x.get('unterkuehlung')}\n"
+            e_section += f"  UnterkÃ¼hlung: {x.get('unterkuehlung')}\n"
         if x.get("verbrennung"):
             e_section += f"  Thermische Verletzungen: {x.get('verbrennung')}\n"
     
-    # Körpertemperatur (immer hinzufügen, wenn vorhanden)
+    # KÃ¶rpertemperatur (immer hinzufÃ¼gen, wenn vorhanden)
     if temperatur is not None:
         if not e_section:
-            e_section = f"E — EXPOSURE (Ganzkörperuntersuchung):\n"
+            e_section = f"E â€” EXPOSURE (GanzkÃ¶rperuntersuchung):\n"
         t_cat, t_val = categorize_temperature(temperatur)
-        e_section += f"  Körpertemperatur: {t_cat}\n"
+        e_section += f"  KÃ¶rpertemperatur: {t_cat}\n"
     
-    # SAMPLERS und OPQRST zusätzlich unter E aufführen
+    # SAMPLERS und OPQRST zusÃ¤tzlich unter E auffÃ¼hren
     samplers_under_e = ""
     if s.get("symptome"):
         samplers_under_e += f"    S Symptome: {s.get('symptome')}\n"
@@ -329,17 +331,17 @@ def generate_protocol():
     if o.get('onset'):
         opqrst_under_e += f"    O Onset: {o.get('onset')}"
         if o.get('onset_text'):
-            opqrst_under_e += f" — {o.get('onset_text')}"
+            opqrst_under_e += f" â€” {o.get('onset_text')}"
         opqrst_under_e += "\n"
     if o.get('provocation'):
         opqrst_under_e += f"    P Provocation: {o.get('provocation')}"
         if o.get('provocation_text'):
-            opqrst_under_e += f" — {o.get('provocation_text')}"
+            opqrst_under_e += f" â€” {o.get('provocation_text')}"
         opqrst_under_e += "\n"
     if o.get('quality'):
         opqrst_under_e += f"    Q Quality: {o.get('quality')}"
         if o.get('quality_text'):
-            opqrst_under_e += f" — {o.get('quality_text')}"
+            opqrst_under_e += f" â€” {o.get('quality_text')}"
         opqrst_under_e += "\n"
     if o.get('region'):
         opqrst_under_e += f"    R Region: {o.get('region')}\n"
@@ -361,23 +363,23 @@ def generate_protocol():
 
     if samplers_under_e:
         if not e_section:
-            e_section = "E — EXPOSURE (Ganzkörperuntersuchung):\n"
+            e_section = "E â€” EXPOSURE (GanzkÃ¶rperuntersuchung):\n"
         e_section += "  SAMPLERS:\n" + samplers_under_e
 
     if opqrst_under_e:
         if not e_section:
-            e_section = "E — EXPOSURE (Ganzkörperuntersuchung):\n"
+            e_section = "E â€” EXPOSURE (GanzkÃ¶rperuntersuchung):\n"
         e_section += "  OPQRST:\n" + opqrst_under_e
 
     if e_section:
         xabcde += "\n" + e_section
 
     if xabcde:
-        protocol += "xABCDE — STRUKTURIERTE UNTERSUCHUNG\n"
+        protocol += "xABCDE â€” STRUKTURIERTE UNTERSUCHUNG\n"
         protocol += "=" * 50 + "\n"
         protocol += xabcde + "\n"
 
-    # Klinischer Verlauf als Fließtext
+    # Klinischer Verlauf als FlieÃŸtext
     try:
         narrative = []
         if s.get("symptome"):
@@ -385,13 +387,13 @@ def generate_protocol():
         if x.get("atemweg") and x.get("atemweg") != "Keine Angabe":
             narrative.append(f"Der Atemweg war {x.get('atemweg').lower()}. ")
         if x.get("atmung") and x.get("atmung") != "Keine Angabe":
-            narrative.append(f"Die Atmung wurde als {x.get('atmung').lower()} eingeschätzt. ")
+            narrative.append(f"Die Atmung wurde als {x.get('atmung').lower()} eingeschÃ¤tzt. ")
         if x.get("haut") and x.get("haut") != "Keine Angabe":
             narrative.append(f"Kreislaufbezogen zeigte sich die Haut {x.get('haut').lower()}. ")
         if x.get("avpu") and x.get("avpu") != "Keine Angabe":
             narrative.append(f"Neurologisch ergab sich ein AVPU-Status {x.get('avpu')}. ")
         if o.get("nrs") and int(o.get("nrs", 0)) > 0:
-            narrative.append(f"Die Schmerzintensität wurde mit NRS {o.get('nrs')}/10 angegeben. ")
+            narrative.append(f"Die SchmerzintensitÃ¤t wurde mit NRS {o.get('nrs')}/10 angegeben. ")
         if narrative:
             protocol += "KLINISCHER VERLAUF (NARRATIV)\n"
             protocol += "=" * 50 + "\n"
@@ -399,14 +401,14 @@ def generate_protocol():
     except Exception:
         pass
 
-    # Maßnahmen-Timeline
+    # MaÃŸnahmen-Timeline
     timeline_entries = m.get("timeline", [])
     if timeline_entries:
-        protocol += "MAßNAHMEN-TIMELINE\n"
+        protocol += "MAÃŸNAHMEN-TIMELINE\n"
         protocol += "=" * 50 + "\n"
         for entry in timeline_entries:
             zeit = entry.get("zeit", "--:--")
-            massnahme = entry.get("massnahme", "Maßnahme")
+            massnahme = entry.get("massnahme", "MaÃŸnahme")
             wirkung = entry.get("wirkung", "")
             line = f"{zeit} - {massnahme}"
             if wirkung:
@@ -445,12 +447,12 @@ def generate_protocol():
 
 st.set_page_config(
     page_title="RD-Protokoll Generator",
-    page_icon="🚑",
+    page_icon="ðŸš‘",
     layout="wide"
 )
 
-st.title("🚑 RD-Protokoll Generator")
-st.caption("Dokumentationshilfe für den Rettungsdienst")
+st.title("ðŸš‘ RD-Protokoll Generator")
+st.caption("Dokumentationshilfe fÃ¼r den Rettungsdienst")
 
 # --- Custom styling (Dark Mode, centered navigation) -----------------
 st.markdown(
@@ -463,11 +465,11 @@ st.markdown(
     .header::after { content:""; position:absolute; left:22px; right:22px; bottom:10px; height:1px; background: linear-gradient(90deg, rgba(255,255,255,0.22), rgba(255,255,255,0.03)); pointer-events:none; }
     .header-title { font-size:2rem; font-weight:900; letter-spacing:0.01em; text-shadow: 0 2px 12px rgba(6,20,44,0.35); }
     .header-sub { opacity:0.96; color:rgba(255,255,255,0.95); font-size:1.05rem; font-weight:700; }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+10) { padding: 0 2px; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.13); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)); color: var(--text); font-weight: 800; margin:0; box-shadow: 0 12px 24px rgba(2,8,24,0.28); transition: all 0.22s ease; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
-        [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button:focus { outline:none; }
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button[kind='primary'] { color:#fff; border:none; box-shadow: 0 15px 30px rgba(64,124,255,0.3); }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+11) { padding: 0 2px; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.13); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)); color: var(--text); font-weight: 800; margin:0; box-shadow: 0 12px 24px rgba(2,8,24,0.28); transition: all 0.22s ease; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button:focus { outline:none; }
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button[kind='primary'] { color:#fff; border:none; box-shadow: 0 15px 30px rgba(64,124,255,0.3); }
         [data-testid="stTextInput"] input,
         [data-testid="stNumberInput"] input,
         [data-testid="stTextArea"] textarea {
@@ -516,7 +518,7 @@ st.markdown(
         unsafe_allow_html=True,
 )
 
-st.markdown("""<div class='header'><div style='display:flex; align-items:center; gap:14px; flex-wrap:wrap;'><div class='header-title'>🚑 RD-Protokoll Generator</div><div class='header-sub'>Schnell. Klar. Einsatzbereit.</div></div></div>""", unsafe_allow_html=True)
+st.markdown("""<div class='header'><div style='display:flex; align-items:center; gap:14px; flex-wrap:wrap;'><div class='header-title'>ðŸš‘ RD-Protokoll Generator</div><div class='header-sub'>Schnell. Klar. Einsatzbereit.</div></div></div>""", unsafe_allow_html=True)
 
 # --------------------------------------------------
 # Patientenobjekt anlegen
@@ -549,6 +551,61 @@ patient.setdefault("opqrst", {})
 patient.setdefault("massnahmen", {"timeline": [], "medikation": []})
 patient["massnahmen"].setdefault("timeline", [])
 patient["massnahmen"].setdefault("medikation", [])
+
+SOP_ADMIN_CONFIG_FILE = "sop_admin_config.json"
+DEFAULT_SOP_ADMIN_CONFIG = {
+    "value_overrides": {
+        "lae_wells_threshold": 5.0,
+        "lae_spesi_threshold": 1.0,
+    },
+    "text_overrides": {},
+}
+
+
+def _deep_merge_dict(base_dict, update_dict):
+    merged = deepcopy(base_dict)
+    for key, value in update_dict.items():
+        if isinstance(value, dict) and isinstance(merged.get(key), dict):
+            merged[key] = _deep_merge_dict(merged[key], value)
+        else:
+            merged[key] = value
+    return merged
+
+
+def _load_sop_admin_config():
+    cfg = deepcopy(DEFAULT_SOP_ADMIN_CONFIG)
+    if os.path.exists(SOP_ADMIN_CONFIG_FILE):
+        try:
+            with open(SOP_ADMIN_CONFIG_FILE, "r", encoding="utf-8") as file_obj:
+                disk_cfg = json.load(file_obj)
+            if isinstance(disk_cfg, dict):
+                cfg = _deep_merge_dict(cfg, disk_cfg)
+        except Exception:
+            pass
+    return cfg
+
+
+def _save_sop_admin_config(cfg):
+    with open(SOP_ADMIN_CONFIG_FILE, "w", encoding="utf-8") as file_obj:
+        json.dump(cfg, file_obj, ensure_ascii=False, indent=2)
+
+
+if "sop_admin_config" not in st.session_state:
+    st.session_state["sop_admin_config"] = _load_sop_admin_config()
+
+
+def sop_value(key, default_value):
+    try:
+        return st.session_state["sop_admin_config"].get("value_overrides", {}).get(key, default_value)
+    except Exception:
+        return default_value
+
+
+def sop_text(text_value):
+    try:
+        return st.session_state["sop_admin_config"].get("text_overrides", {}).get(text_value, text_value)
+    except Exception:
+        return text_value
 # --------------------------------------------------
 # Hilfsfunktionen
 # --------------------------------------------------
@@ -622,7 +679,7 @@ def build_handover_text(patient_data):
 
     mist = []
     mechanism = s.get("ereignis") or v.get("auffindesituation") or "Kein klares Ereignis dokumentiert"
-    injuries = x.get("bodycheck_text") if x.get("bodycheck") == "Auffällig" else "Keine relevanten Verletzungen dokumentiert"
+    injuries = x.get("bodycheck_text") if x.get("bodycheck") == "AuffÃ¤llig" else "Keine relevanten Verletzungen dokumentiert"
     signs = []
     if _is_valid_value(v.get("spo2")):
         signs.append(f"SpO2 {v.get('spo2')}")
@@ -639,7 +696,7 @@ def build_handover_text(patient_data):
     mist.append(f"M: {mechanism}")
     mist.append(f"I: {injuries}")
     mist.append("S: " + (", ".join(signs) if signs else "Keine Vitalzeichen dokumentiert"))
-    mist.append("T: " + ("; ".join(treatment[-4:]) if treatment else "Keine Maßnahmen dokumentiert"))
+    mist.append("T: " + ("; ".join(treatment[-4:]) if treatment else "Keine MaÃŸnahmen dokumentiert"))
 
     isbar = []
     identity = "Patient"
@@ -650,11 +707,11 @@ def build_handover_text(patient_data):
     isbar.append(f"I: {identity}")
     isbar.append(f"S: {s.get('symptome') or 'Kein Leitsymptom dokumentiert'}")
     isbar.append(f"B: {s.get('vorgeschichte') or 'Keine relevante Vorgeschichte dokumentiert'}")
-    assess = x.get("atmung") or x.get("atemweg") or x.get("avpu") or "Keine strukturierte Einschätzung dokumentiert"
+    assess = x.get("atmung") or x.get("atemweg") or x.get("avpu") or "Keine strukturierte EinschÃ¤tzung dokumentiert"
     isbar.append(f"A: {assess}")
-    rec = "Transport in geeignete Zielklinik und strukturierte Übergabe empfohlen"
+    rec = "Transport in geeignete Zielklinik und strukturierte Ãœbergabe empfohlen"
     if o.get("nrs") and int(o.get("nrs", 0)) >= 7:
-        rec = "Hohe Schmerzintensität, zeitnahe ärztliche Weiterbehandlung empfohlen"
+        rec = "Hohe SchmerzintensitÃ¤t, zeitnahe Ã¤rztliche Weiterbehandlung empfohlen"
     isbar.append(f"R: {rec}")
 
     return "\n".join(mist), "\n".join(isbar)
@@ -677,46 +734,46 @@ def build_suspicion_assessment(patient_data):
     if any(k in symptome for k in ["atemnot", "dyspnoe", "luftnot"]) or x.get("atmung") in ["Dyspnoe", "Tachypnoe", "Apnoe"] or (_is_valid_value(v.get("spo2")) and int(v.get("spo2")) < 90):
         suspicions.append("Respiratorische Insuffizienz / akute Dyspnoe")
         recommendations.extend([
-            "Atemweg sichern und Atemarbeit engmaschig überwachen",
-            "Sauerstofftherapie titriert fortführen",
-            "Frühe Zielklinikmeldung bei persistierender Hypoxie"
+            "Atemweg sichern und Atemarbeit engmaschig Ã¼berwachen",
+            "Sauerstofftherapie titriert fortfÃ¼hren",
+            "FrÃ¼he Zielklinikmeldung bei persistierender Hypoxie"
         ])
 
-    if any(k in symptome for k in ["brust", "thorax", "druck"]) or any(k in region for k in ["brust", "thorax"]) or "drückend" in quality:
+    if any(k in symptome for k in ["brust", "thorax", "druck"]) or any(k in region for k in ["brust", "thorax"]) or "drÃ¼ckend" in quality:
         suspicions.append("Akutes Koronarsyndrom (ACS) als Differentialdiagnose")
         recommendations.extend([
             "12-Kanal-EKG und Verlaufskontrolle",
             "Schmerz- und Kreislaufmonitoring",
-            "Zeitkritischen Transport erwägen"
+            "Zeitkritischen Transport erwÃ¤gen"
         ])
 
     if x.get("avpu") in ["P", "U"] or (_is_valid_value(v.get("gcs")) and int(v.get("gcs")) <= 8):
-        suspicions.append("Schwere neurologische Beeinträchtigung")
+        suspicions.append("Schwere neurologische BeeintrÃ¤chtigung")
         recommendations.extend([
             "Atemwegsschutz priorisieren",
             "Neurologischen Verlauf wiederholt dokumentieren",
             "Zielklinik mit neurologischer Versorgung bevorzugen"
         ])
 
-    if any(k in ereignis for k in ["sturz", "unfall", "trauma", "kollision"]) or (x.get("bodycheck") == "Auffällig"):
-        suspicions.append("Traumatische Genese / relevante Verletzung möglich")
+    if any(k in ereignis for k in ["sturz", "unfall", "trauma", "kollision"]) or (x.get("bodycheck") == "AuffÃ¤llig"):
+        suspicions.append("Traumatische Genese / relevante Verletzung mÃ¶glich")
         recommendations.extend([
-            "Vollständigen Bodycheck und Blutungskontrolle sichern",
-            "Immobilisationsbedarf prüfen",
+            "VollstÃ¤ndigen Bodycheck und Blutungskontrolle sichern",
+            "Immobilisationsbedarf prÃ¼fen",
             "Traumazentrum-Indikation evaluieren"
         ])
 
     if _is_valid_value(v.get("bz")) and float(v.get("bz")) < 70:
-        suspicions.append("Hypoglykämie")
+        suspicions.append("HypoglykÃ¤mie")
         recommendations.extend([
-            "Sofortige Glukosegabe gemäß SOP",
+            "Sofortige Glukosegabe gemÃ¤ÃŸ SOP",
             "Blutzucker nach Intervention kontrollieren"
         ])
     elif _is_valid_value(v.get("bz")) and float(v.get("bz")) > 250:
-        suspicions.append("Hyperglykäme Stoffwechsellage")
+        suspicions.append("HyperglykÃ¤me Stoffwechsellage")
         recommendations.extend([
-            "Hydratationsstatus und Vigilanz eng überwachen",
-            "Zeitnahe klinische Abklärung veranlassen"
+            "Hydratationsstatus und Vigilanz eng Ã¼berwachen",
+            "Zeitnahe klinische AbklÃ¤rung veranlassen"
         ])
 
     if _is_valid_value(o.get("nrs")) and int(o.get("nrs")) >= 7:
@@ -727,8 +784,8 @@ def build_suspicion_assessment(patient_data):
         ])
 
     if not suspicions:
-        suspicions.append("Aktuell keine klare Verdachtsdiagnose aus den verfügbaren Angaben ableitbar")
-        recommendations.append("Datensatz vervollständigen (xABCDE, SAMPLERS, OPQRST) und Verlauf engmaschig re-evaluieren")
+        suspicions.append("Aktuell keine klare Verdachtsdiagnose aus den verfÃ¼gbaren Angaben ableitbar")
+        recommendations.append("Datensatz vervollstÃ¤ndigen (xABCDE, SAMPLERS, OPQRST) und Verlauf engmaschig re-evaluieren")
 
     # Duplikate entfernen, Reihenfolge behalten
     dedup_recs = list(dict.fromkeys(recommendations))
@@ -740,27 +797,28 @@ def build_suspicion_assessment(patient_data):
 
 # Centered navigation in main area
 if 'seite' not in st.session_state:
-    st.session_state['seite'] = "❤️ Vitalwerte"
+    st.session_state['seite'] = "â¤ï¸ Vitalwerte"
 
 if 'xabcde_selected' not in st.session_state:
     st.session_state['xabcde_selected'] = "A"
 
 nav_options = [
-    "❤️ Vitalwerte",
-    "🩺 xABCDE",
-    "📋 SAMPLERS",
-    "🔥 OPQRST",
-    "⏱️ Maßnahmen",
-    "🔎 Verdacht",
-    "💉 Med-Rechner",
-    "🗣️ Übergabe",
-    "📄 Protokoll"
+    "ðŸ› ï¸ Admin",
+    "â¤ï¸ Vitalwerte",
+    "ðŸ©º xABCDE",
+    "ðŸ“‹ SAMPLERS",
+    "ðŸ”¥ OPQRST",
+    "â±ï¸ MaÃŸnahmen",
+    "ðŸ”Ž Verdacht",
+    "ðŸ’‰ Med-Rechner",
+    "ðŸ—£ï¸ Ãœbergabe",
+    "ðŸ“„ Protokoll"
 ]
 
 # Navigation mit Streamlit-Buttons und Session-State
 nav_container = st.container()
 with nav_container:
-    cols_nav = st.columns([1] + [1]*9 + [1])
+    cols_nav = st.columns([1] + [1]*10 + [1])
     for i, opt in enumerate(nav_options):
         with cols_nav[i+1]:
             nav_type = "primary" if st.session_state['seite'] == opt else "secondary"
@@ -771,21 +829,22 @@ with nav_container:
 seite = st.session_state['seite']
 
 active_nav_palette = {
-    "❤️ Vitalwerte": ("#ff5b86", "#ff9a5a"),
-    "🩺 xABCDE": ("#4b8cff", "#35d8a6"),
-    "📋 SAMPLERS": ("#5f89ff", "#7a67f8"),
-    "🔥 OPQRST": ("#ff8a4d", "#ff4f7b"),
-    "⏱️ Maßnahmen": ("#2ac4df", "#3de99a"),
-    "🔎 Verdacht": ("#f3b33d", "#ff6f4a"),
-    "💉 Med-Rechner": ("#22b8cf", "#4c6fff"),
-    "🗣️ Übergabe": ("#7d6bff", "#5bbdff"),
-    "📄 Protokoll": ("#4e72ff", "#5ac8ff"),
+    "ðŸ› ï¸ Admin": ("#6d7dff", "#8e9dff"),
+    "â¤ï¸ Vitalwerte": ("#ff5b86", "#ff9a5a"),
+    "ðŸ©º xABCDE": ("#4b8cff", "#35d8a6"),
+    "ðŸ“‹ SAMPLERS": ("#5f89ff", "#7a67f8"),
+    "ðŸ”¥ OPQRST": ("#ff8a4d", "#ff4f7b"),
+    "â±ï¸ MaÃŸnahmen": ("#2ac4df", "#3de99a"),
+    "ðŸ”Ž Verdacht": ("#f3b33d", "#ff6f4a"),
+    "ðŸ’‰ Med-Rechner": ("#22b8cf", "#4c6fff"),
+    "ðŸ—£ï¸ Ãœbergabe": ("#7d6bff", "#5bbdff"),
+    "ðŸ“„ Protokoll": ("#4e72ff", "#5ac8ff"),
 }
 start_color, end_color = active_nav_palette.get(seite, ("#4b8cff", "#ff7a7a"))
 st.markdown(
     f"""
     <style>
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button[kind='primary'] {{
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button[kind='primary'] {{
         background: linear-gradient(135deg, {start_color} 0%, {end_color} 100%);
     }}
     </style>
@@ -797,18 +856,80 @@ st.markdown(
 # VITALWERTE
 # --------------------------------------------------
 
-if seite == "❤️ Vitalwerte":
+if seite == "ðŸ› ï¸ Admin":
 
-    st.header("❤️ Vitalwerte & Demographie")
+    st.header("ðŸ› ï¸ Adminbereich SOP-Konfiguration")
+    st.info("Hier kannst du SOP-Texte und Grenzwerte anpassen, ohne Code zu Ã¤ndern.")
+
+    cfg = deepcopy(st.session_state.get("sop_admin_config", DEFAULT_SOP_ADMIN_CONFIG))
+
+    st.subheader("Wert-Overrides")
+    st.caption("Numerische Schwellwerte. Aktuell angebunden: Lungenarterienembolie (Wells-/sPESI-Schwelle).")
+    value_override_text = st.text_area(
+        "value_overrides (JSON)",
+        value=json.dumps(cfg.get("value_overrides", {}), indent=2, ensure_ascii=False),
+        height=180,
+        key="admin_value_overrides_json",
+    )
+
+    st.subheader("Text-Overrides")
+    st.caption("1:1-Ersetzung von SOP-Textbausteinen. Links Originaltext, rechts dein neuer Text.")
+    text_override_text = st.text_area(
+        "text_overrides (JSON)",
+        value=json.dumps(cfg.get("text_overrides", {}), indent=2, ensure_ascii=False),
+        height=260,
+        key="admin_text_overrides_json",
+    )
+
+    c1, c2, c3 = st.columns(3)
+    with c1:
+        if st.button("ðŸ’¾ Admin-Konfiguration speichern", use_container_width=True, type="primary"):
+            try:
+                parsed_value_overrides = json.loads(value_override_text) if value_override_text.strip() else {}
+                parsed_text_overrides = json.loads(text_override_text) if text_override_text.strip() else {}
+                if not isinstance(parsed_value_overrides, dict) or not isinstance(parsed_text_overrides, dict):
+                    st.error("Beide JSON-BlÃ¶cke mÃ¼ssen Objekte (key/value) sein.")
+                else:
+                    new_cfg = {
+                        "value_overrides": parsed_value_overrides,
+                        "text_overrides": parsed_text_overrides,
+                    }
+                    st.session_state["sop_admin_config"] = _deep_merge_dict(DEFAULT_SOP_ADMIN_CONFIG, new_cfg)
+                    _save_sop_admin_config(st.session_state["sop_admin_config"])
+                    st.success("Admin-Konfiguration gespeichert.")
+            except Exception as exc:
+                st.error(f"UngÃ¼ltiges JSON: {exc}")
+
+    with c2:
+        if st.button("â†©ï¸ Auf Standard zurÃ¼cksetzen", use_container_width=True):
+            st.session_state["sop_admin_config"] = deepcopy(DEFAULT_SOP_ADMIN_CONFIG)
+            _save_sop_admin_config(st.session_state["sop_admin_config"])
+            st.success("Standard-Konfiguration wiederhergestellt.")
+
+    with c3:
+        st.download_button(
+            "â¬‡ï¸ Config herunterladen",
+            data=json.dumps(st.session_state.get("sop_admin_config", {}), indent=2, ensure_ascii=False),
+            file_name="sop_admin_config.json",
+            mime="application/json",
+            use_container_width=True,
+        )
+
+    st.subheader("Aktive Konfiguration (Vorschau)")
+    st.code(json.dumps(st.session_state.get("sop_admin_config", {}), indent=2, ensure_ascii=False), language="json")
+
+elif seite == "â¤ï¸ Vitalwerte":
+
+    st.header("â¤ï¸ Vitalwerte & Demographie")
     
     # --- GANZ OBEN: Demographie ---
-    st.subheader("👤 Patientendemographie")
+    st.subheader("ðŸ‘¤ Patientendemographie")
     d1, d2, d3 = st.columns(3)
     
     with d1:
         patient["vitalwerte"]["geschlecht"] = st.selectbox(
             "Geschlecht",
-            ["", "männlich", "weiblich", "divers", "Unbekannt"],
+            ["", "mÃ¤nnlich", "weiblich", "divers", "Unbekannt"],
             key="geschlecht"
         )
     
@@ -824,30 +945,30 @@ if seite == "❤️ Vitalwerte":
     with d3:
         patient["vitalwerte"]["auffindesituation"] = st.selectbox(
             "Auffindesituation",
-            ["", "sitzend vorgefunden", "liegend vorgefunden", "stehend vorgefunden", "am Boden", "auf Stuhl/Sofa", "in häuslicher Umgebung"],
+            ["", "sitzend vorgefunden", "liegend vorgefunden", "stehend vorgefunden", "am Boden", "auf Stuhl/Sofa", "in hÃ¤uslicher Umgebung"],
             key="auffindesituation"
         )
     
     st.divider()
     
     # --- B: ATMUNG & OXYGENATION ---
-    st.subheader("B – ATMUNG & OXYGENATION")
+    st.subheader("B â€“ ATMUNG & OXYGENATION")
     
     b1, b2 = st.columns(2)
     
     with b1:
         spo2_cat = st.selectbox(
-            "SpO₂-Wert",
-            ["", "Normal (≥95%)", "Leicht ↓ (90-94%)", "Kritisch ↓ (<90%)", "Selber schreiben"],
+            "SpOâ‚‚-Wert",
+            ["", "Normal (â‰¥95%)", "Leicht â†“ (90-94%)", "Kritisch â†“ (<90%)", "Selber schreiben"],
             key="spo2_category"
         )
         if spo2_cat == "Selber schreiben":
-            patient["vitalwerte"]["spo2"] = st.number_input("SpO₂ (%)", 0, 100, 0, key="spo2_input")
-        elif spo2_cat == "Normal (≥95%)":
+            patient["vitalwerte"]["spo2"] = st.number_input("SpOâ‚‚ (%)", 0, 100, 0, key="spo2_input")
+        elif spo2_cat == "Normal (â‰¥95%)":
             patient["vitalwerte"]["spo2"] = 97
-        elif spo2_cat == "Leicht ↓ (90-94%)":
+        elif spo2_cat == "Leicht â†“ (90-94%)":
             patient["vitalwerte"]["spo2"] = 92
-        elif spo2_cat == "Kritisch ↓ (<90%)":
+        elif spo2_cat == "Kritisch â†“ (<90%)":
             patient["vitalwerte"]["spo2"] = 85
     
     with b2:
@@ -870,14 +991,14 @@ if seite == "❤️ Vitalwerte":
     st.divider()
     
     # --- C: ZIRKULATION ---
-    st.subheader("C – ZIRKULATION")
+    st.subheader("C â€“ ZIRKULATION")
     
     c1, c2 = st.columns(2)
     
     with c1:
         rr_cat = st.selectbox(
             "RR-Wert",
-            ["", "Hypotonie (<90/60)", "Normal (90-140/60-90)", "Erhöht (140-160/90-100)", "Hypertonie (>160/100)", "Selber schreiben"],
+            ["", "Hypotonie (<90/60)", "Normal (90-140/60-90)", "ErhÃ¶ht (140-160/90-100)", "Hypertonie (>160/100)", "Selber schreiben"],
             key="rr_category"
         )
 
@@ -891,7 +1012,7 @@ if seite == "❤️ Vitalwerte":
             patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 85, 55
         elif rr_cat == "Normal (90-140/60-90)":
             patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 120, 80
-        elif rr_cat == "Erhöht (140-160/90-100)":
+        elif rr_cat == "ErhÃ¶ht (140-160/90-100)":
             patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 150, 95
         elif rr_cat == "Hypertonie (>160/100)":
             patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 170, 105
@@ -902,7 +1023,7 @@ if seite == "❤️ Vitalwerte":
     st.divider()
     
     # --- D: DISABILITY (Neurologischer Status) ---
-    st.subheader("D – DISABILITY (Neurologischer Status)")
+    st.subheader("D â€“ DISABILITY (Neurologischer Status)")
     
     d1, d2 = st.columns(2)
     
@@ -915,43 +1036,43 @@ if seite == "❤️ Vitalwerte":
     st.divider()
     
     # --- E: EXPOSURE (Temperatur) ---
-    st.subheader("E – EXPOSURE (Ganzkörperuntersuchung)")
+    st.subheader("E â€“ EXPOSURE (GanzkÃ¶rperuntersuchung)")
     
     temp_gemessen = st.checkbox("Temperatur gemessen", key="temp_checkbox")
     
     if temp_gemessen:
         temp_cat = st.selectbox(
             "Temp-Wert",
-            ["", "Unterkühlung (<36°C)", "Normal (36-37.5°C)", "Erhöht (37.5-38°C)", "Fieber (>38°C)", "Selber schreiben"],
+            ["", "UnterkÃ¼hlung (<36Â°C)", "Normal (36-37.5Â°C)", "ErhÃ¶ht (37.5-38Â°C)", "Fieber (>38Â°C)", "Selber schreiben"],
             key="temp_category"
         )
         if temp_cat == "Selber schreiben":
             patient["vitalwerte"]["temperatur"] = st.number_input(
-                "Temp (°C)",
+                "Temp (Â°C)",
                 min_value=30.0,
                 max_value=45.0,
                 value=36.5,
                 step=0.1,
                 key="temp_input"
             )
-        elif temp_cat == "Unterkühlung (<36°C)":
+        elif temp_cat == "UnterkÃ¼hlung (<36Â°C)":
             patient["vitalwerte"]["temperatur"] = 35.5
-        elif temp_cat == "Normal (36-37.5°C)":
+        elif temp_cat == "Normal (36-37.5Â°C)":
             patient["vitalwerte"]["temperatur"] = 37.0
-        elif temp_cat == "Erhöht (37.5-38°C)":
+        elif temp_cat == "ErhÃ¶ht (37.5-38Â°C)":
             patient["vitalwerte"]["temperatur"] = 37.7
-        elif temp_cat == "Fieber (>38°C)":
+        elif temp_cat == "Fieber (>38Â°C)":
             patient["vitalwerte"]["temperatur"] = 38.5
     
     st.divider()
     
     # --- Kurzbericht ---
-    st.subheader("📝 Einsatz-Kurzbericht")
+    st.subheader("ðŸ“ Einsatz-Kurzbericht")
     patient["vitalwerte"]["kurzbericht"] = st.text_area(
         "Beschreibung des Einsatzes (optional)",
         height=150,
         key="kurzbericht",
-        placeholder="z.B. Sturz aus Höhe, Verkehrsunfall, Schmerzen seit 2 Stunden, ..."
+        placeholder="z.B. Sturz aus HÃ¶he, Verkehrsunfall, Schmerzen seit 2 Stunden, ..."
     )
 
     render_live_summary(
@@ -969,9 +1090,9 @@ if seite == "❤️ Vitalwerte":
 # xABCDE
 # --------------------------------------------------
 
-elif seite == "🩺 xABCDE":
+elif seite == "ðŸ©º xABCDE":
 
-    st.header("🩺 xABCDE")
+    st.header("ðŸ©º xABCDE")
 
     if "xabcde_selected" not in st.session_state:
         st.session_state["xabcde_selected"] = "A"
@@ -984,7 +1105,7 @@ elif seite == "🩺 xABCDE":
         "C": x.get("haut") not in [None, "", "Keine Angabe"] and x.get("rekap") not in [None, "", "Keine Angabe"] and x.get("pulsqualitaet") not in [None, "", "Keine Angabe"],
         "D": x.get("avpu") not in [None, "", "Keine Angabe"] and x.get("pupillen") not in [None, "", "Keine Angabe"],
         "E": x.get("bodycheck") not in [None, "", "Keine Angabe"] and (
-            x.get("bodycheck") != "Auffällig" or x.get("bodycheck_text") not in [None, ""]
+            x.get("bodycheck") != "AuffÃ¤llig" or x.get("bodycheck_text") not in [None, ""]
         ),
     }
 
@@ -996,7 +1117,7 @@ elif seite == "🩺 xABCDE":
     cols = [col1, col2, col3, col4, col5]
     for label, col in zip(buttons, cols):
         is_incomplete = label in incomplete_letters
-        button_label = f"🔴 {label} !" if is_incomplete else label
+        button_label = f"ðŸ”´ {label} !" if is_incomplete else label
         button_type = "primary" if label == selected else "secondary"
         with col:
             if st.button(button_label, key=f"xabcde_{label}", use_container_width=True, type=button_type):
@@ -1005,13 +1126,13 @@ elif seite == "🩺 xABCDE":
 
     selected = st.session_state["xabcde_selected"]
 
-    st.info(f"Aktive Sektion: {selected} — offene Reiter sind mit 🔴 und ! markiert.")
+    st.info(f"Aktive Sektion: {selected} â€” offene Reiter sind mit ðŸ”´ und ! markiert.")
 
     if selected == "A":
-        st.subheader("A – Airway")
+        st.subheader("A â€“ Airway")
         patient["xabcde"]["atemweg"] = st.radio(
             "Atemweg",
-            ["Keine Angabe", "Frei", "Gefährdet", "Verlegt"],
+            ["Keine Angabe", "Frei", "GefÃ¤hrdet", "Verlegt"],
             key="atemweg"
         )
         patient["xabcde"]["hws"] = st.radio(
@@ -1021,15 +1142,15 @@ elif seite == "🩺 xABCDE":
         )
 
     elif selected == "B":
-        st.subheader("B – Breathing")
+        st.subheader("B â€“ Breathing")
         patient["xabcde"]["atmung"] = st.radio(
             "Atmung",
-            ["Keine Angabe", "Unauffällig", "Dyspnoe", "Bradypnoe", "Tachypnoe", "Apnoe"],
+            ["Keine Angabe", "UnauffÃ¤llig", "Dyspnoe", "Bradypnoe", "Tachypnoe", "Apnoe"],
             key="atmung"
         )
         patient["xabcde"]["atemgeraeusche"] = st.radio(
-            "Atemgeräusche",
-            ["Keine Angabe", "Beidseits vorhanden", "Links abgeschwächt", "Rechts abgeschwächt", "Keine"],
+            "AtemgerÃ¤usche",
+            ["Keine Angabe", "Beidseits vorhanden", "Links abgeschwÃ¤cht", "Rechts abgeschwÃ¤cht", "Keine"],
             key="atemgeraeusche"
         )
         patient["xabcde"]["sauerstoff"] = st.selectbox(
@@ -1039,10 +1160,10 @@ elif seite == "🩺 xABCDE":
         )
 
     elif selected == "C":
-        st.subheader("C – Circulation")
+        st.subheader("C â€“ Circulation")
         patient["xabcde"]["haut"] = st.radio(
             "Haut",
-            ["Keine Angabe", "Rosig / warm", "Blass", "Kalt / schweißig", "Zyanotisch"],
+            ["Keine Angabe", "Rosig / warm", "Blass", "Kalt / schweiÃŸig", "Zyanotisch"],
             key="haut"
         )
         patient["xabcde"]["rekap"] = st.radio(
@@ -1051,13 +1172,13 @@ elif seite == "🩺 xABCDE":
             key="rekap"
         )
         patient["xabcde"]["pulsqualitaet"] = st.radio(
-            "Pulsqualität",
-            ["Keine Angabe", "Kräftig", "Schwach", "Fadenförmig"],
+            "PulsqualitÃ¤t",
+            ["Keine Angabe", "KrÃ¤ftig", "Schwach", "FadenfÃ¶rmig"],
             key="pulsqualitaet"
         )
 
     elif selected == "D":
-        st.subheader("D – Disability")
+        st.subheader("D â€“ Disability")
         patient["xabcde"]["avpu"] = st.radio(
             "AVPU",
             ["Keine Angabe", "A", "V", "P", "U"],
@@ -1070,20 +1191,20 @@ elif seite == "🩺 xABCDE":
         )
 
     elif selected == "E":
-        st.subheader("E – Exposure")
+        st.subheader("E â€“ Exposure")
         patient["xabcde"]["bodycheck"] = st.radio(
             "Bodycheck",
-            ["Keine Angabe", "Unauffällig", "Auffällig"],
+            ["Keine Angabe", "UnauffÃ¤llig", "AuffÃ¤llig"],
             key="bodycheck"
         )
-        if patient["xabcde"]["bodycheck"] == "Auffällig":
+        if patient["xabcde"]["bodycheck"] == "AuffÃ¤llig":
             patient["xabcde"]["bodycheck_text"] = st.text_area(
-                "Auffälligkeiten",
+                "AuffÃ¤lligkeiten",
                 height=120,
                 key="bodycheck_text"
             )
         patient["xabcde"]["unterkuehlung"] = st.checkbox(
-            "Unterkühlung",
+            "UnterkÃ¼hlung",
             key="unterkuehlung"
         )
         patient["xabcde"]["verbrennung"] = st.checkbox(
@@ -1105,9 +1226,9 @@ elif seite == "🩺 xABCDE":
 # SAMPLERS
 # --------------------------------------------------
 
-elif seite == "📋 SAMPLERS":
+elif seite == "ðŸ“‹ SAMPLERS":
 
-    st.header("📋 SAMPLERS")
+    st.header("ðŸ“‹ SAMPLERS")
 
     if "samplers_selected" not in st.session_state:
         st.session_state["samplers_selected"] = "S1"
@@ -1125,11 +1246,11 @@ elif seite == "📋 SAMPLERS":
     st.info(f"Aktive SAMPLERS-Sektion: {samplers_selected}")
 
     if samplers_selected == "S1":
-        st.subheader("S – Symptome")
+        st.subheader("S â€“ Symptome")
         textarea_field("samplers", "symptome", "Beschwerden / Symptome")
 
     elif samplers_selected == "A":
-        st.subheader("A – Allergien")
+        st.subheader("A â€“ Allergien")
         allergien = radio_field(
             "samplers",
             "allergien",
@@ -1140,7 +1261,7 @@ elif seite == "📋 SAMPLERS":
             text_field("samplers", "allergien_text", "Welche Allergien?")
 
     elif samplers_selected == "M":
-        st.subheader("M – Medikamente")
+        st.subheader("M â€“ Medikamente")
         medikamente = radio_field(
             "samplers",
             "medikamente_option",
@@ -1151,26 +1272,26 @@ elif seite == "📋 SAMPLERS":
             textarea_field("samplers", "medikamente", "Bitte Medikamente eingeben")
 
     elif samplers_selected == "P":
-        st.subheader("P – Patientenvorgeschichte")
+        st.subheader("P â€“ Patientenvorgeschichte")
         textarea_field("samplers", "vorgeschichte", "Vorerkrankungen")
 
     elif samplers_selected == "L":
-        st.subheader("L – Letzte Nahrungsaufnahme")
+        st.subheader("L â€“ Letzte Nahrungsaufnahme")
         letzte_mahlzeit = radio_field(
             "samplers",
             "letzte_mahlzeit",
             "Letzte Mahlzeit",
-            ["Keine Angabe", "< 2 Stunden", "2–6 Stunden", "> 6 Stunden", "Unbekannt", "Eigene Eingabe"]
+            ["Keine Angabe", "< 2 Stunden", "2â€“6 Stunden", "> 6 Stunden", "Unbekannt", "Eigene Eingabe"]
         )
         if letzte_mahlzeit == "Eigene Eingabe":
             text_field("samplers", "letzte_mahlzeit_text", "Eigene Eingabe")
 
     elif samplers_selected == "E":
-        st.subheader("E – Ereignis")
+        st.subheader("E â€“ Ereignis")
         textarea_field("samplers", "ereignis", "Ereignisbeschreibung", height=180)
 
     elif samplers_selected == "R":
-        st.subheader("R – Risikofaktoren")
+        st.subheader("R â€“ Risikofaktoren")
         col1, col2 = st.columns(2)
         with col1:
             checkbox_field("samplers", "raucher", "Raucher")
@@ -1183,7 +1304,7 @@ elif seite == "📋 SAMPLERS":
         text_field("samplers", "risiken_sonstige", "Weitere Risikofaktoren")
 
     elif samplers_selected == "S2":
-        st.subheader("S – Schwangerschaft")
+        st.subheader("S â€“ Schwangerschaft")
         radio_field(
             "samplers",
             "schwangerschaft",
@@ -1206,9 +1327,9 @@ elif seite == "📋 SAMPLERS":
 # OPQRST
 # --------------------------------------------------
 
-elif seite == "🔥 OPQRST":
+elif seite == "ðŸ”¥ OPQRST":
 
-    st.header("🔥 OPQRST – Schmerzassessment")
+    st.header("ðŸ”¥ OPQRST â€“ Schmerzassessment")
 
     if "opqrst_selected" not in st.session_state:
         st.session_state["opqrst_selected"] = "O"
@@ -1234,22 +1355,22 @@ elif seite == "🔥 OPQRST":
         st.info(f"Aktive OPQRST-Sektion: {opqrst_selected}")
 
         if opqrst_selected == "O":
-            st.subheader("O – Onset (Beginn des Schmerzes)")
+            st.subheader("O â€“ Onset (Beginn des Schmerzes)")
             patient["opqrst"]["onset"] = st.selectbox(
                 "Beginn",
-                ["", "Plötzlich", "Allmählich", "Progressiv verschlimmernd", "Wiederkehrend"],
+                ["", "PlÃ¶tzlich", "AllmÃ¤hlich", "Progressiv verschlimmernd", "Wiederkehrend"],
                 key="opqrst_onset"
             )
             patient["opqrst"]["onset_text"] = st.text_input(
-                "Zusätzliche Information zu Beginn",
+                "ZusÃ¤tzliche Information zu Beginn",
                 key="opqrst_onset_text"
             )
 
         elif opqrst_selected == "P":
-            st.subheader("P – Provocation/Palliation (Auslöser und Linderung)")
+            st.subheader("P â€“ Provocation/Palliation (AuslÃ¶ser und Linderung)")
             patient["opqrst"]["provocation"] = st.selectbox(
                 "Was verschlimmert oder lindert den Schmerz?",
-                ["", "Bewegung verschlimmert", "Ruhe lindert", "Tiefe Atmung verschlimmert", "Druck lindert", "Wärme lindert", "Kälte lindert", "Nichts lindert"],
+                ["", "Bewegung verschlimmert", "Ruhe lindert", "Tiefe Atmung verschlimmert", "Druck lindert", "WÃ¤rme lindert", "KÃ¤lte lindert", "Nichts lindert"],
                 key="opqrst_provocation"
             )
             patient["opqrst"]["provocation_text"] = st.text_input(
@@ -1258,10 +1379,10 @@ elif seite == "🔥 OPQRST":
             )
 
         elif opqrst_selected == "Q":
-            st.subheader("Q – Quality (Charakteristik des Schmerzes)")
+            st.subheader("Q â€“ Quality (Charakteristik des Schmerzes)")
             patient["opqrst"]["quality"] = st.selectbox(
                 "Wie beschreibt der Patient den Schmerz?",
-                ["", "Stechend/Messerscharf", "Dumpf", "Drückend", "Reißend", "Brennend", "Ziehend", "Klopfend", "Rauschhaft"],
+                ["", "Stechend/Messerscharf", "Dumpf", "DrÃ¼ckend", "ReiÃŸend", "Brennend", "Ziehend", "Klopfend", "Rauschhaft"],
                 key="opqrst_quality"
             )
             patient["opqrst"]["quality_text"] = st.text_input(
@@ -1270,7 +1391,7 @@ elif seite == "🔥 OPQRST":
             )
 
         elif opqrst_selected == "R":
-            st.subheader("R – Region/Radiation (Ort und Ausbreitung)")
+            st.subheader("R â€“ Region/Radiation (Ort und Ausbreitung)")
             patient["opqrst"]["region"] = st.text_input(
                 "Wo tut es weh?",
                 key="opqrst_region"
@@ -1281,20 +1402,20 @@ elif seite == "🔥 OPQRST":
             )
 
         elif opqrst_selected == "S":
-            st.subheader("S – Severity (Stärke des Schmerzes)")
+            st.subheader("S â€“ Severity (StÃ¤rke des Schmerzes)")
             patient["opqrst"]["nrs"] = st.slider(
                 "Numerische Rating-Skala (NRS) 0-10",
                 0, 10, 0,
                 key="opqrst_nrs"
             )
             patient["opqrst"]["severity_desc"] = st.selectbox(
-                "Auswirkung auf Aktivitäten",
-                ["", "Kein Schmerz (0)", "Minimal (1-3)", "Mäßig (4-6)", "Schwer (7-8)", "Sehr schwer (9-10)"],
+                "Auswirkung auf AktivitÃ¤ten",
+                ["", "Kein Schmerz (0)", "Minimal (1-3)", "MÃ¤ÃŸig (4-6)", "Schwer (7-8)", "Sehr schwer (9-10)"],
                 key="opqrst_severity"
             )
 
         elif opqrst_selected == "T":
-            st.subheader("T – Time (Zeitverlauf)")
+            st.subheader("T â€“ Time (Zeitverlauf)")
             patient["opqrst"]["zeitverlauf"] = st.selectbox(
                 "Zeitlicher Verlauf",
                 ["", "Konstant", "Intermittierend", "Sich verschlimmernd", "Sich verbessernd", "Gleichbleibend"],
@@ -1321,39 +1442,39 @@ elif seite == "🔥 OPQRST":
 # MASSNAHMEN
 # --------------------------------------------------
 
-elif seite == "⏱️ Maßnahmen":
+elif seite == "â±ï¸ MaÃŸnahmen":
 
-    st.header("⏱️ Maßnahmen & Timeline")
+    st.header("â±ï¸ MaÃŸnahmen & Timeline")
 
     m = patient["massnahmen"]
 
-    st.subheader("🕒 Maßnahmen-Timeline")
+    st.subheader("ðŸ•’ MaÃŸnahmen-Timeline")
     t1, t2, t3 = st.columns([1, 2, 2])
     with t1:
         timeline_zeit = st.text_input("Uhrzeit", placeholder="14:32", key="timeline_zeit")
     with t2:
-        timeline_massnahme = st.text_input("Maßnahme", placeholder="z.B. O2 über Maske", key="timeline_massnahme")
+        timeline_massnahme = st.text_input("MaÃŸnahme", placeholder="z.B. O2 Ã¼ber Maske", key="timeline_massnahme")
     with t3:
-        timeline_wirkung = st.text_input("Wirkung", placeholder="z.B. Dyspnoe rückläufig", key="timeline_wirkung")
+        timeline_wirkung = st.text_input("Wirkung", placeholder="z.B. Dyspnoe rÃ¼cklÃ¤ufig", key="timeline_wirkung")
 
-    if st.button("Maßnahme zur Timeline hinzufügen", key="add_timeline", use_container_width=True):
+    if st.button("MaÃŸnahme zur Timeline hinzufÃ¼gen", key="add_timeline", use_container_width=True):
         if _is_valid_value(timeline_massnahme):
             m["timeline"].append({
                 "zeit": timeline_zeit if _is_valid_value(timeline_zeit) else datetime.now().strftime("%H:%M"),
                 "massnahme": timeline_massnahme,
                 "wirkung": timeline_wirkung,
             })
-            st.success("Maßnahme hinzugefügt")
+            st.success("MaÃŸnahme hinzugefÃ¼gt")
             st.rerun()
         else:
-            st.warning("Bitte mindestens eine Maßnahme eingeben.")
+            st.warning("Bitte mindestens eine MaÃŸnahme eingeben.")
 
     if m.get("timeline"):
         for idx, entry in enumerate(m["timeline"], start=1):
             st.write(f"{idx}. {entry.get('zeit','--:--')} - {entry.get('massnahme','')} | Wirkung: {entry.get('wirkung','-')}")
 
     st.divider()
-    st.subheader("💊 Medikationsmodul")
+    st.subheader("ðŸ’Š Medikationsmodul")
     med1, med2, med3, med4, med5 = st.columns([2, 1, 1, 1, 2])
     with med1:
         med_name = st.text_input("Medikament", placeholder="z.B. Morphin", key="med_name")
@@ -1366,7 +1487,7 @@ elif seite == "⏱️ Maßnahmen":
     with med5:
         med_wirkung = st.text_input("Wirkung", placeholder="z.B. Schmerzreduktion", key="med_wirkung")
 
-    if st.button("Medikation hinzufügen", key="add_medikation", use_container_width=True):
+    if st.button("Medikation hinzufÃ¼gen", key="add_medikation", use_container_width=True):
         if _is_valid_value(med_name):
             m["medikation"].append({
                 "name": med_name,
@@ -1375,7 +1496,7 @@ elif seite == "⏱️ Maßnahmen":
                 "zeit": med_zeit if _is_valid_value(med_zeit) else datetime.now().strftime("%H:%M"),
                 "wirkung": med_wirkung,
             })
-            st.success("Medikation hinzugefügt")
+            st.success("Medikation hinzugefÃ¼gt")
             st.rerun()
         else:
             st.warning("Bitte ein Medikament eintragen.")
@@ -1385,9 +1506,9 @@ elif seite == "⏱️ Maßnahmen":
             st.write(f"{idx}. {med.get('zeit','--:--')} - {med.get('name','')} ({med.get('dosis','k.A.')}, {med.get('weg','k.A.')}) | Wirkung: {med.get('wirkung','-')}")
 
     render_live_summary(
-        "Live-Zusammenfassung Maßnahmen",
+        "Live-Zusammenfassung MaÃŸnahmen",
         [
-            f"Timeline-Einträge: {len(m.get('timeline', []))}",
+            f"Timeline-EintrÃ¤ge: {len(m.get('timeline', []))}",
             f"Medikationen: {len(m.get('medikation', []))}",
         ],
     )
@@ -1396,18 +1517,18 @@ elif seite == "⏱️ Maßnahmen":
 # VERDACHT
 # --------------------------------------------------
 
-elif seite == "🔎 Verdacht":
+elif seite == "ðŸ”Ž Verdacht":
 
-    st.header("🔎 Verdacht & Handlungshilfe")
-    st.warning("Hinweis: Dies sind unterstützende Verdachtshinweise und keine ärztliche Diagnose.")
+    st.header("ðŸ”Ž Verdacht & Handlungshilfe")
+    st.warning("Hinweis: Dies sind unterstÃ¼tzende Verdachtshinweise und keine Ã¤rztliche Diagnose.")
 
     suspicions, recommendations = build_suspicion_assessment(patient)
 
-    st.subheader("Mögliche Verdachtsdiagnosen")
+    st.subheader("MÃ¶gliche Verdachtsdiagnosen")
     for idx, item in enumerate(suspicions, start=1):
         st.write(f"{idx}. {item}")
 
-    st.subheader("Empfohlene nächste Hilfsmaßnahmen")
+    st.subheader("Empfohlene nÃ¤chste HilfsmaÃŸnahmen")
     for idx, rec in enumerate(recommendations, start=1):
         st.write(f"{idx}. {rec}")
 
@@ -1425,25 +1546,25 @@ elif seite == "🔎 Verdacht":
 # MEDIKAMENTENRECHNER
 # --------------------------------------------------
 
-elif seite == "💉 Med-Rechner":
+elif seite == "ðŸ’‰ Med-Rechner":
 
-    st.header("💉 Medikamentenrechner")
-    st.caption("SOP-Rechner für mehrere Krankheitsbilder")
-    st.warning("Sicherheits-Hinweis: Dieses Modul ist eine rechnerische SOP-Unterstützung. Es ersetzt keine klinische Entscheidung oder Freigabe durch Fachpersonal.")
+    st.header("ðŸ’‰ Medikamentenrechner")
+    st.caption("SOP-Rechner fÃ¼r mehrere Krankheitsbilder")
+    st.warning("Sicherheits-Hinweis: Dieses Modul ist eine rechnerische SOP-UnterstÃ¼tzung. Es ersetzt keine klinische Entscheidung oder Freigabe durch Fachpersonal.")
 
     sop = st.selectbox(
-        "SOP auswählen",
+        "SOP auswÃ¤hlen",
         [
             "Anaphylaxie (SOPKB0105)",
             "Asthma/COPD Bronchialobstruktion (SOPKB0207)",
-            "Hypoglykämie",
+            "HypoglykÃ¤mie",
             "Krampfanfall",
             "Schlaganfall",
-            "Kardiales Lungenödem",
+            "Kardiales LungenÃ¶dem",
             "Hypertensiver Notfall",
             "Nichttraumatischer Brustschmerz: ACS",
             "Abdominelle Schmerzen / Koliken",
-            "Massive Übelkeit / Erbrechen",
+            "Massive Ãœbelkeit / Erbrechen",
             "Starke Schmerzen",
             "Instabile Bradykardie",
             "Instabile Tachykardie",
@@ -1514,26 +1635,26 @@ elif seite == "💉 Med-Rechner":
         if kreislaufstillstand or grad == "IV":
             handlung.append("Grad IV / Kreislaufstillstand: Reanimationsalgorithmus (SOP CPR) priorisieren.")
         else:
-            handlung.append("Basismaßnahmen: Auslöser entfernen, ABCDE, Monitoring, O2, i.v.-Zugang, Blutzucker, SAMPLER.")
+            handlung.append("BasismaÃŸnahmen: AuslÃ¶ser entfernen, ABCDE, Monitoring, O2, i.v.-Zugang, Blutzucker, SAMPLER.")
             if abcd_problem or grad in ["II", "III"]:
-                handlung.append(f"Unverzüglich Adrenalin i.m. {adrenalin_im_mg} mg (auch ohne vorliegenden i.v.-Zugang).")
+                handlung.append(f"UnverzÃ¼glich Adrenalin i.m. {adrenalin_im_mg} mg (auch ohne vorliegenden i.v.-Zugang).")
             if stridor:
                 handlung.append("Atemwegsproblem: Adrenalin 4 mg pur verneb + Clemastin i.v. + Prednisolon i.v.")
             if bronch_obstr:
                 if salbutamol_mg is not None:
                     handlung.append(f"Bronchiale Obstruktion: Salbutamol {salbutamol_mg} mg verneb.")
                 else:
-                    handlung.append("Bronchiale Obstruktion: Salbutamol-Dosis für <4 Jahre nicht in dieser SOP angegeben.")
+                    handlung.append("Bronchiale Obstruktion: Salbutamol-Dosis fÃ¼r <4 Jahre nicht in dieser SOP angegeben.")
             if schock:
                 handlung.append(f"Schockzeichen: Volumenbolus Vollelektrolyt {int(volumen_ml)} ml.")
-            handlung.append("Bei fehlender Stabilisierung Adrenalin i.m. alle 5 Minuten wiederholen und Notarztindikation prüfen.")
+            handlung.append("Bei fehlender Stabilisierung Adrenalin i.m. alle 5 Minuten wiederholen und Notarztindikation prÃ¼fen.")
 
         if schwanger == "Ja":
-            handlung.append("Schwangerschaft: Risiko-Nutzen eng abwägen, frühzeitige notärztliche/klinische Einbindung.")
+            handlung.append("Schwangerschaft: Risiko-Nutzen eng abwÃ¤gen, frÃ¼hzeitige notÃ¤rztliche/klinische Einbindung.")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
@@ -1554,7 +1675,7 @@ elif seite == "💉 Med-Rechner":
             copd_bekannt = st.selectbox("Bekannte COPD", ["Nein", "Ja"], key="asthma_copd_known")
         with k2:
             keine_besserung = st.selectbox("Keine Besserung nach 5 Min.", ["Nein", "Ja"], key="asthma_no_improve")
-            cpap_relevant = st.selectbox("CPAP/NIV erwägen", ["Nein", "Ja"], key="asthma_cpap")
+            cpap_relevant = st.selectbox("CPAP/NIV erwÃ¤gen", ["Nein", "Ja"], key="asthma_cpap")
         with k3:
             spo2_aktuell = st.number_input("Aktuelle SpO2 (%)", min_value=50, max_value=100, value=92, key="asthma_spo2")
 
@@ -1563,7 +1684,7 @@ elif seite == "💉 Med-Rechner":
         hinweise = []
 
         if sympt_tachy == "Ja":
-            hinweise.append("Laut SOP: bei symptomatischer Tachykardie Notarztindikation prüfen / Notarztruf.")
+            hinweise.append("Laut SOP: bei symptomatischer Tachykardie Notarztindikation prÃ¼fen / Notarztruf.")
         else:
             if alter < 4:
                 meds.append("Adrenalin 4 mg pur vernebelt")
@@ -1586,36 +1707,36 @@ elif seite == "💉 Med-Rechner":
             o2_ziel = "SpO2 > 92 %"
 
         handlung.extend([
-            "Basismaßnahmen: Beruhigen, Oberkörper hoch, Lippenbremse, vollständiges Monitoring",
-            "Sauerstoffgabe 2-6 l/min (bei schwerer Dyspnoe initial höher), Zielbereich beachten",
-            "Medikation gemäß SOP verabreichen und Wirkung nach 5 Minuten re-evaluieren",
+            "BasismaÃŸnahmen: Beruhigen, OberkÃ¶rper hoch, Lippenbremse, vollstÃ¤ndiges Monitoring",
+            "Sauerstoffgabe 2-6 l/min (bei schwerer Dyspnoe initial hÃ¶her), Zielbereich beachten",
+            "Medikation gemÃ¤ÃŸ SOP verabreichen und Wirkung nach 5 Minuten re-evaluieren",
         ])
 
         if cpap_relevant == "Ja" or alter > 12:
-            handlung.append("CPAP / NIV erwägen (v. a. bei persistierender Ateminsuffizienz)")
+            handlung.append("CPAP / NIV erwÃ¤gen (v. a. bei persistierender Ateminsuffizienz)")
         if keine_besserung == "Ja":
-            handlung.append("Keine Besserung nach 5 Minuten: Notarztruf auslösen")
+            handlung.append("Keine Besserung nach 5 Minuten: Notarztruf auslÃ¶sen")
 
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: SOP enthält keine gesonderte Dosisanpassung; frühe ärztliche Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: SOP enthÃ¤lt keine gesonderte Dosisanpassung; frÃ¼he Ã¤rztliche RÃ¼cksprache einplanen.")
 
         if spo2_aktuell < 88:
             hinweise.append("Kritische Oxygenierung: Eskalation und engmaschige Kontrolle priorisieren.")
 
         st.subheader("Berechnete SOP-Dosierungen")
         for i, med in enumerate(meds, start=1):
-            st.write(f"{i}. {med}")
+            st.write(f"{i}. {sop_text(med)}")
 
         st.info(f"Sauerstoffziel laut SOP: {o2_ziel}")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
         if hinweise:
-            st.subheader("Zusätzliche Hinweise")
+            st.subheader("ZusÃ¤tzliche Hinweise")
             for i, h in enumerate(hinweise, start=1):
-                st.write(f"{i}. {h}")
+                st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
@@ -1628,13 +1749,13 @@ elif seite == "💉 Med-Rechner":
             ],
         )
 
-    elif sop == "Hypoglykämie":
+    elif sop == "HypoglykÃ¤mie":
         st.subheader("Klinische Konstellation")
         h1, h2, h3 = st.columns(3)
         with h1:
             bz_mg = st.number_input("BZ (mg/dl)", min_value=10, max_value=1000, value=55, key="hypo_bz_mg")
         with h2:
-            bewusstseinsstoerung = st.selectbox("Bewusstseinsstörung", ["Nein", "Ja"], key="hypo_conscious")
+            bewusstseinsstoerung = st.selectbox("BewusstseinsstÃ¶rung", ["Nein", "Ja"], key="hypo_conscious")
         with h3:
             keine_besserung_hypo = st.selectbox("Keine Besserung (5 Min.)", ["Nein", "Ja"], key="hypo_no_improve")
 
@@ -1644,8 +1765,8 @@ elif seite == "💉 Med-Rechner":
         st.caption(f"Umgerechnet: {bz_mmol} mmol/l")
 
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
         ]
         meds = []
         hinweise = []
@@ -1656,39 +1777,39 @@ elif seite == "💉 Med-Rechner":
             else:
                 meds.append("Glucose oral")
         else:
-            hinweise.append("Schwellenwert für SOP-Hypoglykämie aktuell nicht erfüllt (BZ <60 mg/dl oder <3,3 mmol/l).")
+            hinweise.append("Schwellenwert fÃ¼r SOP-HypoglykÃ¤mie aktuell nicht erfÃ¼llt (BZ <60 mg/dl oder <3,3 mmol/l).")
 
         if keine_besserung_hypo == "Ja":
-            handlung.append("Notarztruf auslösen")
+            handlung.append("Notarztruf auslÃ¶sen")
             handlung.append("Kliniktransport priorisieren")
         else:
-            handlung.append("Weiterbeobachtung und anschließend Klinik / Ende gemäß Gesamtlage")
+            handlung.append("Weiterbeobachtung und anschlieÃŸend Klinik / Ende gemÃ¤ÃŸ Gesamtlage")
 
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühzeitige ärztliche Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼hzeitige Ã¤rztliche RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         if meds:
             for i, med in enumerate(meds, start=1):
-                st.write(f"{i}. {med}")
+                st.write(f"{i}. {sop_text(med)}")
         else:
             st.write("Keine unmittelbare Glucose-Gabe nach diesem SOP-Schwellenwert.")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
         if hinweise:
-            st.subheader("Zusätzliche Hinweise")
+            st.subheader("ZusÃ¤tzliche Hinweise")
             for i, h in enumerate(hinweise, start=1):
-                st.write(f"{i}. {h}")
+                st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
             [
                 f"SOP: {sop}",
                 f"BZ: {bz_mg} mg/dl ({bz_mmol} mmol/l)",
-                f"Bewusstseinsstörung: {bewusstseinsstoerung}",
+                f"BewusstseinsstÃ¶rung: {bewusstseinsstoerung}",
                 f"Keine Besserung (5 Min.): {keine_besserung_hypo}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
@@ -1709,8 +1830,8 @@ elif seite == "💉 Med-Rechner":
         iv_midazolam_mg = round(0.05 * float(gewicht), 2)
         meds = []
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
         ]
         hinweise = []
 
@@ -1718,7 +1839,7 @@ elif seite == "💉 Med-Rechner":
             if bewusstlos == "Ja":
                 handlung.append("Stabile Seitenlage")
             handlung.append("ABCDE-Re-Evaluation")
-            handlung.append("Klinik / Ende gemäß Gesamtlage")
+            handlung.append("Klinik / Ende gemÃ¤ÃŸ Gesamtlage")
         else:
             if iv_zugang == "Ja":
                 meds.append(f"Midazolam {iv_midazolam_mg} mg i.v. (0,05 mg/kgKG), langsam in mg-Schritten titrieren")
@@ -1729,33 +1850,33 @@ elif seite == "💉 Med-Rechner":
                     meds.append("Midazolam nasal 5 mg (= 1 ml)")
                 else:
                     meds.append("Midazolam nasal 10 mg (= 2 ml)")
-                hinweise.append("Intranasale Medikamentengabe gemäß SOP-Schema")
+                hinweise.append("Intranasale Medikamentengabe gemÃ¤ÃŸ SOP-Schema")
 
             if andauernder_anfall_2 == "Ja":
-                handlung.append("Notarztruf auslösen")
+                handlung.append("Notarztruf auslÃ¶sen")
                 handlung.append("Kliniktransport priorisieren")
             else:
                 handlung.append("ABCDE-Re-Evaluation")
-                handlung.append("Klinik / Ende gemäß Gesamtlage")
+                handlung.append("Klinik / Ende gemÃ¤ÃŸ Gesamtlage")
 
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühzeitige notärztliche/klinische Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼hzeitige notÃ¤rztliche/klinische RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         if meds:
             for i, med in enumerate(meds, start=1):
-                st.write(f"{i}. {med}")
+                st.write(f"{i}. {sop_text(med)}")
         else:
-            st.write("Keine sofortige Midazolam-Gabe gemäß Entscheidungsweg erforderlich.")
+            st.write("Keine sofortige Midazolam-Gabe gemÃ¤ÃŸ Entscheidungsweg erforderlich.")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
         if hinweise:
-            st.subheader("Zusätzliche Hinweise")
+            st.subheader("ZusÃ¤tzliche Hinweise")
             for i, h in enumerate(hinweise, start=1):
-                st.write(f"{i}. {h}")
+                st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
@@ -1784,61 +1905,61 @@ elif seite == "💉 Med-Rechner":
         with c2:
             cave_exsikkose = st.selectbox("CAVE Exsikkose", ["Nein", "Ja"], key="stroke_cave_exsiccosis")
         with c3:
-            cave_hypogly = st.selectbox("CAVE Hypoglykämie", ["Nein", "Ja"], key="stroke_cave_hypo")
+            cave_hypogly = st.selectbox("CAVE HypoglykÃ¤mie", ["Nein", "Ja"], key="stroke_cave_hypo")
 
         meds = []
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
         ]
         hinweise = []
 
         if rr_syst < 120:
-            meds.append("Volumengabe 500 ml Vollelektrolytlösung i.v.")
+            meds.append("Volumengabe 500 ml VollelektrolytlÃ¶sung i.v.")
             hinweise.append("Ziel: Normotension")
         elif rr_syst > 220:
             meds.append("Urapidil 5-15 mg langsam i.v., titrierend")
             hinweise.append("Ziel: systolischer RR < 220 mmHg")
         else:
-            hinweise.append("Bei RR syst. 120-220 mmHg keine primäre RR-Senkung gemäß SOP-Fluss.")
+            hinweise.append("Bei RR syst. 120-220 mmHg keine primÃ¤re RR-Senkung gemÃ¤ÃŸ SOP-Fluss.")
 
         handlung.append("Voranmeldung Neurologie / Stroke Unit")
         handlung.append("Kliniktransport priorisieren")
 
         if symptombeginn_h < 6:
-            hinweise.append("Zeitfenster: < 6 h, systemische Lyse möglich.")
+            hinweise.append("Zeitfenster: < 6 h, systemische Lyse mÃ¶glich.")
         elif symptombeginn_h <= 8:
-            hinweise.append("Zeitfenster: bis 8 h und mehr, intraarterielle Thrombektomie möglich.")
+            hinweise.append("Zeitfenster: bis 8 h und mehr, intraarterielle Thrombektomie mÃ¶glich.")
         else:
-            hinweise.append("Zeitfenster außerhalb klassischer Akutfenster, trotzdem Stroke-Unit-Voranmeldung.")
+            hinweise.append("Zeitfenster auÃŸerhalb klassischer Akutfenster, trotzdem Stroke-Unit-Voranmeldung.")
 
         if befast_positiv == "Ja":
             hinweise.append("BE-FAST passend: Balance/Eyes/Face/Arm/Speech/Time dokumentieren.")
         if cave_fieber == "Ja" or cave_exsikkose == "Ja" or cave_hypogly == "Ja":
             hinweise.append("CAVE-Konstellation vorhanden: Differenzialdiagnosen aktiv mitbeurteilen.")
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühe neurologische/geburtshilfliche Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼he neurologische/geburtshilfliche RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         if meds:
             for i, med in enumerate(meds, start=1):
-                st.write(f"{i}. {med}")
+                st.write(f"{i}. {sop_text(med)}")
         else:
-            st.write("Keine akute medikamentöse RR-Intervention gemäß SOP-Schwelle erforderlich.")
+            st.write("Keine akute medikamentÃ¶se RR-Intervention gemÃ¤ÃŸ SOP-Schwelle erforderlich.")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
-        st.subheader("Zusätzliche Hinweise")
+        st.subheader("ZusÃ¤tzliche Hinweise")
         for i, h in enumerate(hinweise, start=1):
-            st.write(f"{i}. {h}")
+            st.write(f"{i}. {sop_text(h)}")
 
         st.info(
             "Stroke-Unit Kontakte (laut Vorlage): "
             "Borken 02861 97 707 77 | Wesel (ev.) 0281 106 5808 (tags) / 0281 106 5800 | "
-            "Dülmen 02594 92 47750 | MST Enschede 0031 53 4873999 | Nordhorn 05921 84 2222 | "
-            "UKM Münster 0251 83 55555"
+            "DÃ¼lmen 02594 92 47750 | MST Enschede 0031 53 4873999 | Nordhorn 05921 84 2222 | "
+            "UKM MÃ¼nster 0251 83 55555"
         )
 
         render_live_summary(
@@ -1852,7 +1973,7 @@ elif seite == "💉 Med-Rechner":
             ],
         )
 
-    elif sop == "Kardiales Lungenödem":
+    elif sop == "Kardiales LungenÃ¶dem":
         st.subheader("Klinische Konstellation")
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -1860,62 +1981,62 @@ elif seite == "💉 Med-Rechner":
         with c2:
             keine_besserung_pulm = st.selectbox("Keine Besserung", ["Nein", "Ja"], key="pulm_no_improve")
         with c3:
-            cpap_moeglich = st.selectbox("CPAP/NIV verfügbar", ["Nein", "Ja"], key="pulm_cpap_available")
+            cpap_moeglich = st.selectbox("CPAP/NIV verfÃ¼gbar", ["Nein", "Ja"], key="pulm_cpap_available")
 
         meds = []
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
             "CPAP-Therapie starten",
         ]
         hinweise = []
 
         if cpap_moeglich == "Ja":
-            hinweise.append("CPAP / NIV anwenden (laut SOP frühzeitig vorgesehen).")
+            hinweise.append("CPAP / NIV anwenden (laut SOP frÃ¼hzeitig vorgesehen).")
         else:
-            hinweise.append("CPAP/NIV nicht verfügbar: Atemunterstützung bestmöglich mit O2 und Lagerung.")
+            hinweise.append("CPAP/NIV nicht verfÃ¼gbar: AtemunterstÃ¼tzung bestmÃ¶glich mit O2 und Lagerung.")
 
         if rr_syst > 120:
             meds.append("Glyceroltrinitrat 0,4-0,8 mg s.l.")
         else:
-            hinweise.append("Bei RR syst. <= 120 mmHg kein Nitro gemäß SOP-Fluss.")
+            hinweise.append("Bei RR syst. <= 120 mmHg kein Nitro gemÃ¤ÃŸ SOP-Fluss.")
 
         meds.append("Furosemid 20 mg i.v. langsam, ggf. einmalige Repetition")
 
         if rr_syst >= 220:
             hinweise.append("Hypertensiver Notfall (RR syst. >= 220 mmHg)")
-            handlung.append("Notärztliche Eskalation unmittelbar priorisieren")
+            handlung.append("NotÃ¤rztliche Eskalation unmittelbar priorisieren")
         else:
             hinweise.append("RR-Ziel im Verlauf: systolisch < 220 mmHg")
 
         if keine_besserung_pulm == "Ja":
-            handlung.append("Notarztruf auslösen")
+            handlung.append("Notarztruf auslÃ¶sen")
         else:
             handlung.append("ABCDE-Re-Evaluation")
 
         handlung.append("Kliniktransport priorisieren")
 
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼he notÃ¤rztliche/klinische RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         for i, med in enumerate(meds, start=1):
-            st.write(f"{i}. {med}")
+            st.write(f"{i}. {sop_text(med)}")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
-        st.subheader("Zusätzliche Hinweise")
+        st.subheader("ZusÃ¤tzliche Hinweise")
         for i, h in enumerate(hinweise, start=1):
-            st.write(f"{i}. {h}")
+            st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
             [
                 f"SOP: {sop}",
                 f"RR syst.: {rr_syst} mmHg",
-                f"CPAP/NIV verfügbar: {cpap_moeglich}",
+                f"CPAP/NIV verfÃ¼gbar: {cpap_moeglich}",
                 f"Keine Besserung: {keine_besserung_pulm}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
@@ -1927,24 +2048,24 @@ elif seite == "💉 Med-Rechner":
         with h1:
             rr_syst = st.number_input("RR syst. (mmHg)", min_value=50, max_value=300, value=190, key="htn_rr_syst")
         with h2:
-            kein_lungenoedem = st.selectbox("Kein Lungenödem", ["Ja", "Nein"], key="htn_no_pulm_edema")
+            kein_lungenoedem = st.selectbox("Kein LungenÃ¶dem", ["Ja", "Nein"], key="htn_no_pulm_edema")
         with h3:
             keine_brustschmerzen = st.selectbox("Keine Brustschmerzen", ["Ja", "Nein"], key="htn_no_chest_pain")
 
         d1, d2, d3 = st.columns(3)
         with d1:
-            befast_unauffaellig = st.selectbox("BE-FAST-Test unauffällig", ["Ja", "Nein"], key="htn_befast_normal")
+            befast_unauffaellig = st.selectbox("BE-FAST-Test unauffÃ¤llig", ["Ja", "Nein"], key="htn_befast_normal")
         with d2:
             keine_besserung_htn = st.selectbox("Keine Besserung", ["Nein", "Ja"], key="htn_no_improve")
         with d3:
             organdysfunktion = st.multiselect(
-                "Zusätzliche Organdysfunktion",
+                "ZusÃ¤tzliche Organdysfunktion",
                 [
                     "Kopfschmerzen",
                     "Druck im Kopf",
                     "Roter Kopf",
                     "Augenflimmern",
-                    "Übelkeit",
+                    "Ãœbelkeit",
                     "Ohrensausen",
                 ],
                 key="htn_organdysf",
@@ -1952,8 +2073,8 @@ elif seite == "💉 Med-Rechner":
 
         meds = []
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
         ]
         hinweise = []
 
@@ -1961,42 +2082,42 @@ elif seite == "💉 Med-Rechner":
             hinweise.append("SOP-Hinweis: hypertensiver Notfall typischerweise bei RR syst. > 180 mmHg mit Organdysfunktion.")
 
         if len(organdysfunktion) == 0:
-            hinweise.append("Keine zusätzliche Organdysfunktion markiert; Differenzialdiagnosen und Gesamtlage engmaschig prüfen.")
+            hinweise.append("Keine zusÃ¤tzliche Organdysfunktion markiert; Differenzialdiagnosen und Gesamtlage engmaschig prÃ¼fen.")
 
         if kein_lungenoedem == "Nein":
-            handlung.append("Konstellation spricht für kardiales Lungenödem: entsprechenden SOP-Pfad priorisieren")
+            handlung.append("Konstellation spricht fÃ¼r kardiales LungenÃ¶dem: entsprechenden SOP-Pfad priorisieren")
         elif keine_brustschmerzen == "Nein":
             handlung.append("Brustschmerz vorhanden: ACS-SOP priorisieren")
         elif befast_unauffaellig == "Nein":
-            handlung.append("Neurologische Auffälligkeit: Schlaganfall-SOP priorisieren")
+            handlung.append("Neurologische AuffÃ¤lligkeit: Schlaganfall-SOP priorisieren")
         else:
             meds.append("Urapidil 5-15 mg langsam i.v., titrierend")
             hinweise.append("Systolische RR-Senkung initial um maximal 20 % anstreben")
 
         if keine_besserung_htn == "Ja":
-            handlung.append("Notarztruf auslösen")
+            handlung.append("Notarztruf auslÃ¶sen")
         else:
             handlung.append("ABCDE-Re-Evaluation")
 
         handlung.append("Kliniktransport priorisieren")
 
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼he notÃ¤rztliche/klinische RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         if meds:
             for i, med in enumerate(meds, start=1):
-                st.write(f"{i}. {med}")
+                st.write(f"{i}. {sop_text(med)}")
         else:
             st.write("Keine direkte Urapidil-Gabe in diesem Entscheidungszweig.")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
-        st.subheader("Zusätzliche Hinweise")
+        st.subheader("ZusÃ¤tzliche Hinweise")
         for i, h in enumerate(hinweise, start=1):
-            st.write(f"{i}. {h}")
+            st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
@@ -2004,7 +2125,7 @@ elif seite == "💉 Med-Rechner":
                 f"SOP: {sop}",
                 f"RR syst.: {rr_syst} mmHg",
                 f"Organdysfunktion markiert: {len(organdysfunktion)}",
-                f"BE-FAST unauffällig: {befast_unauffaellig}",
+                f"BE-FAST unauffÃ¤llig: {befast_unauffaellig}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
@@ -2030,8 +2151,8 @@ elif seite == "💉 Med-Rechner":
             "Heparin 5000 I.E.",
         ]
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
         ]
         hinweise = [
             "Differenzialdiagnosen beachten: Spontanpneumothorax, Lungenembolie, akutes Aortenaneurysma",
@@ -2039,14 +2160,14 @@ elif seite == "💉 Med-Rechner":
         ]
 
         if nrs_acs > 4:
-            meds.append("Morphin 3 mg i.v., einmalige Repetition nach 5 Minuten möglich")
+            meds.append("Morphin 3 mg i.v., einmalige Repetition nach 5 Minuten mÃ¶glich")
             handlung.append("Nasenkapnografie, Alarmgrenze AF < 10/min")
-            handlung.append("Voranmeldung Kardiologie und EKG-Übermittlung")
+            handlung.append("Voranmeldung Kardiologie und EKG-Ãœbermittlung")
         else:
             handlung.append("ABCDE-Re-Evaluation")
 
         if af < 10:
-            hinweise.append("Atemfrequenz unter Alarmgrenze: engmaschige Überwachung und Eskalation.")
+            hinweise.append("Atemfrequenz unter Alarmgrenze: engmaschige Ãœberwachung und Eskalation.")
 
         if st_hebung_persist == "Ja" or neuer_schenkelblock == "Ja":
             handlung.append("Sofortiger Transport in Kardiologie mit HKL-Option")
@@ -2054,22 +2175,22 @@ elif seite == "💉 Med-Rechner":
             handlung.append("Kliniktransport priorisieren")
 
         if keine_besserung_acs == "Ja":
-            handlung.append("Notarztruf auslösen")
+            handlung.append("Notarztruf auslÃ¶sen")
 
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühe kardiologische/geburtshilfliche Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼he kardiologische/geburtshilfliche RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         for i, med in enumerate(meds, start=1):
-            st.write(f"{i}. {med}")
+            st.write(f"{i}. {sop_text(med)}")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
-        st.subheader("Zusätzliche Hinweise")
+        st.subheader("ZusÃ¤tzliche Hinweise")
         for i, h in enumerate(hinweise, start=1):
-            st.write(f"{i}. {h}")
+            st.write(f"{i}. {sop_text(h)}")
 
         st.info(
             "Kardiologie-Kontakte (laut Vorlage): "
@@ -2100,8 +2221,8 @@ elif seite == "💉 Med-Rechner":
 
         meds = []
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
         ]
         hinweise = []
 
@@ -2113,7 +2234,7 @@ elif seite == "💉 Med-Rechner":
                 else:
                     meds.append("Paracetamol 1 g i.v.")
             else:
-                hinweise.append("Paracetamol-Stufe im SOP-Fluss explizit für Erw./Kind >12 Jahre angegeben.")
+                hinweise.append("Paracetamol-Stufe im SOP-Fluss explizit fÃ¼r Erw./Kind >12 Jahre angegeben.")
         else:
             handlung.append("ABCDE-Re-Evaluation")
 
@@ -2122,13 +2243,13 @@ elif seite == "💉 Med-Rechner":
             if alter > 12:
                 meds.append(f"Butylscopolamin {butyl_mg} mg langsam i.v. (0,3 mg/kgKG, max. 40 mg)")
             else:
-                hinweise.append("Butylscopolamin-Stufe im SOP-Fluss explizit für Erw./Kind >12 Jahre angegeben.")
+                hinweise.append("Butylscopolamin-Stufe im SOP-Fluss explizit fÃ¼r Erw./Kind >12 Jahre angegeben.")
         else:
             handlung.append("ABCDE-Re-Evaluation")
 
         if nrs_abd_3 > 6:
             if float(gewicht) > 30:
-                meds.append("Fentanyl i.v.: 0,05 mg Einmalgaben alle 4 Minuten, Maximaldosis 2 µg/kgKG")
+                meds.append("Fentanyl i.v.: 0,05 mg Einmalgaben alle 4 Minuten, Maximaldosis 2 Âµg/kgKG")
                 hinweise.append("BTM-Dokumentation beachten")
             else:
                 hinweise.append("Fentanyl-Stufe laut SOP erst ab >30 kg.")
@@ -2142,22 +2263,22 @@ elif seite == "💉 Med-Rechner":
         )
 
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼he notÃ¤rztliche/klinische RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         if meds:
             for i, med in enumerate(meds, start=1):
-                st.write(f"{i}. {med}")
+                st.write(f"{i}. {sop_text(med)}")
         else:
-            st.write("Keine stufenspezifische medikamentöse Empfehlung bei aktueller NRS-Konstellation.")
+            st.write("Keine stufenspezifische medikamentÃ¶se Empfehlung bei aktueller NRS-Konstellation.")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
-        st.subheader("Zusätzliche Hinweise")
+        st.subheader("ZusÃ¤tzliche Hinweise")
         for i, h in enumerate(hinweise, start=1):
-            st.write(f"{i}. {h}")
+            st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
@@ -2186,17 +2307,17 @@ elif seite == "💉 Med-Rechner":
         with q2:
             keine_deutliche_besserung = st.selectbox("Keine deutliche Besserung", ["Nein", "Ja"], key="pain_no_clear_improve")
         with q3:
-            erweiterte_massnahmen = st.selectbox("Erweiterte Basismaßnahmen", ["Nein", "Ja"], key="pain_extended_measures")
+            erweiterte_massnahmen = st.selectbox("Erweiterte BasismaÃŸnahmen", ["Nein", "Ja"], key="pain_extended_measures")
 
         meds = []
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
         ]
         hinweise = []
 
         if nrs < 3:
-            hinweise.append("SOP-Hinweis: Flussbild für starke Schmerzen ab NRS >= 3.")
+            hinweise.append("SOP-Hinweis: Flussbild fÃ¼r starke Schmerzen ab NRS >= 3.")
 
         if abdominelle_schmerzen == "Ja":
             handlung.append("Verdacht abdominelle Schmerzen / Koliken: entsprechenden SOP-Pfad priorisieren")
@@ -2212,10 +2333,10 @@ elif seite == "💉 Med-Rechner":
                 else:
                     meds.append("Paracetamol 1 g i.v.")
             else:
-                hinweise.append("Paracetamol-Dosierung im Flussbild vorrangig für Erw./Kind >12 Jahre angegeben.")
+                hinweise.append("Paracetamol-Dosierung im Flussbild vorrangig fÃ¼r Erw./Kind >12 Jahre angegeben.")
 
             if nrs >= 6 or erweiterte_massnahmen == "Ja":
-                handlung.append("Erweiterte Basismaßnahmen")
+                handlung.append("Erweiterte BasismaÃŸnahmen")
                 if alter > 60:
                     meds.append("Midazolam i.v.: 1 mg (Patient > 60 Jahre)")
                 elif float(gewicht) > 50:
@@ -2226,11 +2347,11 @@ elif seite == "💉 Med-Rechner":
                 if float(gewicht) > 30:
                     esketamin_mg = round(0.125 * float(gewicht), 2)
                     meds.append(f"Esketamin i.v.: {esketamin_mg} mg (0,125 mg/kgKG), max. einmalige Repetition")
-                    meds.append("ODER Fentanyl i.v.: 0,05 mg Einmalgaben alle 4 Minuten, Maximaldosis 2 µg/kgKG")
+                    meds.append("ODER Fentanyl i.v.: 0,05 mg Einmalgaben alle 4 Minuten, Maximaldosis 2 Âµg/kgKG")
                     hinweise.append("BTM-Dokumentation beachten")
 
                 if keine_deutliche_besserung == "Ja":
-                    handlung.append("Notarztruf auslösen")
+                    handlung.append("Notarztruf auslÃ¶sen")
                 else:
                     handlung.append("Ruhigstellung, Schienung, Verband")
             else:
@@ -2242,26 +2363,26 @@ elif seite == "💉 Med-Rechner":
             handlung.append("Kliniktransport")
 
         if nrs > 8:
-            hinweise.append("Bei unerträglichen Schmerzen (NRS > 8) zuerst Midazolam/Esketamin/Fentanyl und anschließend Paracetamol erwägen.")
+            hinweise.append("Bei unertrÃ¤glichen Schmerzen (NRS > 8) zuerst Midazolam/Esketamin/Fentanyl und anschlieÃŸend Paracetamol erwÃ¤gen.")
 
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼he notÃ¤rztliche/klinische RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         if meds:
             for i, med in enumerate(meds, start=1):
-                st.write(f"{i}. {med}")
+                st.write(f"{i}. {sop_text(med)}")
         else:
-            st.write("Keine spezifische medikamentöse Empfehlung in diesem Entscheidungszweig.")
+            st.write("Keine spezifische medikamentÃ¶se Empfehlung in diesem Entscheidungszweig.")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
         if hinweise:
-            st.subheader("Zusätzliche Hinweise")
+            st.subheader("ZusÃ¤tzliche Hinweise")
             for i, h in enumerate(hinweise, start=1):
-                st.write(f"{i}. {h}")
+                st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
@@ -2274,7 +2395,7 @@ elif seite == "💉 Med-Rechner":
             ],
         )
 
-    elif sop == "Massive Übelkeit / Erbrechen":
+    elif sop == "Massive Ãœbelkeit / Erbrechen":
         st.subheader("Klinische Konstellation")
         m1, m2, m3 = st.columns(3)
         with m1:
@@ -2292,8 +2413,8 @@ elif seite == "💉 Med-Rechner":
 
         meds = []
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
         ]
         hinweise = []
 
@@ -2307,29 +2428,29 @@ elif seite == "💉 Med-Rechner":
             hinweise.append("Bei Dehydratation oder C2-Intoxikation in diesem SOP-Zweig keine Antiemetika-Gabe.")
         else:
             if alter > 60 or neuro_defizit == "Ja" or krampfleiden_bekannt == "Ja":
-                meds.append("Ondansetron 4 mg i.v., einmalige Repetition möglich")
+                meds.append("Ondansetron 4 mg i.v., einmalige Repetition mÃ¶glich")
             else:
                 meds.append("Dimenhydrinat 31 mg i.v. und 31 mg als Zusatz in die Infusion")
             handlung.append("Kliniktransport")
 
         if schwanger == "Unbekannt":
-            hinweise.append("Schwangerschaftsstatus unklar: vor Antiemetika-Gabe engmaschig abklären.")
+            hinweise.append("Schwangerschaftsstatus unklar: vor Antiemetika-Gabe engmaschig abklÃ¤ren.")
 
         st.subheader("Berechnete SOP-Medikation")
         if meds:
             for i, med in enumerate(meds, start=1):
-                st.write(f"{i}. {med}")
+                st.write(f"{i}. {sop_text(med)}")
         else:
-            st.write("Keine medikamentöse Antiemese in diesem Entscheidungszweig.")
+            st.write("Keine medikamentÃ¶se Antiemese in diesem Entscheidungszweig.")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
         if hinweise:
-            st.subheader("Zusätzliche Hinweise")
+            st.subheader("ZusÃ¤tzliche Hinweise")
             for i, h in enumerate(hinweise, start=1):
-                st.write(f"{i}. {h}")
+                st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
@@ -2348,7 +2469,7 @@ elif seite == "💉 Med-Rechner":
         with b1:
             hf = st.number_input("Herzfrequenz (HF/min)", min_value=20, max_value=220, value=45, key="brady_hf")
         with b2:
-            instabil = st.selectbox("Instabilitätszeichen vorhanden", ["Nein", "Ja"], key="brady_instability")
+            instabil = st.selectbox("InstabilitÃ¤tszeichen vorhanden", ["Nein", "Ja"], key="brady_instability")
         with b3:
             asystolie_gefahr = st.selectbox("Asystolie-Gefahr", ["Nein", "Ja"], key="brady_asystole_risk")
 
@@ -2360,16 +2481,16 @@ elif seite == "💉 Med-Rechner":
 
         meds = []
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
         ]
         hinweise = [
-            "Instabilitätszeichen: Schock, Bewusstseinsstörung, Synkope, Myokardischämie, schwere Herzinsuffizienz",
-            "Asystolie-Gefahr prüfen: kürzliche Asystolie, AV-Block II Typ 2 (Mobitz), AV-Block III und breiter QRS-Komplex, ventrikuläre Pausen > 3 Sek.",
+            "InstabilitÃ¤tszeichen: Schock, BewusstseinsstÃ¶rung, Synkope, MyokardischÃ¤mie, schwere Herzinsuffizienz",
+            "Asystolie-Gefahr prÃ¼fen: kÃ¼rzliche Asystolie, AV-Block II Typ 2 (Mobitz), AV-Block III und breiter QRS-Komplex, ventrikulÃ¤re Pausen > 3 Sek.",
         ]
 
         if hf >= 60:
-            hinweise.append("SOP-Hinweis: Flussbild für instabile Bradykardie bei HF < 60/min.")
+            hinweise.append("SOP-Hinweis: Flussbild fÃ¼r instabile Bradykardie bei HF < 60/min.")
 
         if instabil == "Nein":
             handlung.append("ABCDE-Re-Evaluation")
@@ -2379,13 +2500,13 @@ elif seite == "💉 Med-Rechner":
                 meds.append("Atropin 0,5 mg i.v., bis max. 3 mg")
             else:
                 meds.append("Adrenalinperfusor: 1 mg Adrenalin in 500 ml Infusion, initial >1 Tropfen/Sek.")
-                hinweise.append("Orientierung Perfusor: 1 Tropfen/Sek. = 60 Tropfen/Min. = ca. 3 ml/Min. = ca. 6 µg/Min.")
+                hinweise.append("Orientierung Perfusor: 1 Tropfen/Sek. = 60 Tropfen/Min. = ca. 3 ml/Min. = ca. 6 Âµg/Min.")
 
             if hf_ansteigend == "Ja":
                 handlung.append("ABCDE-Re-Evaluation")
                 handlung.append("Kliniktransport")
             else:
-                handlung.append("Notarztruf auslösen")
+                handlung.append("Notarztruf auslÃ¶sen")
                 if gcs_unter_10 == "Ja":
                     handlung.append("Transthorakalen Schrittmacher vorbereiten/anwenden")
                 else:
@@ -2393,29 +2514,29 @@ elif seite == "💉 Med-Rechner":
                 handlung.append("Kliniktransport")
 
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼he notÃ¤rztliche/klinische RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         if meds:
             for i, med in enumerate(meds, start=1):
-                st.write(f"{i}. {med}")
+                st.write(f"{i}. {sop_text(med)}")
         else:
-            st.write("Keine medikamentöse Bradykardie-Therapie in diesem Entscheidungszweig.")
+            st.write("Keine medikamentÃ¶se Bradykardie-Therapie in diesem Entscheidungszweig.")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
-        st.subheader("Zusätzliche Hinweise")
+        st.subheader("ZusÃ¤tzliche Hinweise")
         for i, h in enumerate(hinweise, start=1):
-            st.write(f"{i}. {h}")
+            st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
             [
                 f"SOP: {sop}",
                 f"HF: {hf}/min",
-                f"Instabilitätszeichen: {instabil}",
+                f"InstabilitÃ¤tszeichen: {instabil}",
                 f"Asystolie-Gefahr: {asystolie_gefahr}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
@@ -2427,29 +2548,29 @@ elif seite == "💉 Med-Rechner":
         with t1:
             hf_tachy = st.number_input("Herzfrequenz (HF/min)", min_value=20, max_value=300, value=160, key="tachy_hf")
         with t2:
-            instabil_tachy = st.selectbox("Instabilitätszeichen vorhanden", ["Nein", "Ja"], key="tachy_instability")
+            instabil_tachy = st.selectbox("InstabilitÃ¤tszeichen vorhanden", ["Nein", "Ja"], key="tachy_instability")
         with t3:
             bewusstlos_tachy = st.selectbox("Bewusstlosigkeit", ["Nein", "Ja"], key="tachy_unconscious")
 
         meds = []
         handlung = [
-            "Basismaßnahmen durchführen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
             "Reanimationsbereitschaft herstellen",
-            "Notarztruf prüfen",
+            "Notarztruf prÃ¼fen",
         ]
         hinweise = [
-            "Instabilitätszeichen: Schock, Bewusstseinsstörung, Synkope, Myokardischämie, schwere Herzinsuffizienz",
+            "InstabilitÃ¤tszeichen: Schock, BewusstseinsstÃ¶rung, Synkope, MyokardischÃ¤mie, schwere Herzinsuffizienz",
         ]
 
         if hf_tachy < 100:
-            hinweise.append("SOP-Hinweis: Flussbild für instabile Tachykardie ist typischerweise bei deutlich erhöhter HF relevant.")
+            hinweise.append("SOP-Hinweis: Flussbild fÃ¼r instabile Tachykardie ist typischerweise bei deutlich erhÃ¶hter HF relevant.")
 
         if instabil_tachy == "Nein":
             handlung.append("ABCDE-Re-Evaluation")
             handlung.append("Klinik / Ende")
         else:
             if bewusstlos_tachy == "Ja":
-                handlung.append("Notarztruf auslösen")
+                handlung.append("Notarztruf auslÃ¶sen")
                 meds.append("Erw.: Kardioversion")
                 handlung.append("ABCDE-Re-Evaluation")
                 handlung.append("Klinik / Ende")
@@ -2458,29 +2579,29 @@ elif seite == "💉 Med-Rechner":
                 handlung.append("Klinik / Ende")
 
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼he notÃ¤rztliche/klinische RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         if meds:
             for i, med in enumerate(meds, start=1):
-                st.write(f"{i}. {med}")
+                st.write(f"{i}. {sop_text(med)}")
         else:
-            st.write("Keine medikamentöse Empfehlung in diesem Entscheidungszweig.")
+            st.write("Keine medikamentÃ¶se Empfehlung in diesem Entscheidungszweig.")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
-        st.subheader("Zusätzliche Hinweise")
+        st.subheader("ZusÃ¤tzliche Hinweise")
         for i, h in enumerate(hinweise, start=1):
-            st.write(f"{i}. {h}")
+            st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
             [
                 f"SOP: {sop}",
                 f"HF: {hf_tachy}/min",
-                f"Instabilitätszeichen: {instabil_tachy}",
+                f"InstabilitÃ¤tszeichen: {instabil_tachy}",
                 f"Bewusstlosigkeit: {bewusstlos_tachy}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
@@ -2504,13 +2625,13 @@ elif seite == "💉 Med-Rechner":
 
         meds = []
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
         ]
         hinweise = [
-            "Verdacht: Atemdepression, Somnolenz, Midazolam-Überdosierung bei Analgosedierung, Schlafmittelmissbrauch",
+            "Verdacht: Atemdepression, Somnolenz, Midazolam-Ãœberdosierung bei Analgosedierung, Schlafmittelmissbrauch",
             "Ziel: ausreichende Spontanatmung",
-            "Cave: Entzug mit Krampfanfall möglich",
+            "Cave: Entzug mit Krampfanfall mÃ¶glich",
         ]
 
         symptome_vorhanden = (somnolenz == "Ja") or (atemdepression == "Ja") or (hypoxie == "Ja")
@@ -2519,7 +2640,7 @@ elif seite == "💉 Med-Rechner":
             handlung.append("Weiteres Vorgehen nach Befund, engmaschiges Monitoring")
             handlung.append("Klinik / Ende")
         else:
-            handlung.append("Kopf überstrecken, Esmarch-Handgriff, Guedel-/Wendel-Tubus, Seitenlage")
+            handlung.append("Kopf Ã¼berstrecken, Esmarch-Handgriff, Guedel-/Wendel-Tubus, Seitenlage")
 
             if vital_bedroht == "Ja":
                 meds.append("Flumazenil titriert, initial 0,5 mg i.v.")
@@ -2533,22 +2654,22 @@ elif seite == "💉 Med-Rechner":
             handlung.append("Klinik / Ende")
 
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼he notÃ¤rztliche/klinische RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         if meds:
             for i, med in enumerate(meds, start=1):
-                st.write(f"{i}. {med}")
+                st.write(f"{i}. {sop_text(med)}")
         else:
-            st.write("Keine medikamentöse Antidot-Therapie in diesem Entscheidungszweig.")
+            st.write("Keine medikamentÃ¶se Antidot-Therapie in diesem Entscheidungszweig.")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
-        st.subheader("Zusätzliche Hinweise")
+        st.subheader("ZusÃ¤tzliche Hinweise")
         for i, h in enumerate(hinweise, start=1):
-            st.write(f"{i}. {h}")
+            st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
@@ -2579,13 +2700,13 @@ elif seite == "💉 Med-Rechner":
 
         meds = []
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
         ]
         hinweise = [
             "Verdacht: Atemdepression, Somnolenz, Einstichstellen, Opiatpflaster",
             "Ziel: ausreichende Spontanatmung",
-            "CAVE: Entzug möglich",
+            "CAVE: Entzug mÃ¶glich",
         ]
 
         symptome_vorhanden = (somnolenz == "Ja") or (atemdepression == "Ja") or (hypoxie == "Ja")
@@ -2594,12 +2715,12 @@ elif seite == "💉 Med-Rechner":
             handlung.append("ABCDE-Re-Evaluation")
             handlung.append("Klinik / Ende")
         else:
-            handlung.append("Kopf überstrecken, Esmarch-Handgriff, Guedel-/Wendel-Tubus, Seitenlage")
+            handlung.append("Kopf Ã¼berstrecken, Esmarch-Handgriff, Guedel-/Wendel-Tubus, Seitenlage")
 
             if vital_bedroht == "Ja":
                 meds.append("Naloxon titriert 0,4 mg i.v. (auf 10 ml aufziehen)")
                 if keine_reaktion == "Ja":
-                    handlung.append("Notarztruf auslösen")
+                    handlung.append("Notarztruf auslÃ¶sen")
                 else:
                     handlung.append("ABCDE-Re-Evaluation")
             else:
@@ -2608,22 +2729,22 @@ elif seite == "💉 Med-Rechner":
             handlung.append("Klinik / Ende")
 
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼he notÃ¤rztliche/klinische RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         if meds:
             for i, med in enumerate(meds, start=1):
-                st.write(f"{i}. {med}")
+                st.write(f"{i}. {sop_text(med)}")
         else:
-            st.write("Keine medikamentöse Antidot-Therapie in diesem Entscheidungszweig.")
+            st.write("Keine medikamentÃ¶se Antidot-Therapie in diesem Entscheidungszweig.")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
-        st.subheader("Zusätzliche Hinweise")
+        st.subheader("ZusÃ¤tzliche Hinweise")
         for i, h in enumerate(hinweise, start=1):
-            st.write(f"{i}. {h}")
+            st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
@@ -2649,7 +2770,7 @@ elif seite == "💉 Med-Rechner":
             )
             wells_tumor = st.selectbox("Tumorerkrankung", ["Nein", "Ja"], key="pe_wells_tumor")
         with w2:
-            wells_haemoptyse = st.selectbox("Hämoptyse", ["Nein", "Ja"], key="pe_wells_hemoptysis")
+            wells_haemoptyse = st.selectbox("HÃ¤moptyse", ["Nein", "Ja"], key="pe_wells_hemoptysis")
             wells_puls_hoch = st.selectbox("Herzfrequenz > 100/min", ["Nein", "Ja"], key="pe_wells_hr")
             wells_dvt = st.selectbox("Zeichen einer tiefen Venenthrombose", ["Nein", "Ja"], key="pe_wells_dvt")
         with w3:
@@ -2689,42 +2810,45 @@ elif seite == "💉 Med-Rechner":
 
         meds = []
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
         ]
         hinweise = [
             f"Wells-Score berechnet: {wells_score:.1f} Punkte",
             f"sPESI-Score berechnet: {spesi_score} Punkte",
         ]
 
-        if wells_score >= 5.0:
-            if spesi_score >= 1:
+        wells_threshold = float(sop_value("lae_wells_threshold", 5.0))
+        spesi_threshold = float(sop_value("lae_spesi_threshold", 1.0))
+
+        if wells_score >= wells_threshold:
+            if spesi_score >= spesi_threshold:
                 meds.append("Heparin 5000 I.E. i.v.")
             else:
-                hinweise.append("sPESI < 1: in diesem SOP-Pfad keine Heparin-Gabe.")
+                hinweise.append(f"sPESI < {spesi_threshold:g}: in diesem SOP-Pfad keine Heparin-Gabe.")
         else:
-            hinweise.append("Wells-Score < 5: in diesem SOP-Pfad keine Heparin-Gabe.")
+            hinweise.append(f"Wells-Score < {wells_threshold:g}: in diesem SOP-Pfad keine Heparin-Gabe.")
 
         handlung.append("ABCDE-Re-Evaluation")
         handlung.append("Klinik / Ende")
 
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼he notÃ¤rztliche/klinische RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         if meds:
             for i, med in enumerate(meds, start=1):
-                st.write(f"{i}. {med}")
+                st.write(f"{i}. {sop_text(med)}")
         else:
-            st.write("Keine medikamentöse Empfehlung in diesem Entscheidungszweig.")
+            st.write("Keine medikamentÃ¶se Empfehlung in diesem Entscheidungszweig.")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
-        st.subheader("Zusätzliche Hinweise")
+        st.subheader("ZusÃ¤tzliche Hinweise")
         for i, h in enumerate(hinweise, start=1):
-            st.write(f"{i}. {h}")
+            st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
@@ -2744,13 +2868,13 @@ elif seite == "💉 Med-Rechner":
         with a1:
             schmerzen_ge3 = st.selectbox("Schmerzen NRS >= 3", ["Nein", "Ja"], key="pao_pain_ge3")
         with a2:
-            instabilitaetszeichen = st.selectbox("Instabilitätszeichen (Schock/Prostration)", ["Nein", "Ja"], key="pao_instability")
+            instabilitaetszeichen = st.selectbox("InstabilitÃ¤tszeichen (Schock/Prostration)", ["Nein", "Ja"], key="pao_instability")
         with a3:
             pulslosigkeit = st.selectbox("Pulselessness (Pulslosigkeit)", ["Nein", "Ja"], key="pao_pulseless")
 
         s1, s2, s3 = st.columns(3)
         with s1:
-            pallor = st.selectbox("Pallor (Blässe)", ["Nein", "Ja"], key="pao_pallor")
+            pallor = st.selectbox("Pallor (BlÃ¤sse)", ["Nein", "Ja"], key="pao_pallor")
         with s2:
             paresthesia = st.selectbox("Paresthesia", ["Nein", "Ja"], key="pao_paresthesia")
         with s3:
@@ -2760,14 +2884,14 @@ elif seite == "💉 Med-Rechner":
             "Risikofaktoren",
             [
                 "Vorhofflimmern",
-                "kürzlicher Myokardinfarkt",
-                "andere kardiale Morbiditäten",
+                "kÃ¼rzlicher Myokardinfarkt",
+                "andere kardiale MorbiditÃ¤ten",
                 "Atherosklerose der Aorta",
                 "prothetischer Aortenersatz",
                 "Aorten-/Poplitealaneurysmen",
                 "Zustand nach Revaskularisation",
                 "arterielles Trauma (Unfall, iatrogen)",
-                "Hyperkoagulabilität",
+                "HyperkoagulabilitÃ¤t",
                 "tiefe Venenthrombose bei persistierendem Foramen ovale",
             ],
             key="pao_risk_factors",
@@ -2775,42 +2899,42 @@ elif seite == "💉 Med-Rechner":
 
         meds = ["Heparin 5.000 I.E. i.v."]
         handlung = [
-            "Basismaßnahmen durchführen",
-            "Notarztruf prüfen",
+            "BasismaÃŸnahmen durchfÃ¼hren",
+            "Notarztruf prÃ¼fen",
         ]
         hinweise = [
             "Leitsymptome der 6 P beachten: Pain, Pallor, Pulselessness, Paresthesia, Paralysis, Prostration",
         ]
 
         if schmerzen_ge3 == "Ja":
-            handlung.append("Starke Schmerzen (NRS >= 3): Analgesiepfad gemäß SOP Starke Schmerzen berücksichtigen")
+            handlung.append("Starke Schmerzen (NRS >= 3): Analgesiepfad gemÃ¤ÃŸ SOP Starke Schmerzen berÃ¼cksichtigen")
         else:
             handlung.append("Keine starken Schmerzen (NRS < 3)")
 
         handlung.append("Heparin 5.000 I.E. i.v. verabreichen")
-        handlung.append("Immobilisation und Tieflagerung der betroffenen Extremität")
+        handlung.append("Immobilisation und Tieflagerung der betroffenen ExtremitÃ¤t")
         handlung.append("Klinik / Ende")
 
         if instabilitaetszeichen == "Ja":
-            hinweise.append("Instabilitätszeichen vorhanden: notärztliche Eskalation priorisieren.")
+            hinweise.append("InstabilitÃ¤tszeichen vorhanden: notÃ¤rztliche Eskalation priorisieren.")
         if pulslosigkeit == "Nein":
-            hinweise.append("Pulslosigkeit nicht gesichert: Differenzialdiagnosen und Verlauf engmaschig prüfen.")
+            hinweise.append("Pulslosigkeit nicht gesichert: Differenzialdiagnosen und Verlauf engmaschig prÃ¼fen.")
         if len(risikofaktoren) > 0:
             hinweise.append(f"Risikofaktoren markiert: {len(risikofaktoren)}")
         if schwanger == "Ja":
-            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+            hinweise.append("Schwangerschaft: frÃ¼he notÃ¤rztliche/klinische RÃ¼cksprache einplanen.")
 
         st.subheader("Berechnete SOP-Medikation")
         for i, med in enumerate(meds, start=1):
-            st.write(f"{i}. {med}")
+            st.write(f"{i}. {sop_text(med)}")
 
         st.subheader("SOP-Handlungshilfe")
         for i, step in enumerate(handlung, start=1):
-            st.write(f"{i}. {step}")
+            st.write(f"{i}. {sop_text(step)}")
 
-        st.subheader("Zusätzliche Hinweise")
+        st.subheader("ZusÃ¤tzliche Hinweise")
         for i, h in enumerate(hinweise, start=1):
-            st.write(f"{i}. {h}")
+            st.write(f"{i}. {sop_text(h)}")
 
         render_live_summary(
             "Live-Zusammenfassung Medikamentenrechner",
@@ -2827,24 +2951,24 @@ elif seite == "💉 Med-Rechner":
 # UEBERGABE
 # --------------------------------------------------
 
-elif seite == "🗣️ Übergabe":
+elif seite == "ðŸ—£ï¸ Ãœbergabe":
 
-    st.header("🗣️ Übergabe (MIST / ISBAR)")
+    st.header("ðŸ—£ï¸ Ãœbergabe (MIST / ISBAR)")
 
     mist_text, isbar_text = build_handover_text(patient)
 
     st.subheader("MIST")
-    st.text_area("Übergabe MIST", mist_text, height=180, key="handover_mist")
+    st.text_area("Ãœbergabe MIST", mist_text, height=180, key="handover_mist")
 
     st.subheader("ISBAR")
-    st.text_area("Übergabe ISBAR", isbar_text, height=220, key="handover_isbar")
+    st.text_area("Ãœbergabe ISBAR", isbar_text, height=220, key="handover_isbar")
 
     render_live_summary(
-        "Live-Zusammenfassung Übergabe",
+        "Live-Zusammenfassung Ãœbergabe",
         [
             "MIST generiert",
             "ISBAR generiert",
-            f"Maßnahmen: {len(patient.get('massnahmen', {}).get('timeline', []))}",
+            f"MaÃŸnahmen: {len(patient.get('massnahmen', {}).get('timeline', []))}",
             f"Medikationen: {len(patient.get('massnahmen', {}).get('medikation', []))}",
         ],
     )
@@ -2853,9 +2977,9 @@ elif seite == "🗣️ Übergabe":
 # PROTOKOLL
 # --------------------------------------------------
 
-elif seite == "📄 Protokoll":
+elif seite == "ðŸ“„ Protokoll":
 
-    st.header("📄 Fertiges Protokoll")
+    st.header("ðŸ“„ Fertiges Protokoll")
 
     st.write(
         "Nach Klick auf **Protokoll generieren** wird automatisch "
@@ -2865,7 +2989,7 @@ elif seite == "📄 Protokoll":
     st.divider()
 
     if st.button(
-        "🚑 Protokoll generieren",
+        "ðŸš‘ Protokoll generieren",
         use_container_width=True,
         type="primary"
     ):
@@ -2892,7 +3016,7 @@ elif seite == "📄 Protokoll":
 
             st.download_button(
 
-                "💾 Protokoll als TXT herunterladen",
+                "ðŸ’¾ Protokoll als TXT herunterladen",
 
                 protocol,
 
@@ -2915,7 +3039,7 @@ elif seite == "📄 Protokoll":
                         color:#fff;
                         font-weight:700;
                         cursor:pointer;
-                    \">📋 Protokoll kopieren</button>
+                    \">ðŸ“‹ Protokoll kopieren</button>
                     <div id=\"copy-status\" style=\"margin-top:8px; color:#b7d7ff; font-size:0.92rem;\"></div>
                 </div>
                 <script>
@@ -2934,3 +3058,4 @@ elif seite == "📄 Protokoll":
                 """,
                 height=95,
             )
+
