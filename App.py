@@ -347,12 +347,33 @@ st.markdown(
         html, body, [class*="css"]  { background: linear-gradient(180deg,var(--bg) 0%, #051123 100%) !important; color:var(--text) }
         .header { background: linear-gradient(90deg,var(--accent) 0%, #0950b0 100%); color: white; padding: 14px 22px; border-radius:10px }
         .card { background: linear-gradient(180deg, rgba(255,255,255,0.02), rgba(255,255,255,0.01)); padding: 18px; border-radius: 12px; box-shadow: 0 10px 30px rgba(2,6,23,0.6); color:var(--text); margin-top:18px }
-        /* Nav styling: large centered pills */
-        .stButton>button { background: rgba(255,255,255,0.03); color:var(--text); padding:18px 28px; border-radius:28px; border:1px solid rgba(255,255,255,0.06); font-weight:700; box-shadow: 0 6px 20px rgba(2,6,23,0.6); transition: transform .12s ease, box-shadow .12s ease }
-        .stButton>button:hover { transform: translateY(-4px); border-color: rgba(255,255,255,0.12) }
-        .nav-active-badge { display:block; margin:8px auto 0 auto; width:fit-content; background: linear-gradient(90deg,var(--accent) 0%, var(--accent-2) 100%); color:#fff; padding:10px 22px; border-radius:22px; font-weight:800; box-shadow:0 10px 30px rgba(12,50,120,0.35) }
-        /* Tighter spacing between nav buttons */
-        .stContainer .row-widget.stButton { display:inline-block; margin: 0 10px }
+        /* Tight nav button styling */
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) { padding: 0 -4px; }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button { width: 100%; padding: 14px 20px; border-radius: 22px; border: 1px solid rgba(255,255,255,0.06); background: rgba(255,255,255,0.03); color: var(--text); font-weight: 700; margin: 0; box-shadow: 0 6px 20px rgba(2,6,23,0.6); transition: all 0.15s ease; }
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.12); transform: translateY(-2px); }
+        /* Active nav button - apply gradient when it contains certain keywords */
+        [data-testid="column"]:nth-child(n+2):nth-child(-n+6) > [data-testid="stButton"] > button:focus { outline: none; }
+        </style>
+        <script>
+        // Color active nav button
+        setTimeout(function() {
+            const navButtons = document.querySelectorAll('[data-testid="column"]:nth-child(n+2):nth-child(-n+6) button');
+            navButtons.forEach((btn, idx) => {
+                const text = btn.textContent.trim();
+                if (text === '❤️ Vitalwerte' || text === '🩺 xABCDE' || text === '📋 SAMPLERS' || text === '🔥 OPQRST' || text === '📄 Protokoll') {
+                    // Check if button was recently clicked by checking if it's focused
+                    btn.addEventListener('click', function() {
+                        navButtons.forEach(b => b.style.background = 'rgba(255,255,255,0.03)');
+                        btn.style.background = 'linear-gradient(90deg, #1e73ff 0%, #ff6b6b 100%)';
+                        btn.style.color = '#fff';
+                        btn.style.border = 'none';
+                        btn.style.boxShadow = '0 8px 25px rgba(12,50,120,0.4)';
+                    });
+                }
+            });
+        }, 100);
+        </script>
+        <style>
         /* Inputs */
         input, textarea { background:#081029; color:var(--text) !important; border:1px solid rgba(255,255,255,0.04) }
         /* Hide sidebar completely */
@@ -455,19 +476,19 @@ nav_options = [
     "📄 Protokoll"
 ]
 
+# Navigation mit inline HTML + Session-State handling
 nav_container = st.container()
 with nav_container:
-    cols = st.columns([1,2,2,2,2,2,1])
+    # HTML-basierte visuelle Navigation
+    cols_nav = st.columns([1] + [1]*5 + [1])
+    
     for i, opt in enumerate(nav_options):
-        col = cols[i+1]
         is_active = (st.session_state['seite'] == opt)
-        # render the button (large)
-        btn = col.button(opt, key=f"nav_{i}")
-        if btn:
+        col = cols_nav[i+1]
+        
+        if col.button(opt, key=f"nav_{i}", use_container_width=True):
             st.session_state['seite'] = opt
-        # render active badge below the button so the active tab is visually highlighted
-        if is_active:
-            col.markdown(f"<div class='nav-active-badge'>{opt}</div>", unsafe_allow_html=True)
+            st.rerun()
 
 seite = st.session_state['seite']
 
@@ -577,6 +598,26 @@ if seite == "❤️ Vitalwerte":
             ["", "sitzend vorgefunden", "liegend vorgefunden", "stehend vorgefunden", "am Boden", "auf Stuhl/Sofa", "in häuslicher Umgebung"],
             key="auffindesituation"
         )
+
+    # Info-Card: Schnell. Sicher. Strukturiert.
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, rgba(30,115,255,0.1) 0%, rgba(255,107,107,0.1) 100%); border: 1px solid rgba(30,115,255,0.2); padding: 20px; border-radius: 12px; margin-top: 28px; text-align: center;">
+        <div style="display:flex; align-items:center; justify-content:center; gap:30px; flex-wrap:wrap;">
+            <div>
+                <div style="font-size:24px; margin-bottom:6px">✓</div>
+                <div style="font-weight:700; color:#e6eef8">Schnelle<br>Erfassung</div>
+            </div>
+            <div>
+                <div style="font-size:24px; margin-bottom:6px">🔒</div>
+                <div style="font-weight:700; color:#e6eef8">Sichere<br>Daten</div>
+            </div>
+            <div>
+                <div style="font-size:24px; margin-bottom:6px">📋</div>
+                <div style="font-weight:700; color:#e6eef8">Strukturierte<br>Dokumentation</div>
+            </div>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 # --------------------------------------------------
 # xABCDE
