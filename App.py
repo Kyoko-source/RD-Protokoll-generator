@@ -485,7 +485,7 @@ st.markdown(
         0% { transform: translateX(-130%) rotate(10deg); }
         100% { transform: translateX(240%) rotate(10deg); }
     }
-    html, body, [class*="css"] {
+    html, body, [class*="css"], .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"], [data-testid="stMainBlockContainer"], section.main {
         background:
             radial-gradient(circle at 10% -4%, rgba(78,143,255,0.26), transparent 28%),
             radial-gradient(circle at 88% 8%, rgba(255,108,139,0.18), transparent 26%),
@@ -494,7 +494,22 @@ st.markdown(
         color: var(--text);
         font-family: "Aptos", "Segoe UI Variable", "Segoe UI", sans-serif;
     }
-    .stApp { background: transparent; }
+    .stApp,
+    [data-testid="stAppViewContainer"],
+    [data-testid="stMain"],
+    [data-testid="stMainBlockContainer"],
+    section.main {
+        color-scheme: dark;
+    }
+    [data-testid="stHeader"],
+    [data-testid="stToolbar"],
+    [data-testid="stDecoration"] {
+        background: transparent !important;
+    }
+    [data-testid="stVerticalBlock"],
+    [data-testid="stHorizontalBlock"] {
+        background: transparent;
+    }
     h1, h2, h3 { letter-spacing:-0.02em; }
     h3 {
         color:#b8dcff;
@@ -630,7 +645,7 @@ st.markdown(
         padding: 12px 18px;
         border-radius: 16px;
         border: 1px solid rgba(255,255,255,0.12);
-        background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.025));
+        background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.018));
         color: var(--text);
         font-weight: 850;
         margin:0;
@@ -651,7 +666,7 @@ st.markdown(
         border-color: rgba(255,255,255,0.24);
         transform: translateY(-3px);
         box-shadow: 0 18px 36px rgba(2,8,24,0.28);
-        background: linear-gradient(180deg, rgba(255,255,255,0.09), rgba(255,255,255,0.035));
+        background: linear-gradient(180deg, rgba(255,255,255,0.065), rgba(255,255,255,0.028));
     }
     [data-testid="stButton"] > button:hover::before { transform: translateX(150%); }
     [data-testid="stButton"] > button:focus,
@@ -722,7 +737,7 @@ st.markdown(
         [data-testid="stAlert"] {
             border-radius: 18px;
             border: 1px solid rgba(255,255,255,0.10);
-            background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.03)) !important;
+            background: linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.02)) !important;
             backdrop-filter: blur(14px);
             -webkit-backdrop-filter: blur(14px);
             box-shadow: 0 18px 34px rgba(2,8,24,0.16);
@@ -730,7 +745,7 @@ st.markdown(
         [data-testid="stExpander"] {
             border-radius: 18px !important;
             border: 1px solid rgba(255,255,255,0.08) !important;
-            background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.02)) !important;
+            background: linear-gradient(180deg, rgba(255,255,255,0.032), rgba(255,255,255,0.015)) !important;
             box-shadow: 0 14px 28px rgba(2,8,24,0.14);
             overflow: hidden;
         }
