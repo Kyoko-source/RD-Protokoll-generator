@@ -917,7 +917,6 @@ if 'xabcde_selected' not in st.session_state:
     st.session_state['xabcde_selected'] = "A"
 
 nav_options = [
-    "🛠️ Admin",
     "❤️ Vitalwerte",
     "🩺 xABCDE",
     "📋 SAMPLERS",
@@ -932,13 +931,19 @@ nav_options = [
 # Navigation mit Streamlit-Buttons und Session-State
 nav_container = st.container()
 with nav_container:
-    cols_nav = st.columns([1] + [1]*10 + [1])
+    cols_nav = st.columns([1] + [1]*9 + [1])
     for i, opt in enumerate(nav_options):
         with cols_nav[i+1]:
             nav_type = "primary" if st.session_state['seite'] == opt else "secondary"
             if st.button(opt, key=f"nav_{i}", use_container_width=True, type=nav_type):
                 st.session_state['seite'] = opt
                 st.rerun()
+
+with st.sidebar:
+    st.markdown("<div style='height: 72vh;'></div>", unsafe_allow_html=True)
+    if st.button("🛠️ Admin", key="nav_admin_sidebar", use_container_width=True, type="secondary"):
+        st.session_state['seite'] = "🛠️ Admin"
+        st.rerun()
 
 seite = st.session_state['seite']
 
@@ -958,7 +963,7 @@ start_color, end_color = active_nav_palette.get(seite, ("#4b8cff", "#ff7a7a"))
 st.markdown(
     f"""
     <style>
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+11) > [data-testid="stButton"] > button[kind='primary'] {{
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button[kind='primary'] {{
         background: linear-gradient(135deg, {start_color} 0%, {end_color} 100%);
     }}
     </style>
