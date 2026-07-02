@@ -916,6 +916,19 @@ if 'seite' not in st.session_state:
 if 'xabcde_selected' not in st.session_state:
     st.session_state['xabcde_selected'] = "A"
 
+topbar_left, topbar_right = st.columns([14, 2])
+with topbar_right:
+    quick_menu = st.selectbox(
+        "",
+        ["⋯", "🛠️ Admin"],
+        key="quick_menu",
+        label_visibility="collapsed",
+    )
+    if quick_menu == "🛠️ Admin":
+        st.session_state["seite"] = "🛠️ Admin"
+        st.session_state["quick_menu"] = "⋯"
+        st.rerun()
+
 nav_options = [
     "❤️ Vitalwerte",
     "🩺 xABCDE",
@@ -938,12 +951,6 @@ with nav_container:
             if st.button(opt, key=f"nav_{i}", use_container_width=True, type=nav_type):
                 st.session_state['seite'] = opt
                 st.rerun()
-
-with st.sidebar:
-    st.markdown("<div style='height: 72vh;'></div>", unsafe_allow_html=True)
-    if st.button("🛠️ Admin", key="nav_admin_sidebar", use_container_width=True, type="secondary"):
-        st.session_state['seite'] = "🛠️ Admin"
-        st.rerun()
 
 seite = st.session_state['seite']
 
