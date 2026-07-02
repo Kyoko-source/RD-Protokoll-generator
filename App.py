@@ -540,6 +540,9 @@ def checkbox_field(section, key, label):
 if 'seite' not in st.session_state:
     st.session_state['seite'] = "❤️ Vitalwerte"
 
+if 'xabcde_selected' not in st.session_state:
+    st.session_state['xabcde_selected'] = "A"
+
 nav_options = [
     "❤️ Vitalwerte",
     "🩺 xABCDE",
@@ -548,19 +551,14 @@ nav_options = [
     "📄 Protokoll"
 ]
 
-# Navigation mit inline HTML + Session-State handling
+# Navigation mit Streamlit-Widgets und Session-State
 nav_container = st.container()
 with nav_container:
-    # HTML-basierte visuelle Navigation
-    cols_nav = st.columns([1] + [1]*5 + [1])
-    
+    cols_nav = st.columns([1, 1, 1, 1, 1, 1, 1])
     for i, opt in enumerate(nav_options):
-        is_active = (st.session_state['seite'] == opt)
-        col = cols_nav[i+1]
-        
-        if col.button(opt, key=f"nav_{i}", use_container_width=True):
-            st.session_state['seite'] = opt
-            st.rerun()
+        with cols_nav[i+1]:
+            if st.radio("", [opt], index=0, key=f"nav_{i}", horizontal=True):
+                st.session_state['seite'] = opt
 
 seite = st.session_state['seite']
 
