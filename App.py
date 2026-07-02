@@ -1114,10 +1114,6 @@ if current_workflow_index is not None:
                 st.session_state["seite"] = step["page"]
                 st.rerun()
 
-    missing_hint = workflow_missing_hint(st.session_state["seite"], patient)
-    if missing_hint:
-        st.caption(f"Offen in diesem Schritt: {missing_hint}")
-
 nav_options = [
     "❤️ Vitalwerte",
     "🩺 xABCDE",
