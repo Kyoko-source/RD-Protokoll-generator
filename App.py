@@ -1414,6 +1414,7 @@ elif seite == "💉 Medikamentenrechner":
             "Abdominelle Schmerzen / Koliken",
             "Massive Übelkeit / Erbrechen",
             "Starke Schmerzen",
+            "Instabile Bradykardie",
         ],
     )
 
@@ -2237,7 +2238,7 @@ elif seite == "💉 Medikamentenrechner":
             ],
         )
 
-    else:
+    elif sop == "Massive Übelkeit / Erbrechen":
         st.subheader("Klinische Konstellation")
         m1, m2, m3 = st.columns(3)
         with m1:
@@ -2301,6 +2302,85 @@ elif seite == "💉 Medikamentenrechner":
                 f"Schwangerschaft/Stillzeit: {schwanger}/{stillzeit}",
                 f"Dehydratation: {dehydration}",
                 f"C2-Intoxikation: {c2_intox}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    else:
+        st.subheader("Klinische Konstellation")
+        b1, b2, b3 = st.columns(3)
+        with b1:
+            hf = st.number_input("Herzfrequenz (HF/min)", min_value=20, max_value=220, value=45, key="brady_hf")
+        with b2:
+            instabil = st.selectbox("Instabilitätszeichen vorhanden", ["Nein", "Ja"], key="brady_instability")
+        with b3:
+            asystolie_gefahr = st.selectbox("Asystolie-Gefahr", ["Nein", "Ja"], key="brady_asystole_risk")
+
+        c1, c2 = st.columns(2)
+        with c1:
+            hf_ansteigend = st.selectbox("HF nach Ersttherapie ansteigend", ["Ja", "Nein"], key="brady_hr_rising")
+        with c2:
+            gcs_unter_10 = st.selectbox("GCS < 10", ["Nein", "Ja"], key="brady_gcs_lt10")
+
+        meds = []
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+        ]
+        hinweise = [
+            "Instabilitätszeichen: Schock, Bewusstseinsstörung, Synkope, Myokardischämie, schwere Herzinsuffizienz",
+            "Asystolie-Gefahr prüfen: kürzliche Asystolie, AV-Block II Typ 2 (Mobitz), AV-Block III und breiter QRS-Komplex, ventrikuläre Pausen > 3 Sek.",
+        ]
+
+        if hf >= 60:
+            hinweise.append("SOP-Hinweis: Flussbild für instabile Bradykardie bei HF < 60/min.")
+
+        if instabil == "Nein":
+            handlung.append("ABCDE-Re-Evaluation")
+            handlung.append("Kliniktransport")
+        else:
+            if asystolie_gefahr == "Nein":
+                meds.append("Atropin 0,5 mg i.v., bis max. 3 mg")
+            else:
+                meds.append("Adrenalinperfusor: 1 mg Adrenalin in 500 ml Infusion, initial >1 Tropfen/Sek.")
+                hinweise.append("Orientierung Perfusor: 1 Tropfen/Sek. = 60 Tropfen/Min. = ca. 3 ml/Min. = ca. 6 µg/Min.")
+
+            if hf_ansteigend == "Ja":
+                handlung.append("ABCDE-Re-Evaluation")
+                handlung.append("Kliniktransport")
+            else:
+                handlung.append("Notarztruf auslösen")
+                if gcs_unter_10 == "Ja":
+                    handlung.append("Transthorakalen Schrittmacher vorbereiten/anwenden")
+                else:
+                    handlung.append("ABCDE-Re-Evaluation")
+                handlung.append("Kliniktransport")
+
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        if meds:
+            for i, med in enumerate(meds, start=1):
+                st.write(f"{i}. {med}")
+        else:
+            st.write("Keine medikamentöse Bradykardie-Therapie in diesem Entscheidungszweig.")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        st.subheader("Zusätzliche Hinweise")
+        for i, h in enumerate(hinweise, start=1):
+            st.write(f"{i}. {h}")
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"HF: {hf}/min",
+                f"Instabilitätszeichen: {instabil}",
+                f"Asystolie-Gefahr: {asystolie_gefahr}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
