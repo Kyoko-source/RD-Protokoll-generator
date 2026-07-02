@@ -1,0 +1,7 @@
+.env
+__pycache__/
+*.pyc
+*.pyo
+.vscode/settings.json
+sop_admin_config.json
+.DS_Store

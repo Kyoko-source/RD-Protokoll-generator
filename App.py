@@ -6,6 +6,10 @@ from datetime import datetime
 import json
 import os
 from copy import deepcopy
+from dotenv import load_dotenv
+
+# Load environment variables from .env
+load_dotenv()
 
 
 def add_line(text, value):
@@ -556,7 +560,9 @@ patient["massnahmen"].setdefault("medikation", [])
 # Admin-Konfiguration
 # --------------------------------------------------
 
-ADMIN_PASSWORD = "RD112BOR"
+ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "")
+if not ADMIN_PASSWORD:
+    st.warning("⚠️ Admin-Passwort nicht in .env gesetzt. Adminbereich deaktiviert.")
 SOP_ADMIN_CONFIG_FILE = "sop_admin_config.json"
 ADMIN_SOP_FIELDS = {
     "Anaphylaxie (SOPKB0105)": [
