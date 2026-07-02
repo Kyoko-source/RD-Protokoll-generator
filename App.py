@@ -768,29 +768,27 @@ elif seite == "🩺 xABCDE":
 
     st.header("🩺 xABCDE")
 
-    params = st.experimental_get_query_params()
-    selected = params.get("xabcde", ["A"])[0]
-    if selected not in ["A", "B", "C", "D", "E"]:
-        selected = "A"
+    if "xabcde_selected" not in st.session_state:
+        st.session_state["xabcde_selected"] = "A"
 
+    col1, col2, col3, col4, col5 = st.columns(5, gap="large")
+    buttons = ["A", "B", "C", "D", "E"]
+    cols = [col1, col2, col3, col4, col5]
+    for label, col in zip(buttons, cols):
+        with col:
+            if st.button(label, key=f"xabcde_{label}", use_container_width=True):
+                st.session_state["xabcde_selected"] = label
+
+    selected = st.session_state["xabcde_selected"]
     st.markdown(
         "<style>"
-        "  .xabcde-buttons { display:flex; justify-content:center; gap:22px; flex-wrap:wrap; margin-bottom:20px; }"
-        "  .xabcde-buttons button { min-width:78px; min-height:78px; border-radius:20px; border:1px solid rgba(187,225,255,0.3); background:rgba(255,255,255,0.04); color:#bbe1ff; font-size:42px; font-weight:900; letter-spacing:0.18em; cursor:pointer; transition:transform .15s ease, border-color .15s ease, background .15s ease; }"
-        "  .xabcde-buttons button:hover { transform:translateY(-2px); background:rgba(187,225,255,0.14); }"
-        "  .xabcde-buttons button.active { background:linear-gradient(135deg, rgba(75,140,255,0.95), rgba(187,225,255,0.95)); color:#07111f; border-color:rgba(255,255,255,0.55); }"
-        "</style>"
-        "<div class='xabcde-buttons'>"
-        f"<button class='{'active' if selected == 'A' else ''}' onclick=\"window.location.search='?xabcde=A'\">A</button>"
-        f"<button class='{'active' if selected == 'B' else ''}' onclick=\"window.location.search='?xabcde=B'\">B</button>"
-        f"<button class='{'active' if selected == 'C' else ''}' onclick=\"window.location.search='?xabcde=C'\">C</button>"
-        f"<button class='{'active' if selected == 'D' else ''}' onclick=\"window.location.search='?xabcde=D'\">D</button>"
-        f"<button class='{'active' if selected == 'E' else ''}' onclick=\"window.location.search='?xabcde=E'\">E</button>"
-        "</div>",
+        "div[data-testid='stButton'] > button { min-height: 88px; font-size: 42px; font-weight: 900; letter-spacing: 0.18em; border-radius: 18px; }"
+        "div[data-testid='stButton'] > button:hover { transform: translateY(-1px); }"
+        "</style>",
         unsafe_allow_html=True,
     )
 
-    st.info("Klicke einen Buchstaben, um direkt zum entsprechenden xABCDE-Untermenü zu gelangen.")
+    st.info(f"Aktive Sektion: {selected} — klicke einen Buchstaben, um die Eingaben zu wechseln.")
 
     if selected == "A":
         st.subheader("A – Airway")
