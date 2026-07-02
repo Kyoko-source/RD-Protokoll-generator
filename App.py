@@ -768,13 +768,27 @@ elif seite == "🩺 xABCDE":
 
     st.header("🩺 xABCDE")
     st.markdown(
-        "<div style='text-align:center; margin-bottom:18px;'>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>A</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>B</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>C</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>D</div>"
-        "<div style='font-size:42px; font-weight:800; letter-spacing:0.18em; color:#bbe1ff;'>E</div>"
-        "</div>",
+        "<div style='display:flex; justify-content:center; gap:20px; margin-bottom:24px;'>"
+        "<button id='xabcde_A' style='cursor:pointer; border:none; background:transparent; color:#bbe1ff; font-size:46px; font-weight:800; letter-spacing:0.18em; padding:0 8px; transition: color 0.2s ease;'>A</button>"
+        "<button id='xabcde_B' style='cursor:pointer; border:none; background:transparent; color:#bbe1ff; font-size:46px; font-weight:800; letter-spacing:0.18em; padding:0 8px; transition: color 0.2s ease;'>B</button>"
+        "<button id='xabcde_C' style='cursor:pointer; border:none; background:transparent; color:#bbe1ff; font-size:46px; font-weight:800; letter-spacing:0.18em; padding:0 8px; transition: color 0.2s ease;'>C</button>"
+        "<button id='xabcde_D' style='cursor:pointer; border:none; background:transparent; color:#bbe1ff; font-size:46px; font-weight:800; letter-spacing:0.18em; padding:0 8px; transition: color 0.2s ease;'>D</button>"
+        "<button id='xabcde_E' style='cursor:pointer; border:none; background:transparent; color:#bbe1ff; font-size:46px; font-weight:800; letter-spacing:0.18em; padding:0 8px; transition: color 0.2s ease;'>E</button>"
+        "</div>"
+        "<script>"
+        "[...document.querySelectorAll('button[id^=xabcde_]')].forEach((letterBtn) => {"
+        "  letterBtn.addEventListener('mouseover', () => letterBtn.style.color = '#e0f2ff');"
+        "  letterBtn.addEventListener('mouseout', () => letterBtn.style.color = '#bbe1ff');"
+        "  letterBtn.addEventListener('click', () => {"
+        "    const letter = letterBtn.innerText.trim();"
+        "    const expanderButton = Array.from(document.querySelectorAll('button')).find((btn) => btn.innerText && btn.innerText.trim().startsWith(letter + ' – '));"
+        "    if (expanderButton) {"
+        "      expanderButton.click();"
+        "      expanderButton.scrollIntoView({behavior:'smooth', block:'center'});"
+        "    }"
+        "  });"
+        "});"
+        "</script>",
         unsafe_allow_html=True
     )
 
