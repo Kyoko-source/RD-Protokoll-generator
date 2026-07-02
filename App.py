@@ -599,26 +599,6 @@ if seite == "❤️ Vitalwerte":
             key="auffindesituation"
         )
 
-    # Info-Card: Schnell. Sicher. Strukturiert.
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, rgba(30,115,255,0.1) 0%, rgba(255,107,107,0.1) 100%); border: 1px solid rgba(30,115,255,0.2); padding: 20px; border-radius: 12px; margin-top: 28px; text-align: center;">
-        <div style="display:flex; align-items:center; justify-content:center; gap:30px; flex-wrap:wrap;">
-            <div>
-                <div style="font-size:24px; margin-bottom:6px">✓</div>
-                <div style="font-weight:700; color:#e6eef8">Schnelle<br>Erfassung</div>
-            </div>
-            <div>
-                <div style="font-size:24px; margin-bottom:6px">🔒</div>
-                <div style="font-weight:700; color:#e6eef8">Sichere<br>Daten</div>
-            </div>
-            <div>
-                <div style="font-size:24px; margin-bottom:6px">📋</div>
-                <div style="font-weight:700; color:#e6eef8">Strukturierte<br>Dokumentation</div>
-            </div>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
-
 # --------------------------------------------------
 # xABCDE
 # --------------------------------------------------
