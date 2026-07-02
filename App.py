@@ -558,11 +558,89 @@ patient["massnahmen"].setdefault("medikation", [])
 
 ADMIN_PASSWORD = "RD112BOR"
 SOP_ADMIN_CONFIG_FILE = "sop_admin_config.json"
+ADMIN_SOP_FIELDS = {
+    "Anaphylaxie (SOPKB0105)": [
+        {"key": "ana_adult_age_threshold", "label": "Altersschwelle Erwachsene (Jahre)", "default": 12.0, "min": 0.0, "max": 21.0, "step": 1.0},
+        {"key": "ana_child_age_threshold", "label": "Altersschwelle Kind (Jahre)", "default": 6.0, "min": 0.0, "max": 18.0, "step": 1.0},
+    ],
+    "Asthma/COPD Bronchialobstruktion (SOPKB0207)": [
+        {"key": "asthma_nebulizer_age_1", "label": "Altersgrenze Stufe 1 (Jahre)", "default": 4.0, "min": 0.0, "max": 18.0, "step": 1.0},
+        {"key": "asthma_nebulizer_age_2", "label": "Altersgrenze Stufe 2 (Jahre)", "default": 6.0, "min": 0.0, "max": 21.0, "step": 1.0},
+        {"key": "asthma_no_improvement_minutes", "label": "Re-Evaluationszeit keine Besserung (Min)", "default": 5.0, "min": 1.0, "max": 30.0, "step": 1.0},
+    ],
+    "Hypoglykämie": [
+        {"key": "hypo_bz_threshold_mg", "label": "BZ-Schwelle (mg/dl)", "default": 60.0, "min": 20.0, "max": 200.0, "step": 1.0},
+        {"key": "hypo_bz_threshold_mmol", "label": "BZ-Schwelle (mmol/l)", "default": 3.3, "min": 1.0, "max": 11.0, "step": 0.1},
+    ],
+    "Krampfanfall": [
+        {"key": "seizure_iv_midazolam_mg_per_kg", "label": "Midazolam i.v. (mg/kgKG)", "default": 0.05, "min": 0.01, "max": 0.5, "step": 0.01},
+    ],
+    "Schlaganfall": [
+        {"key": "stroke_rr_low_threshold", "label": "RR-Untergrenze Volumen (mmHg)", "default": 120.0, "min": 70.0, "max": 180.0, "step": 1.0},
+        {"key": "stroke_rr_high_threshold", "label": "RR-Obergrenze Urapidil (mmHg)", "default": 220.0, "min": 160.0, "max": 280.0, "step": 1.0},
+        {"key": "stroke_lysis_window_h", "label": "Lyse-Zeitfenster (h)", "default": 6.0, "min": 1.0, "max": 24.0, "step": 0.5},
+        {"key": "stroke_thrombectomy_window_h", "label": "Thrombektomie-Zeitfenster (h)", "default": 8.0, "min": 1.0, "max": 36.0, "step": 0.5},
+    ],
+    "Kardiales Lungenödem": [
+        {"key": "pulm_nitro_rr_threshold", "label": "RR-Schwelle für Nitro (mmHg)", "default": 120.0, "min": 80.0, "max": 200.0, "step": 1.0},
+        {"key": "pulm_hypertensive_rr_threshold", "label": "RR-Schwelle hypertensiver Notfall (mmHg)", "default": 220.0, "min": 160.0, "max": 280.0, "step": 1.0},
+    ],
+    "Hypertensiver Notfall": [
+        {"key": "htn_rr_threshold", "label": "RR-Schwelle hypertensiver Notfall (mmHg)", "default": 180.0, "min": 140.0, "max": 260.0, "step": 1.0},
+    ],
+    "Nichttraumatischer Brustschmerz: ACS": [
+        {"key": "acs_morphin_nrs_threshold", "label": "NRS-Schwelle Morphin", "default": 4.0, "min": 0.0, "max": 10.0, "step": 1.0},
+        {"key": "acs_af_alarm_threshold", "label": "AF-Alarmgrenze (/min)", "default": 10.0, "min": 4.0, "max": 30.0, "step": 1.0},
+    ],
+    "Abdominelle Schmerzen / Koliken": [
+        {"key": "abd_initial_nrs_threshold", "label": "NRS-Schwelle Stufe 1", "default": 3.0, "min": 0.0, "max": 10.0, "step": 1.0},
+        {"key": "abd_step2_nrs_threshold", "label": "NRS-Schwelle Stufe 2", "default": 6.0, "min": 0.0, "max": 10.0, "step": 1.0},
+        {"key": "abd_step3_nrs_threshold", "label": "NRS-Schwelle Stufe 3", "default": 6.0, "min": 0.0, "max": 10.0, "step": 1.0},
+        {"key": "abd_fentanyl_weight_threshold", "label": "Gewichtsschwelle Fentanyl (kg)", "default": 30.0, "min": 5.0, "max": 120.0, "step": 1.0},
+    ],
+    "Starke Schmerzen": [
+        {"key": "pain_min_nrs_threshold", "label": "Start-Schwelle NRS", "default": 3.0, "min": 0.0, "max": 10.0, "step": 1.0},
+        {"key": "pain_advanced_nrs_threshold", "label": "Schwelle erweiterte Maßnahmen", "default": 6.0, "min": 0.0, "max": 10.0, "step": 1.0},
+        {"key": "pain_extreme_nrs_threshold", "label": "Schwelle unerträgliche Schmerzen", "default": 8.0, "min": 0.0, "max": 10.0, "step": 1.0},
+        {"key": "pain_midazolam_age_threshold", "label": "Altersschwelle Midazolam reduziert (Jahre)", "default": 60.0, "min": 18.0, "max": 100.0, "step": 1.0},
+        {"key": "pain_weight_high_threshold", "label": "Gewichtsschwelle >50 kg", "default": 50.0, "min": 20.0, "max": 150.0, "step": 1.0},
+        {"key": "pain_weight_min_threshold", "label": "Gewichtsschwelle >30 kg", "default": 30.0, "min": 10.0, "max": 120.0, "step": 1.0},
+    ],
+    "Massive Übelkeit / Erbrechen": [
+        {"key": "nausea_ondansetron_age_threshold", "label": "Altersschwelle Ondansetron (Jahre)", "default": 60.0, "min": 18.0, "max": 100.0, "step": 1.0},
+    ],
+    "Instabile Bradykardie": [
+        {"key": "brady_hf_threshold", "label": "HF-Schwelle Bradykardie (/min)", "default": 60.0, "min": 30.0, "max": 100.0, "step": 1.0},
+    ],
+    "Instabile Tachykardie": [
+        {"key": "tachy_hf_warning_threshold", "label": "HF-Hinweisschwelle Tachykardie (/min)", "default": 100.0, "min": 60.0, "max": 180.0, "step": 1.0},
+    ],
+    "Intoxikation: Benzodiazepine": [
+        {"key": "benzo_flumazenil_initial_mg", "label": "Flumazenil initial (mg)", "default": 0.5, "min": 0.1, "max": 2.0, "step": 0.1},
+    ],
+    "Intoxikation: Opiate / Opioide": [
+        {"key": "opioid_naloxon_initial_mg", "label": "Naloxon initial (mg)", "default": 0.4, "min": 0.1, "max": 2.0, "step": 0.1},
+    ],
+    "Lungenarterienembolie": [
+        {"key": "lae_wells_threshold", "label": "Wells-Schwelle", "default": 5.0, "min": 0.0, "max": 12.0, "step": 0.5},
+        {"key": "lae_spesi_threshold", "label": "sPESI-Schwelle", "default": 1.0, "min": 0.0, "max": 6.0, "step": 1.0},
+    ],
+    "Akuter Verschluss peripherer Arterien": [
+        {"key": "pao_pain_threshold", "label": "NRS-Schwelle starke Schmerzen", "default": 3.0, "min": 0.0, "max": 10.0, "step": 1.0},
+    ],
+}
+
+
+def _build_default_value_overrides():
+    defaults = {}
+    for fields in ADMIN_SOP_FIELDS.values():
+        for field in fields:
+            defaults[field["key"]] = field["default"]
+    return defaults
+
+
 DEFAULT_SOP_ADMIN_CONFIG = {
-    "value_overrides": {
-        "lae_wells_threshold": 5.0,
-        "lae_spesi_threshold": 1.0,
-    }
+    "value_overrides": _build_default_value_overrides(),
 }
 
 
@@ -856,7 +934,7 @@ st.markdown(
 if seite == "🛠️ Admin":
 
     st.header("🛠️ Adminbereich")
-    st.caption("Passwortgeschützt: SOP-Schwellenwerte zentral pflegen")
+    st.caption("Passwortgeschützt: Alle SOP-Parameter zentral pflegen")
 
     if not st.session_state.get("admin_unlocked", False):
         admin_pw = st.text_input("Admin-Passwort", type="password", key="admin_password_input")
@@ -870,37 +948,40 @@ if seite == "🛠️ Admin":
     else:
         current_values = st.session_state["sop_admin_config"].get("value_overrides", {})
 
-        lae_wells = st.number_input(
-            "LAE: Wells-Schwelle",
-            min_value=0.0,
-            max_value=20.0,
-            value=float(current_values.get("lae_wells_threshold", 5.0)),
-            step=0.5,
-            key="admin_lae_wells_threshold",
-        )
+        st.info("Alle Felder wirken global auf die SOP-Logik. Änderungen erst nach Speichern aktiv.")
 
-        lae_spesi = st.number_input(
-            "LAE: sPESI-Schwelle",
-            min_value=0.0,
-            max_value=10.0,
-            value=float(current_values.get("lae_spesi_threshold", 1.0)),
-            step=1.0,
-            key="admin_lae_spesi_threshold",
-        )
+        edited_values = {}
+        for sop_name, fields in ADMIN_SOP_FIELDS.items():
+            with st.expander(sop_name, expanded=False):
+                for field in fields:
+                    value = st.number_input(
+                        field["label"],
+                        min_value=float(field["min"]),
+                        max_value=float(field["max"]),
+                        value=float(current_values.get(field["key"], field["default"])),
+                        step=float(field["step"]),
+                        key=f"admin_cfg_{field['key']}",
+                    )
+                    edited_values[field["key"]] = float(value)
 
         c1, c2 = st.columns(2)
         with c1:
             if st.button("💾 Einstellungen speichern", use_container_width=True, type="primary"):
-                st.session_state["sop_admin_config"] = {
-                    "value_overrides": {
-                        "lae_wells_threshold": float(lae_wells),
-                        "lae_spesi_threshold": float(lae_spesi),
-                    }
-                }
+                new_overrides = dict(current_values)
+                new_overrides.update(edited_values)
+                st.session_state["sop_admin_config"] = {"value_overrides": new_overrides}
                 _save_sop_admin_config(st.session_state["sop_admin_config"])
                 st.success("Admin-Einstellungen gespeichert")
 
         with c2:
+            if st.button("↺ Auf Defaults zurücksetzen", use_container_width=True):
+                st.session_state["sop_admin_config"] = deepcopy(DEFAULT_SOP_ADMIN_CONFIG)
+                _save_sop_admin_config(st.session_state["sop_admin_config"])
+                st.success("Standardwerte wiederhergestellt")
+                st.rerun()
+
+        c3, c4 = st.columns(2)
+        with c4:
             if st.button("🔒 Admin sperren", use_container_width=True):
                 st.session_state["admin_unlocked"] = False
                 st.rerun()
@@ -1586,12 +1667,15 @@ elif seite == "💉 Med-Rechner":
             schock = st.checkbox("Hypotonie / Schock / Bewusstlosigkeit", key="ana_shock")
             kreislaufstillstand = st.checkbox("Kreislaufstillstand", key="ana_cpr")
 
-        if alter >= 12:
+        ana_adult_age_threshold = float(sop_value("ana_adult_age_threshold", 12.0))
+        ana_child_age_threshold = float(sop_value("ana_child_age_threshold", 6.0))
+
+        if alter >= ana_adult_age_threshold:
             adrenalin_im_mg = 0.5
             clemastin_mg = 2.0
             prednisolon_mg = 250.0
             salbutamol_mg = 2.5
-        elif alter >= 6:
+        elif alter >= ana_child_age_threshold:
             adrenalin_im_mg = 0.3
             clemastin_mg = round(0.03 * float(gewicht), 2)
             prednisolon_mg = round(2.0 * float(gewicht), 1)
@@ -1676,11 +1760,13 @@ elif seite == "💉 Med-Rechner":
         if sympt_tachy == "Ja":
             hinweise.append("Laut SOP: bei symptomatischer Tachykardie Notarztindikation prüfen / Notarztruf.")
         else:
-            if alter < 4:
+            asthma_nebulizer_age_1 = float(sop_value("asthma_nebulizer_age_1", 4.0))
+            asthma_nebulizer_age_2 = float(sop_value("asthma_nebulizer_age_2", 6.0))
+            if alter < asthma_nebulizer_age_1:
                 meds.append("Adrenalin 4 mg pur vernebelt")
-            elif 4 <= alter <= 6:
+            elif asthma_nebulizer_age_1 <= alter <= asthma_nebulizer_age_2:
                 meds.append("Salbutamol 1,25 mg vernebelt")
-            elif alter > 6:
+            elif alter > asthma_nebulizer_age_2:
                 meds.append("Salbutamol 2,5 mg vernebelt")
                 meds.append("Ipratropiumbromid 500 mcg vernebelt")
 
@@ -1699,7 +1785,7 @@ elif seite == "💉 Med-Rechner":
         handlung.extend([
             "Basismaßnahmen: Beruhigen, Oberkörper hoch, Lippenbremse, vollständiges Monitoring",
             "Sauerstoffgabe 2-6 l/min (bei schwerer Dyspnoe initial höher), Zielbereich beachten",
-            "Medikation gemäß SOP verabreichen und Wirkung nach 5 Minuten re-evaluieren",
+            f"Medikation gemäß SOP verabreichen und Wirkung nach {int(sop_value('asthma_no_improvement_minutes', 5.0))} Minuten re-evaluieren",
         ])
 
         if cpap_relevant == "Ja" or alter > 12:
@@ -1750,7 +1836,9 @@ elif seite == "💉 Med-Rechner":
             keine_besserung_hypo = st.selectbox("Keine Besserung (5 Min.)", ["Nein", "Ja"], key="hypo_no_improve")
 
         bz_mmol = round(float(bz_mg) / 18.0, 1)
-        kriterium_hypo = float(bz_mg) < 60 or bz_mmol < 3.3
+        hypo_bz_threshold_mg = float(sop_value("hypo_bz_threshold_mg", 60.0))
+        hypo_bz_threshold_mmol = float(sop_value("hypo_bz_threshold_mmol", 3.3))
+        kriterium_hypo = float(bz_mg) < hypo_bz_threshold_mg or bz_mmol < hypo_bz_threshold_mmol
 
         st.caption(f"Umgerechnet: {bz_mmol} mmol/l")
 
@@ -1767,7 +1855,9 @@ elif seite == "💉 Med-Rechner":
             else:
                 meds.append("Glucose oral")
         else:
-            hinweise.append("Schwellenwert für SOP-Hypoglykämie aktuell nicht erfüllt (BZ <60 mg/dl oder <3,3 mmol/l).")
+            hinweise.append(
+                f"Schwellenwert für SOP-Hypoglykämie aktuell nicht erfüllt (BZ <{hypo_bz_threshold_mg:g} mg/dl oder <{hypo_bz_threshold_mmol:g} mmol/l)."
+            )
 
         if keine_besserung_hypo == "Ja":
             handlung.append("Notarztruf auslösen")
@@ -1817,7 +1907,8 @@ elif seite == "💉 Med-Rechner":
 
         andauernder_anfall_2 = st.selectbox("Andauernder Anfall nach Intervention", ["Nein", "Ja"], key="seizure_persistent_2")
 
-        iv_midazolam_mg = round(0.05 * float(gewicht), 2)
+        seizure_iv_midazolam_mg_per_kg = float(sop_value("seizure_iv_midazolam_mg_per_kg", 0.05))
+        iv_midazolam_mg = round(seizure_iv_midazolam_mg_per_kg * float(gewicht), 2)
         meds = []
         handlung = [
             "Basismaßnahmen durchführen",
@@ -1904,22 +1995,31 @@ elif seite == "💉 Med-Rechner":
         ]
         hinweise = []
 
-        if rr_syst < 120:
+        stroke_rr_low_threshold = float(sop_value("stroke_rr_low_threshold", 120.0))
+        stroke_rr_high_threshold = float(sop_value("stroke_rr_high_threshold", 220.0))
+        stroke_lysis_window_h = float(sop_value("stroke_lysis_window_h", 6.0))
+        stroke_thrombectomy_window_h = float(sop_value("stroke_thrombectomy_window_h", 8.0))
+
+        if rr_syst < stroke_rr_low_threshold:
             meds.append("Volumengabe 500 ml Vollelektrolytlösung i.v.")
             hinweise.append("Ziel: Normotension")
-        elif rr_syst > 220:
+        elif rr_syst > stroke_rr_high_threshold:
             meds.append("Urapidil 5-15 mg langsam i.v., titrierend")
-            hinweise.append("Ziel: systolischer RR < 220 mmHg")
+            hinweise.append(f"Ziel: systolischer RR < {stroke_rr_high_threshold:g} mmHg")
         else:
-            hinweise.append("Bei RR syst. 120-220 mmHg keine primäre RR-Senkung gemäß SOP-Fluss.")
+            hinweise.append(
+                f"Bei RR syst. {stroke_rr_low_threshold:g}-{stroke_rr_high_threshold:g} mmHg keine primäre RR-Senkung gemäß SOP-Fluss."
+            )
 
         handlung.append("Voranmeldung Neurologie / Stroke Unit")
         handlung.append("Kliniktransport priorisieren")
 
-        if symptombeginn_h < 6:
-            hinweise.append("Zeitfenster: < 6 h, systemische Lyse möglich.")
-        elif symptombeginn_h <= 8:
-            hinweise.append("Zeitfenster: bis 8 h und mehr, intraarterielle Thrombektomie möglich.")
+        if symptombeginn_h < stroke_lysis_window_h:
+            hinweise.append(f"Zeitfenster: < {stroke_lysis_window_h:g} h, systemische Lyse möglich.")
+        elif symptombeginn_h <= stroke_thrombectomy_window_h:
+            hinweise.append(
+                f"Zeitfenster: bis {stroke_thrombectomy_window_h:g} h und mehr, intraarterielle Thrombektomie möglich."
+            )
         else:
             hinweise.append("Zeitfenster außerhalb klassischer Akutfenster, trotzdem Stroke-Unit-Voranmeldung.")
 
@@ -1986,18 +2086,21 @@ elif seite == "💉 Med-Rechner":
         else:
             hinweise.append("CPAP/NIV nicht verfügbar: Atemunterstützung bestmöglich mit O2 und Lagerung.")
 
-        if rr_syst > 120:
+        pulm_nitro_rr_threshold = float(sop_value("pulm_nitro_rr_threshold", 120.0))
+        pulm_hypertensive_rr_threshold = float(sop_value("pulm_hypertensive_rr_threshold", 220.0))
+
+        if rr_syst > pulm_nitro_rr_threshold:
             meds.append("Glyceroltrinitrat 0,4-0,8 mg s.l.")
         else:
-            hinweise.append("Bei RR syst. <= 120 mmHg kein Nitro gemäß SOP-Fluss.")
+            hinweise.append(f"Bei RR syst. <= {pulm_nitro_rr_threshold:g} mmHg kein Nitro gemäß SOP-Fluss.")
 
         meds.append("Furosemid 20 mg i.v. langsam, ggf. einmalige Repetition")
 
-        if rr_syst >= 220:
-            hinweise.append("Hypertensiver Notfall (RR syst. >= 220 mmHg)")
+        if rr_syst >= pulm_hypertensive_rr_threshold:
+            hinweise.append(f"Hypertensiver Notfall (RR syst. >= {pulm_hypertensive_rr_threshold:g} mmHg)")
             handlung.append("Notärztliche Eskalation unmittelbar priorisieren")
         else:
-            hinweise.append("RR-Ziel im Verlauf: systolisch < 220 mmHg")
+            hinweise.append(f"RR-Ziel im Verlauf: systolisch < {pulm_hypertensive_rr_threshold:g} mmHg")
 
         if keine_besserung_pulm == "Ja":
             handlung.append("Notarztruf auslösen")
@@ -2068,8 +2171,11 @@ elif seite == "💉 Med-Rechner":
         ]
         hinweise = []
 
-        if rr_syst <= 180:
-            hinweise.append("SOP-Hinweis: hypertensiver Notfall typischerweise bei RR syst. > 180 mmHg mit Organdysfunktion.")
+        htn_rr_threshold = float(sop_value("htn_rr_threshold", 180.0))
+        if rr_syst <= htn_rr_threshold:
+            hinweise.append(
+                f"SOP-Hinweis: hypertensiver Notfall typischerweise bei RR syst. > {htn_rr_threshold:g} mmHg mit Organdysfunktion."
+            )
 
         if len(organdysfunktion) == 0:
             hinweise.append("Keine zusätzliche Organdysfunktion markiert; Differenzialdiagnosen und Gesamtlage engmaschig prüfen.")
@@ -2149,14 +2255,17 @@ elif seite == "💉 Med-Rechner":
             "BTM-Dokumentation bei Opioidgabe beachten",
         ]
 
-        if nrs_acs > 4:
+        acs_morphin_nrs_threshold = float(sop_value("acs_morphin_nrs_threshold", 4.0))
+        acs_af_alarm_threshold = float(sop_value("acs_af_alarm_threshold", 10.0))
+
+        if nrs_acs > acs_morphin_nrs_threshold:
             meds.append("Morphin 3 mg i.v., einmalige Repetition nach 5 Minuten möglich")
-            handlung.append("Nasenkapnografie, Alarmgrenze AF < 10/min")
+            handlung.append(f"Nasenkapnografie, Alarmgrenze AF < {acs_af_alarm_threshold:g}/min")
             handlung.append("Voranmeldung Kardiologie und EKG-Übermittlung")
         else:
             handlung.append("ABCDE-Re-Evaluation")
 
-        if af < 10:
+        if af < acs_af_alarm_threshold:
             hinweise.append("Atemfrequenz unter Alarmgrenze: engmaschige Überwachung und Eskalation.")
 
         if st_hebung_persist == "Ja" or neuer_schenkelblock == "Ja":
@@ -2216,7 +2325,12 @@ elif seite == "💉 Med-Rechner":
         ]
         hinweise = []
 
-        if nrs_abd_1 >= 3:
+        abd_initial_nrs_threshold = float(sop_value("abd_initial_nrs_threshold", 3.0))
+        abd_step2_nrs_threshold = float(sop_value("abd_step2_nrs_threshold", 6.0))
+        abd_step3_nrs_threshold = float(sop_value("abd_step3_nrs_threshold", 6.0))
+        abd_fentanyl_weight_threshold = float(sop_value("abd_fentanyl_weight_threshold", 30.0))
+
+        if nrs_abd_1 >= abd_initial_nrs_threshold:
             if alter > 12:
                 if float(gewicht) <= 50:
                     paracetamol_mg = round(15.0 * float(gewicht), 0)
@@ -2228,7 +2342,7 @@ elif seite == "💉 Med-Rechner":
         else:
             handlung.append("ABCDE-Re-Evaluation")
 
-        if nrs_abd_2 > 6:
+        if nrs_abd_2 > abd_step2_nrs_threshold:
             butyl_mg = min(round(0.3 * float(gewicht), 1), 40.0)
             if alter > 12:
                 meds.append(f"Butylscopolamin {butyl_mg} mg langsam i.v. (0,3 mg/kgKG, max. 40 mg)")
@@ -2237,12 +2351,12 @@ elif seite == "💉 Med-Rechner":
         else:
             handlung.append("ABCDE-Re-Evaluation")
 
-        if nrs_abd_3 > 6:
-            if float(gewicht) > 30:
+        if nrs_abd_3 > abd_step3_nrs_threshold:
+            if float(gewicht) > abd_fentanyl_weight_threshold:
                 meds.append("Fentanyl i.v.: 0,05 mg Einmalgaben alle 4 Minuten, Maximaldosis 2 µg/kgKG")
                 hinweise.append("BTM-Dokumentation beachten")
             else:
-                hinweise.append("Fentanyl-Stufe laut SOP erst ab >30 kg.")
+                hinweise.append(f"Fentanyl-Stufe laut SOP erst ab >{abd_fentanyl_weight_threshold:g} kg.")
         else:
             handlung.append("ABCDE-Re-Evaluation")
 
@@ -2306,8 +2420,15 @@ elif seite == "💉 Med-Rechner":
         ]
         hinweise = []
 
-        if nrs < 3:
-            hinweise.append("SOP-Hinweis: Flussbild für starke Schmerzen ab NRS >= 3.")
+        pain_min_nrs_threshold = float(sop_value("pain_min_nrs_threshold", 3.0))
+        pain_advanced_nrs_threshold = float(sop_value("pain_advanced_nrs_threshold", 6.0))
+        pain_extreme_nrs_threshold = float(sop_value("pain_extreme_nrs_threshold", 8.0))
+        pain_midazolam_age_threshold = float(sop_value("pain_midazolam_age_threshold", 60.0))
+        pain_weight_high_threshold = float(sop_value("pain_weight_high_threshold", 50.0))
+        pain_weight_min_threshold = float(sop_value("pain_weight_min_threshold", 30.0))
+
+        if nrs < pain_min_nrs_threshold:
+            hinweise.append(f"SOP-Hinweis: Flussbild für starke Schmerzen ab NRS >= {pain_min_nrs_threshold:g}.")
 
         if abdominelle_schmerzen == "Ja":
             handlung.append("Verdacht abdominelle Schmerzen / Koliken: entsprechenden SOP-Pfad priorisieren")
@@ -2325,16 +2446,16 @@ elif seite == "💉 Med-Rechner":
             else:
                 hinweise.append("Paracetamol-Dosierung im Flussbild vorrangig für Erw./Kind >12 Jahre angegeben.")
 
-            if nrs >= 6 or erweiterte_massnahmen == "Ja":
+            if nrs >= pain_advanced_nrs_threshold or erweiterte_massnahmen == "Ja":
                 handlung.append("Erweiterte Basismaßnahmen")
-                if alter > 60:
-                    meds.append("Midazolam i.v.: 1 mg (Patient > 60 Jahre)")
-                elif float(gewicht) > 50:
-                    meds.append("Midazolam i.v.: 2 mg (Erw./Kind > 50 kg)")
-                elif float(gewicht) > 30:
-                    meds.append("Midazolam i.v.: 1 mg (Kind > 30 kg)")
+                if alter > pain_midazolam_age_threshold:
+                    meds.append(f"Midazolam i.v.: 1 mg (Patient > {pain_midazolam_age_threshold:g} Jahre)")
+                elif float(gewicht) > pain_weight_high_threshold:
+                    meds.append(f"Midazolam i.v.: 2 mg (Erw./Kind > {pain_weight_high_threshold:g} kg)")
+                elif float(gewicht) > pain_weight_min_threshold:
+                    meds.append(f"Midazolam i.v.: 1 mg (Kind > {pain_weight_min_threshold:g} kg)")
 
-                if float(gewicht) > 30:
+                if float(gewicht) > pain_weight_min_threshold:
                     esketamin_mg = round(0.125 * float(gewicht), 2)
                     meds.append(f"Esketamin i.v.: {esketamin_mg} mg (0,125 mg/kgKG), max. einmalige Repetition")
                     meds.append("ODER Fentanyl i.v.: 0,05 mg Einmalgaben alle 4 Minuten, Maximaldosis 2 µg/kgKG")
@@ -2352,8 +2473,10 @@ elif seite == "💉 Med-Rechner":
             handlung.append("Ursache unklar: klinische Re-Evaluation und geeigneten SOP-Pfad priorisieren")
             handlung.append("Kliniktransport")
 
-        if nrs > 8:
-            hinweise.append("Bei unerträglichen Schmerzen (NRS > 8) zuerst Midazolam/Esketamin/Fentanyl und anschließend Paracetamol erwägen.")
+        if nrs > pain_extreme_nrs_threshold:
+            hinweise.append(
+                f"Bei unerträglichen Schmerzen (NRS > {pain_extreme_nrs_threshold:g}) zuerst Midazolam/Esketamin/Fentanyl und anschließend Paracetamol erwägen."
+            )
 
         if schwanger == "Ja":
             hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
@@ -2417,7 +2540,8 @@ elif seite == "💉 Med-Rechner":
             handlung.append("Kliniktransport")
             hinweise.append("Bei Dehydratation oder C2-Intoxikation in diesem SOP-Zweig keine Antiemetika-Gabe.")
         else:
-            if alter > 60 or neuro_defizit == "Ja" or krampfleiden_bekannt == "Ja":
+            nausea_ondansetron_age_threshold = float(sop_value("nausea_ondansetron_age_threshold", 60.0))
+            if alter > nausea_ondansetron_age_threshold or neuro_defizit == "Ja" or krampfleiden_bekannt == "Ja":
                 meds.append("Ondansetron 4 mg i.v., einmalige Repetition möglich")
             else:
                 meds.append("Dimenhydrinat 31 mg i.v. und 31 mg als Zusatz in die Infusion")
@@ -2479,8 +2603,9 @@ elif seite == "💉 Med-Rechner":
             "Asystolie-Gefahr prüfen: kürzliche Asystolie, AV-Block II Typ 2 (Mobitz), AV-Block III und breiter QRS-Komplex, ventrikuläre Pausen > 3 Sek.",
         ]
 
-        if hf >= 60:
-            hinweise.append("SOP-Hinweis: Flussbild für instabile Bradykardie bei HF < 60/min.")
+        brady_hf_threshold = float(sop_value("brady_hf_threshold", 60.0))
+        if hf >= brady_hf_threshold:
+            hinweise.append(f"SOP-Hinweis: Flussbild für instabile Bradykardie bei HF < {brady_hf_threshold:g}/min.")
 
         if instabil == "Nein":
             handlung.append("ABCDE-Re-Evaluation")
@@ -2552,7 +2677,8 @@ elif seite == "💉 Med-Rechner":
             "Instabilitätszeichen: Schock, Bewusstseinsstörung, Synkope, Myokardischämie, schwere Herzinsuffizienz",
         ]
 
-        if hf_tachy < 100:
+        tachy_hf_warning_threshold = float(sop_value("tachy_hf_warning_threshold", 100.0))
+        if hf_tachy < tachy_hf_warning_threshold:
             hinweise.append("SOP-Hinweis: Flussbild für instabile Tachykardie ist typischerweise bei deutlich erhöhter HF relevant.")
 
         if instabil_tachy == "Nein":
@@ -2633,7 +2759,8 @@ elif seite == "💉 Med-Rechner":
             handlung.append("Kopf überstrecken, Esmarch-Handgriff, Guedel-/Wendel-Tubus, Seitenlage")
 
             if vital_bedroht == "Ja":
-                meds.append("Flumazenil titriert, initial 0,5 mg i.v.")
+                benzo_flumazenil_initial_mg = float(sop_value("benzo_flumazenil_initial_mg", 0.5))
+                meds.append(f"Flumazenil titriert, initial {benzo_flumazenil_initial_mg:g} mg i.v.")
                 if keine_reaktion == "Ja":
                     handlung.append("Atemwegssicherung")
                 else:
@@ -2708,7 +2835,8 @@ elif seite == "💉 Med-Rechner":
             handlung.append("Kopf überstrecken, Esmarch-Handgriff, Guedel-/Wendel-Tubus, Seitenlage")
 
             if vital_bedroht == "Ja":
-                meds.append("Naloxon titriert 0,4 mg i.v. (auf 10 ml aufziehen)")
+                opioid_naloxon_initial_mg = float(sop_value("opioid_naloxon_initial_mg", 0.4))
+                meds.append(f"Naloxon titriert {opioid_naloxon_initial_mg:g} mg i.v. (auf 10 ml aufziehen)")
                 if keine_reaktion == "Ja":
                     handlung.append("Notarztruf auslösen")
                 else:
@@ -2855,8 +2983,10 @@ elif seite == "💉 Med-Rechner":
         st.subheader("Klinische Konstellation")
 
         a1, a2, a3 = st.columns(3)
+        pao_pain_threshold = float(sop_value("pao_pain_threshold", 3.0))
+
         with a1:
-            schmerzen_ge3 = st.selectbox("Schmerzen NRS >= 3", ["Nein", "Ja"], key="pao_pain_ge3")
+            schmerzen_ge3 = st.selectbox(f"Schmerzen NRS >= {pao_pain_threshold:g}", ["Nein", "Ja"], key="pao_pain_ge3")
         with a2:
             instabilitaetszeichen = st.selectbox("Instabilitätszeichen (Schock/Prostration)", ["Nein", "Ja"], key="pao_instability")
         with a3:
@@ -2897,7 +3027,7 @@ elif seite == "💉 Med-Rechner":
         ]
 
         if schmerzen_ge3 == "Ja":
-            handlung.append("Starke Schmerzen (NRS >= 3): Analgesiepfad gemäß SOP Starke Schmerzen berücksichtigen")
+            handlung.append(f"Starke Schmerzen (NRS >= {pao_pain_threshold:g}): Analgesiepfad gemäß SOP Starke Schmerzen berücksichtigen")
         else:
             handlung.append("Keine starken Schmerzen (NRS < 3)")
 
