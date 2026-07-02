@@ -458,10 +458,11 @@ st.markdown(
         <style>
     :root { --bg:#070f1f; --panel:#0f1b31; --panel-2:#1a2c4a; --muted:#9aa9c2; --accent:#57a4ff; --accent-2:#ff7d66; --accent-3:#35d8a6; --text:#eef5ff; --line:rgba(255,255,255,0.09); }
     html, body, [class*="css"] { background: radial-gradient(circle at 18% 0%, rgba(87,164,255,0.22), transparent 34%), radial-gradient(circle at 92% 12%, rgba(255,125,102,0.18), transparent 34%), linear-gradient(135deg, var(--bg) 0%, #081327 100%) !important; color: var(--text); }
-    .header { position: relative; overflow:hidden; background: linear-gradient(125deg, rgba(68,132,240,0.95) 0%, rgba(98,126,217,0.92) 34%, rgba(209,117,137,0.9) 100%); color: white; padding: 22px 26px; border-radius: 20px; box-shadow: 0 18px 44px rgba(3,10,26,0.42); border: 1px solid rgba(255,255,255,0.2); }
+    .header { position: relative; overflow:hidden; background: linear-gradient(120deg, rgba(62,136,245,0.98) 0%, rgba(92,122,220,0.95) 33%, rgba(196,108,140,0.92) 100%); color: white; padding: 30px 30px 34px; border-radius: 22px; min-height: 112px; margin-bottom: 20px; box-shadow: 0 24px 52px rgba(3,10,26,0.5); border: 1px solid rgba(255,255,255,0.24); }
     .header::before { content:""; position:absolute; inset:-20% auto auto -10%; width:220px; height:220px; background: radial-gradient(circle, rgba(255,255,255,0.25), transparent 70%); pointer-events:none; }
-    .header-title { font-size:1.6rem; font-weight:900; letter-spacing:0.01em; }
-    .header-sub { opacity:0.92; color:rgba(255,255,255,0.92); font-size:1.01rem; font-weight:600; }
+    .header::after { content:""; position:absolute; left:22px; right:22px; bottom:10px; height:1px; background: linear-gradient(90deg, rgba(255,255,255,0.22), rgba(255,255,255,0.03)); pointer-events:none; }
+    .header-title { font-size:2rem; font-weight:900; letter-spacing:0.01em; text-shadow: 0 2px 12px rgba(6,20,44,0.35); }
+    .header-sub { opacity:0.96; color:rgba(255,255,255,0.95); font-size:1.05rem; font-weight:700; }
         [data-testid="column"]:nth-child(n+2):nth-child(-n+10) { padding: 0 2px; }
     [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button { width:100%; padding: 13px 18px; border-radius: 14px; border: 1px solid rgba(255,255,255,0.13); background: linear-gradient(180deg, rgba(255,255,255,0.045), rgba(255,255,255,0.015)); color: var(--text); font-weight: 800; margin:0; box-shadow: 0 12px 24px rgba(2,8,24,0.28); transition: all 0.22s ease; }
     [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button:hover { border-color: rgba(255,255,255,0.28); transform: translateY(-2px); }
@@ -721,7 +722,7 @@ nav_options = [
     "🔥 OPQRST",
     "⏱️ Maßnahmen",
     "🔎 Verdacht",
-    "💉 Medikamentenrechner",
+    "💉 Med-Rechner",
     "🗣️ Übergabe",
     "📄 Protokoll"
 ]
@@ -746,7 +747,7 @@ active_nav_palette = {
     "🔥 OPQRST": ("#ff8a4d", "#ff4f7b"),
     "⏱️ Maßnahmen": ("#2ac4df", "#3de99a"),
     "🔎 Verdacht": ("#f3b33d", "#ff6f4a"),
-    "💉 Medikamentenrechner": ("#22b8cf", "#4c6fff"),
+    "💉 Med-Rechner": ("#22b8cf", "#4c6fff"),
     "🗣️ Übergabe": ("#7d6bff", "#5bbdff"),
     "📄 Protokoll": ("#4e72ff", "#5ac8ff"),
 }
@@ -1394,7 +1395,7 @@ elif seite == "🔎 Verdacht":
 # MEDIKAMENTENRECHNER
 # --------------------------------------------------
 
-elif seite == "💉 Medikamentenrechner":
+elif seite == "💉 Med-Rechner":
 
     st.header("💉 Medikamentenrechner")
     st.caption("SOP-Rechner für mehrere Krankheitsbilder")
