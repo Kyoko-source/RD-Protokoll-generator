@@ -1416,6 +1416,7 @@ elif seite == "💉 Medikamentenrechner":
             "Starke Schmerzen",
             "Instabile Bradykardie",
             "Instabile Tachykardie",
+            "Intoxikation: Benzodiazepine",
         ],
     )
 
@@ -2386,7 +2387,7 @@ elif seite == "💉 Medikamentenrechner":
             ],
         )
 
-    else:
+    elif sop == "Instabile Tachykardie":
         st.subheader("Klinische Konstellation")
         t1, t2, t3 = st.columns(3)
         with t1:
@@ -2447,6 +2448,81 @@ elif seite == "💉 Medikamentenrechner":
                 f"HF: {hf_tachy}/min",
                 f"Instabilitätszeichen: {instabil_tachy}",
                 f"Bewusstlosigkeit: {bewusstlos_tachy}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    else:
+        st.subheader("Klinische Konstellation")
+        i1, i2, i3 = st.columns(3)
+        with i1:
+            somnolenz = st.selectbox("Somnolenz", ["Nein", "Ja"], key="benzo_somnolence")
+        with i2:
+            atemdepression = st.selectbox("Atemdepression", ["Nein", "Ja"], key="benzo_resp_depression")
+        with i3:
+            hypoxie = st.selectbox("Hypoxie", ["Nein", "Ja"], key="benzo_hypoxia")
+
+        j1, j2 = st.columns(2)
+        with j1:
+            vital_bedroht = st.selectbox("Vital bedrohter Patient", ["Nein", "Ja"], key="benzo_vital_threat")
+        with j2:
+            keine_reaktion = st.selectbox("Keine ausreichende Reaktion", ["Nein", "Ja"], key="benzo_no_response")
+
+        meds = []
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+        ]
+        hinweise = [
+            "Verdacht: Atemdepression, Somnolenz, Midazolam-Überdosierung bei Analgosedierung, Schlafmittelmissbrauch",
+            "Ziel: ausreichende Spontanatmung",
+            "Cave: Entzug mit Krampfanfall möglich",
+        ]
+
+        symptome_vorhanden = (somnolenz == "Ja") or (atemdepression == "Ja") or (hypoxie == "Ja")
+
+        if not symptome_vorhanden:
+            handlung.append("Weiteres Vorgehen nach Befund, engmaschiges Monitoring")
+            handlung.append("Klinik / Ende")
+        else:
+            handlung.append("Kopf überstrecken, Esmarch-Handgriff, Guedel-/Wendel-Tubus, Seitenlage")
+
+            if vital_bedroht == "Ja":
+                meds.append("Flumazenil titriert, initial 0,5 mg i.v.")
+                if keine_reaktion == "Ja":
+                    handlung.append("Atemwegssicherung")
+                else:
+                    handlung.append("Weiteres Vorgehen nach Befund, engmaschiges Monitoring")
+            else:
+                handlung.append("Weiteres Vorgehen nach Befund, engmaschiges Monitoring")
+
+            handlung.append("Klinik / Ende")
+
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        if meds:
+            for i, med in enumerate(meds, start=1):
+                st.write(f"{i}. {med}")
+        else:
+            st.write("Keine medikamentöse Antidot-Therapie in diesem Entscheidungszweig.")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        st.subheader("Zusätzliche Hinweise")
+        for i, h in enumerate(hinweise, start=1):
+            st.write(f"{i}. {h}")
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"Somnolenz/Atemdepression/Hypoxie: {somnolenz}/{atemdepression}/{hypoxie}",
+                f"Vital bedroht: {vital_bedroht}",
+                f"Keine Reaktion: {keine_reaktion}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
