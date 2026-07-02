@@ -167,6 +167,9 @@ def generate_protocol():
 
     # B - ATMUNG mit SpO2 und Atemfrequenz
     b_section = ""
+    af = v.get("af")
+    spo2 = v.get("spo2")
+    
     if x.get("atmung") and x.get("atmung") != "Keine Angabe":
         b_section += f"B — ATMUNG:\n  Status: {x.get('atmung')}\n"
         if x.get("atemgeraeusche"):
@@ -174,24 +177,18 @@ def generate_protocol():
         if x.get("sauerstoff"):
             b_section += f"  Sauerstofftherapie: {x.get('sauerstoff')}\n"
         
-        # Atemfrequenz
-        af = v.get("af")
         if af is not None and af != 0:
             af_cat, af_val = categorize_af(af)
             b_section += f"  Atemfrequenz: {af_cat}\n"
         
-        # SpO2
-        spo2 = v.get("spo2")
         if spo2 is not None and spo2 != 0:
             s_cat, s_val = categorize_spo2(spo2)
             b_section += f"  Sauerstoffsättigung: {s_cat}\n"
-    elif x.get("atmung"):
+    elif (af is not None and af != 0) or (spo2 is not None and spo2 != 0):
         b_section = f"B — ATMUNG:\n"
-        af = v.get("af")
         if af is not None and af != 0:
             af_cat, af_val = categorize_af(af)
             b_section += f"  Atemfrequenz: {af_cat}\n"
-        spo2 = v.get("spo2")
         if spo2 is not None and spo2 != 0:
             s_cat, s_val = categorize_spo2(spo2)
             b_section += f"  Sauerstoffsättigung: {s_cat}\n"
@@ -201,6 +198,10 @@ def generate_protocol():
 
     # C - ZIRKULATION mit Blutdruck und Pulsfrequenz
     c_section = ""
+    rr_sys = v.get("rr_sys")
+    rr_dia = v.get("rr_dia")
+    puls = v.get("puls")
+    
     if x.get("haut") and x.get("haut") != "Keine Angabe":
         c_section += f"C — ZIRKULATION (Kreislauf):\n  Hautzeichen: {x.get('haut')}\n"
         if x.get("rekap"):
@@ -208,26 +209,18 @@ def generate_protocol():
         if x.get("pulsqualitaet"):
             c_section += f"  Pulsqualität: {x.get('pulsqualitaet')}\n"
         
-        # Blutdruck
-        rr_sys = v.get("rr_sys")
-        rr_dia = v.get("rr_dia")
         if rr_sys and rr_dia:
             rr_cat, rr_vals = categorize_rr(rr_sys, rr_dia)
             c_section += f"  Blutdruck: {rr_cat}\n"
         
-        # Pulsfrequenz
-        puls = v.get("puls")
         if puls is not None and puls != 0:
             p_cat, p_val = categorize_puls(puls)
             c_section += f"  Pulsfrequenz: {p_cat}\n"
-    elif puls or (rr_sys and rr_dia):
+    elif (puls is not None and puls != 0) or (rr_sys and rr_dia):
         c_section = f"C — ZIRKULATION (Kreislauf):\n"
-        rr_sys = v.get("rr_sys")
-        rr_dia = v.get("rr_dia")
         if rr_sys and rr_dia:
             rr_cat, rr_vals = categorize_rr(rr_sys, rr_dia)
             c_section += f"  Blutdruck: {rr_cat}\n"
-        puls = v.get("puls")
         if puls is not None and puls != 0:
             p_cat, p_val = categorize_puls(puls)
             c_section += f"  Pulsfrequenz: {p_cat}\n"
@@ -237,13 +230,14 @@ def generate_protocol():
 
     # D - DISABILITY mit GCS und Blutzucker
     d_section = ""
+    gcs = v.get("gcs")
+    bz = v.get("bz")
+    
     if x.get("avpu") and x.get("avpu") != "Keine Angabe":
         d_section += f"D — DISABILITY (Neurologischer Status):\n  Bewusstsein (AVPU): {x.get('avpu')}\n"
         if x.get("pupillen"):
             d_section += f"  Pupillen: {x.get('pupillen')}\n"
         
-        # GCS
-        gcs = v.get("gcs")
         if gcs:
             try:
                 g = int(gcs)
@@ -259,14 +253,11 @@ def generate_protocol():
                 g_cat = "Unbekannt"
             d_section += f"  Glasgow Coma Scale: {g_cat}\n"
         
-        # Blutzucker
-        bz = v.get("bz")
         if bz is not None and bz != 0:
             bz_cat, bz_val = categorize_bz(bz)
             d_section += f"  Blutzucker: {bz_cat}\n"
-    else:
+    elif gcs or (bz is not None and bz != 0):
         d_section = f"D — DISABILITY (Neurologischer Status):\n"
-        gcs = v.get("gcs")
         if gcs:
             try:
                 g = int(gcs)
@@ -281,12 +272,11 @@ def generate_protocol():
             except Exception:
                 g_cat = "Unbekannt"
             d_section += f"  Glasgow Coma Scale: {g_cat}\n"
-        bz = v.get("bz")
         if bz is not None and bz != 0:
             bz_cat, bz_val = categorize_bz(bz)
             d_section += f"  Blutzucker: {bz_cat}\n"
     
-    if d_section and d_section != f"D — DISABILITY (Neurologischer Status):\n":
+    if d_section:
         xabcde += "\n" + d_section
 
     # E - EXPOSURE mit Temperatur
