@@ -119,89 +119,74 @@ def generate_protocol():
 
         intro = ""
         if sex or (age and int(age) > 0) or found or avpu or ereignis:
-            intro = "Pat."
+            intro = "PATIENTENSITUATION:\n"
+            intro += "─" * 50 + "\n"
+            intro_desc = "Patient"
             if sex:
-                intro += f" {sex}"
+                intro_desc += f" ({sex})"
             if age and int(age) > 0:
-                intro += f", {int(age)} Jahre alt"
+                intro_desc += f", {int(age)} Jahre alt"
+            
             if found:
-                intro += f", {found}"
+                intro_desc += f"\nAuffindesituation: {found}"
 
             # Bewusstseinszustand aus AVPU
             if avpu and avpu != "Keine Angabe":
+                intro_desc += "\nBewusstseinszustand: "
                 if avpu == 'A':
-                    intro += ", Pat. ist wach, ansprechbar und orientiert"
+                    intro_desc += "Wach, vollständig ansprechbar und orientiert"
                 elif avpu == 'V':
-                    intro += ", Pat. ist verbal ansprechbar"
+                    intro_desc += "Verbal ansprechbar"
                 elif avpu == 'P':
-                    intro += ", Pat. ist nur auf Schmerz ansprechbar"
+                    intro_desc += "Nur auf Schmerzreize ansprechbar"
                 elif avpu == 'U':
-                    intro += ", Pat. ist nicht ansprechbar"
+                    intro_desc += "Nicht ansprechbar (bewusstlos)"
 
             if ereignis:
-                intro += f". Wir wurden gerufen, weil {ereignis}"
+                intro_desc += f"\n\nEinsatzmeldung: {ereignis}"
 
-            intro += "."
+            intro = intro_desc + "\n\n"
 
         if intro:
-            protocol += intro + "\n\n"
+            protocol += intro
     except Exception:
         pass
 
-    # Vitalwerte (mit qualitativen Beschreibungen)
+    # Vitalwerte (nur Kategorien, keine numerischen Werte)
     vital = ""
     rr_sys = v.get("rr_sys") or None
     rr_dia = v.get("rr_dia") or None
     if rr_sys and rr_dia:
         rr_cat, rr_vals = categorize_rr(rr_sys, rr_dia)
-        if isinstance(rr_vals, tuple):
-            vital += f"RR: {rr_cat} ({rr_vals[0]}/{rr_vals[1]} mmHg)\n"
-        else:
-            vital += f"RR: {rr_cat}\n"
+        vital += f"Blutdruck: {rr_cat}\n"
 
     puls = v.get("puls") or None
     if puls is not None and puls != 0:
         p_cat, p_val = categorize_puls(puls)
-        if p_val is not None:
-            vital += f"Puls: {p_cat} ({p_val}/min)\n"
-        else:
-            vital += f"Puls: {p_cat}\n"
+        vital += f"Pulsfrequenz: {p_cat}\n"
 
     spo2 = v.get("spo2") or None
     if spo2 is not None and spo2 != 0:
         s_cat, s_val = categorize_spo2(spo2)
-        if s_val is not None:
-            vital += f"SpO₂: {s_cat} ({s_val} %)\n"
-        else:
-            vital += f"SpO₂: {s_cat}\n"
+        vital += f"Sauerstoffsättigung: {s_cat}\n"
 
     af = v.get("af") or None
     if af is not None and af != 0:
         af_cat, af_val = categorize_af(af)
-        if af_val is not None:
-            vital += f"AF: {af_cat} ({af_val}/min)\n"
-        else:
-            vital += f"AF: {af_cat}\n"
+        vital += f"Atemfrequenz: {af_cat}\n"
 
     bz = v.get("bz") or None
     if bz is not None and bz != 0:
         bz_cat, bz_val = categorize_bz(bz)
-        if bz_val is not None:
-            vital += f"BZ: {bz_cat} ({bz_val} mg/dl)\n"
-        else:
-            vital += f"BZ: {bz_cat}\n"
+        vital += f"Blutzucker: {bz_cat}\n"
 
     temperatur = v.get("temperatur")
     if temperatur is not None:
         t_cat, t_val = categorize_temperature(temperatur)
-        if t_val is not None:
-            vital += f"Temperatur: {t_cat} ({t_val:.1f} °C)\n"
-        else:
-            vital += f"Temperatur: {t_cat}\n"
+        vital += f"Körpertemperatur: {t_cat}\n"
 
     gcs = v.get("gcs")
     if gcs:
-        # GCS: numeric but mit kurzer Interpretation
         try:
             g = int(gcs)
             if g == 15:
@@ -214,115 +199,131 @@ def generate_protocol():
                 g_cat = "Schwer eingeschränkt / Intubationskriterium"
         except Exception:
             g_cat = "Unbekannt"
-        vital += f"GCS: {g_cat} ({gcs})\n"
+        vital += f"Glasgow Coma Scale: {g_cat}\n"
 
     if vital:
         protocol += "VITALWERTE\n"
-        protocol += "=========================\n"
+        protocol += "=" * 50 + "\n"
         protocol += vital + "\n"
 
-    # xABCDE
+    # xABCDE - ausführlicher und strukturierter
     xabcde = ""
     blutung = x.get("blutung")
     if blutung and blutung != "Keine Angabe":
-        xabcde += f"x: {blutung}\n"
+        xabcde += f"\nX — EXSANGUINATION (Blutung):\n  Status: {blutung}\n"
         if x.get("blutung_lokalisation"):
-            xabcde += f"  Lokalisation: {x.get('blutung_lokalisation')}\n"
+            xabcde += f"  Ort: {x.get('blutung_lokalisation')}\n"
 
     if x.get("atemweg") and x.get("atemweg") != "Keine Angabe":
-        xabcde += f"A: Atemweg {x.get('atemweg')}\n"
+        xabcde += f"\nA — ATEMWEG:\n  Status: {x.get('atemweg')}\n"
+        if x.get("hws"):
+            xabcde += f"  HWS-Stabilisierung: {x.get('hws')}\n"
 
     if x.get("atmung") and x.get("atmung") != "Keine Angabe":
-        xabcde += f"B: Atmung {x.get('atmung')}\n"
+        xabcde += f"\nB — ATMUNG:\n  Status: {x.get('atmung')}\n"
+        if x.get("atemgeraeusche"):
+            xabcde += f"  Atemgeräusche: {x.get('atemgeraeusche')}\n"
+        if x.get("sauerstoff"):
+            xabcde += f"  Sauerstofftherapie: {x.get('sauerstoff')}\n"
 
     if x.get("haut") and x.get("haut") != "Keine Angabe":
-        xabcde += f"C: Haut {x.get('haut')}\n"
+        xabcde += f"\nC — ZIRKULATION (Kreislauf):\n  Hautzeichen: {x.get('haut')}\n"
+        if x.get("rekap"):
+            xabcde += f"  Kapillare Füllung: {x.get('rekap')}\n"
+        if x.get("pulsqualitaet"):
+            xabcde += f"  Pulsqualität: {x.get('pulsqualitaet')}\n"
 
     if x.get("avpu") and x.get("avpu") != "Keine Angabe":
-        xabcde += f"D: AVPU {x.get('avpu')}\n"
+        xabcde += f"\nD — DISABILITY (Neurologischer Status):\n  Bewusstsein (AVPU): {x.get('avpu')}\n"
+        if x.get("pupillen"):
+            xabcde += f"  Pupillen: {x.get('pupillen')}\n"
 
     if x.get("bodycheck") and x.get("bodycheck") != "Keine Angabe":
-        xabcde += f"E: {x.get('bodycheck')}\n"
+        xabcde += f"\nE — EXPOSURE (Ganzkörperuntersuchung):\n  Status: {x.get('bodycheck')}\n"
         if x.get("bodycheck_text"):
             xabcde += f"  Auffälligkeiten: {x.get('bodycheck_text')}\n"
+        if x.get("unterkuehlung"):
+            xabcde += f"  Unterkühlung: {x.get('unterkuehlung')}\n"
+        if x.get("verbrennung"):
+            xabcde += f"  Thermische Verletzungen: {x.get('verbrennung')}\n"
 
     if xabcde:
-        protocol += "xABCDE\n"
-        protocol += "-------------------------\n"
+        protocol += "xABCDE — STRUKTURIERTE UNTERSUCHUNG\n"
+        protocol += "=" * 50 + "\n"
         protocol += xabcde + "\n"
 
     # SAMPLERS
     samplers = ""
     if s.get("symptome"):
-        samplers += f"S: {s.get('symptome')}\n"
+        samplers += f"SYMPTOME: {s.get('symptome')}\n"
 
     allergien = s.get("allergien")
     if allergien == "Keine bekannt":
-        samplers += "A: Keine Allergien bekannt\n"
+        samplers += "ALLERGIEN: Keine bekannt\n"
     elif allergien == "Vorhanden":
-        samplers += f"A: {s.get('allergien_text','')}.\n"
+        samplers += f"ALLERGIEN: {s.get('allergien_text','')}\n"
 
     medopt = s.get("medikamente_option")
     if medopt == "Siehe Medikamentenplan":
-        samplers += "M: Siehe Medikamentenplan\n"
+        samplers += "MEDIKAMENTE: Siehe Medikamentenplan\n"
     elif medopt == "Medikamente eingeben":
-        samplers += f"M: {s.get('medikamente','')}\n"
+        samplers += f"MEDIKAMENTE: {s.get('medikamente','')}\n"
 
     if s.get("vorgeschichte"):
-        samplers += f"P: {s.get('vorgeschichte')}\n"
+        samplers += f"VORGESCHICHTE: {s.get('vorgeschichte')}\n"
 
     letzte = s.get('letzte_mahlzeit')
     if letzte and letzte != "Keine Angabe":
         if letzte == 'Eigene Eingabe':
-            samplers += f"L: {s.get('letzte_mahlzeit_text','')}\n"
+            samplers += f"LETZTE MAHLZEIT: {s.get('letzte_mahlzeit_text','')}\n"
         else:
-            samplers += f"L: {letzte}\n"
+            samplers += f"LETZTE MAHLZEIT: {letzte}\n"
 
     if s.get('ereignis'):
-        samplers += f"E: {s.get('ereignis')}\n"
+        samplers += f"EREIGNIS: {s.get('ereignis')}\n"
 
     # Risiken
     risks = []
     for k in ['raucher','alkohol','drogen','diabetes','hypertonie','antikoagulation']:
         if s.get(k):
-            risks.append(k)
+            risks.append(k.upper())
     if s.get('risiken_sonstige'):
         risks.append(s.get('risiken_sonstige'))
     if risks:
-        samplers += "R: " + ", ".join(map(str,risks)) + "\n"
+        samplers += "RISIKOFAKTOREN: " + ", ".join(map(str, risks)) + "\n"
 
     schw = s.get('schwangerschaft')
     if schw and schw != 'Nicht relevant':
-        samplers += f"S (Schwangerschaft): {schw}\n"
+        samplers += f"SCHWANGERSCHAFT: {schw}\n"
 
     if samplers:
-        protocol += "SAMPLERS\n"
-        protocol += "-------------------------\n"
+        protocol += "PATIENTENGESCHICHTE (SAMPLERS)\n"
+        protocol += "=" * 50 + "\n"
         protocol += samplers + "\n"
 
-    # OPQRST
+    # OPQRST - Schmerzassessment ausführlich
     if o.get('schmerz_vorhanden') == 'Ja' or o.get('nrs'):
         opqrst = ""
         if o.get('onset'):
-            opqrst += f"O: {o.get('onset')}\n"
+            opqrst += f"\nONSET (Beginn): {o.get('onset')}\n"
         if o.get('provocation'):
-            opqrst += f"P: {o.get('provocation')}\n"
+            opqrst += f"PROVOCATION (Auslöser/Linderung): {o.get('provocation')}\n"
         if o.get('quality'):
-            opqrst += f"Q: {o.get('quality')}\n"
+            opqrst += f"QUALITY (Charakteristik): {o.get('quality')}\n"
         if o.get('region'):
-            opqrst += f"R: {o.get('region')}\n"
+            opqrst += f"REGION (Lokalisation): {o.get('region')}\n"
         if o.get('nrs'):
             try:
                 n = int(o.get('nrs'))
                 if n > 0:
-                    opqrst += f"S: NRS {n}/10\n"
+                    opqrst += f"SEVERITY (Stärke): {n}/10 (Numerische Ratingskala)\n"
             except Exception:
                 pass
         if o.get('zeitverlauf'):
-            opqrst += f"T: {o.get('zeitverlauf')}\n"
+            opqrst += f"TIME (Zeitverlauf): {o.get('zeitverlauf')}\n"
         if opqrst:
-            protocol += "OPQRST\n"
-            protocol += "-------------------------\n"
+            protocol += "SCHMERZASSESSMENT (OPQRST)\n"
+            protocol += "=" * 50 + "\n"
             protocol += opqrst + "\n"
 
     return protocol
