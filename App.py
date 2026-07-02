@@ -1114,29 +1114,6 @@ if current_workflow_index is not None:
                 st.session_state["seite"] = step["page"]
                 st.rerun()
 
-nav_options = [
-    "❤️ Vitalwerte",
-    "🩺 xABCDE",
-    "📋 SAMPLERS",
-    "🔥 OPQRST",
-    "⏱️ Maßnahmen",
-    "🔎 Verdacht",
-    "💉 Med-Rechner",
-    "🗣️ Übergabe",
-    "📄 Protokoll"
-]
-
-# Navigation mit Streamlit-Buttons und Session-State
-nav_container = st.container()
-with nav_container:
-    cols_nav = st.columns([1] + [1]*9 + [1])
-    for i, opt in enumerate(nav_options):
-        with cols_nav[i+1]:
-            nav_type = "primary" if st.session_state['seite'] == opt else "secondary"
-            if st.button(opt, key=f"nav_{i}", use_container_width=True, type=nav_type):
-                st.session_state['seite'] = opt
-                st.rerun()
-
 seite = st.session_state['seite']
 
 active_nav_palette = {
