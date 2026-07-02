@@ -1409,6 +1409,7 @@ elif seite == "💉 Medikamentenrechner":
             "Krampfanfall",
             "Schlaganfall",
             "Kardiales Lungenödem",
+            "Hypertensiver Notfall",
         ],
     )
 
@@ -1810,7 +1811,7 @@ elif seite == "💉 Medikamentenrechner":
             ],
         )
 
-    else:
+    elif sop == "Kardiales Lungenödem":
         st.subheader("Klinische Konstellation")
         c1, c2, c3 = st.columns(3)
         with c1:
@@ -1875,6 +1876,94 @@ elif seite == "💉 Medikamentenrechner":
                 f"RR syst.: {rr_syst} mmHg",
                 f"CPAP/NIV verfügbar: {cpap_moeglich}",
                 f"Keine Besserung: {keine_besserung_pulm}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    else:
+        st.subheader("Klinische Konstellation")
+        h1, h2, h3 = st.columns(3)
+        with h1:
+            rr_syst = st.number_input("RR syst. (mmHg)", min_value=50, max_value=300, value=190, key="htn_rr_syst")
+        with h2:
+            kein_lungenoedem = st.selectbox("Kein Lungenödem", ["Ja", "Nein"], key="htn_no_pulm_edema")
+        with h3:
+            keine_brustschmerzen = st.selectbox("Keine Brustschmerzen", ["Ja", "Nein"], key="htn_no_chest_pain")
+
+        d1, d2, d3 = st.columns(3)
+        with d1:
+            befast_unauffaellig = st.selectbox("BE-FAST-Test unauffällig", ["Ja", "Nein"], key="htn_befast_normal")
+        with d2:
+            keine_besserung_htn = st.selectbox("Keine Besserung", ["Nein", "Ja"], key="htn_no_improve")
+        with d3:
+            organdysfunktion = st.multiselect(
+                "Zusätzliche Organdysfunktion",
+                [
+                    "Kopfschmerzen",
+                    "Druck im Kopf",
+                    "Roter Kopf",
+                    "Augenflimmern",
+                    "Übelkeit",
+                    "Ohrensausen",
+                ],
+                key="htn_organdysf",
+            )
+
+        meds = []
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+        ]
+        hinweise = []
+
+        if rr_syst <= 180:
+            hinweise.append("SOP-Hinweis: hypertensiver Notfall typischerweise bei RR syst. > 180 mmHg mit Organdysfunktion.")
+
+        if len(organdysfunktion) == 0:
+            hinweise.append("Keine zusätzliche Organdysfunktion markiert; Differenzialdiagnosen und Gesamtlage engmaschig prüfen.")
+
+        if kein_lungenoedem == "Nein":
+            handlung.append("Konstellation spricht für kardiales Lungenödem: entsprechenden SOP-Pfad priorisieren")
+        elif keine_brustschmerzen == "Nein":
+            handlung.append("Brustschmerz vorhanden: ACS-SOP priorisieren")
+        elif befast_unauffaellig == "Nein":
+            handlung.append("Neurologische Auffälligkeit: Schlaganfall-SOP priorisieren")
+        else:
+            meds.append("Urapidil 5-15 mg langsam i.v., titrierend")
+            hinweise.append("Systolische RR-Senkung initial um maximal 20 % anstreben")
+
+        if keine_besserung_htn == "Ja":
+            handlung.append("Notarztruf auslösen")
+        else:
+            handlung.append("ABCDE-Re-Evaluation")
+
+        handlung.append("Kliniktransport priorisieren")
+
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        if meds:
+            for i, med in enumerate(meds, start=1):
+                st.write(f"{i}. {med}")
+        else:
+            st.write("Keine direkte Urapidil-Gabe in diesem Entscheidungszweig.")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        st.subheader("Zusätzliche Hinweise")
+        for i, h in enumerate(hinweise, start=1):
+            st.write(f"{i}. {h}")
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"RR syst.: {rr_syst} mmHg",
+                f"Organdysfunktion markiert: {len(organdysfunktion)}",
+                f"BE-FAST unauffällig: {befast_unauffaellig}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
