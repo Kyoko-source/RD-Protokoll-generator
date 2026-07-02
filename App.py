@@ -869,10 +869,10 @@ SUPABASE_ADMIN_EMAIL = "admin@rd-protokoll-generator.local"
 SOP_ADMIN_CONFIG_FILE = "sop_admin_config.json"
 WORKFLOW_STEPS = [
     {"page": "❤️ Vitalwerte", "label": "Patient", "short_label": "Patient"},
-    {"page": "🩺 xABCDE", "label": "Untersuchung", "short_label": "Untersuchung"},
+    {"page": "🩺 xABCDE", "label": "Untersuchung", "short_label": "Untersuch."},
     {"page": "📋 SAMPLERS", "label": "Anamnese", "short_label": "Anamnese"},
     {"page": "🔥 OPQRST", "label": "Schmerzbild", "short_label": "Schmerz"},
-    {"page": "⏱️ Maßnahmen", "label": "Maßnahmen", "short_label": "Maßnahmen"},
+    {"page": "⏱️ Maßnahmen", "label": "Maßnahmen", "short_label": "Maßn."},
     {"page": "🔎 Verdacht", "label": "Verdacht", "short_label": "Verdacht"},
     {"page": "💉 Med-Rechner", "label": "Rechner", "short_label": "Rechner"},
     {"page": "🗣️ Übergabe", "label": "Übergabe", "short_label": "Übergabe"},
@@ -1364,6 +1364,19 @@ if current_workflow_index is not None:
                 <div style="width:{(workflow_completed / workflow_total) * 100:.0f}%; height:100%; border-radius:999px; background:linear-gradient(90deg, #5ea8ff 0%, #44ddbd 52%, #ff9c7c 100%); box-shadow:0 0 18px rgba(94,168,255,0.22);"></div>
             </div>
         </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    st.markdown(
+        """
+        <style>
+        [data-testid="stHorizontalBlock"] [data-testid="stButton"] > button {
+            padding: 10px 10px;
+            font-size: 0.88rem;
+            min-height: 44px;
+        }
+        </style>
         """,
         unsafe_allow_html=True,
     )
