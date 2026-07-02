@@ -1410,6 +1410,7 @@ elif seite == "💉 Medikamentenrechner":
             "Schlaganfall",
             "Kardiales Lungenödem",
             "Hypertensiver Notfall",
+            "Starke Schmerzen",
         ],
     )
 
@@ -1880,7 +1881,7 @@ elif seite == "💉 Medikamentenrechner":
             ],
         )
 
-    else:
+    elif sop == "Hypertensiver Notfall":
         st.subheader("Klinische Konstellation")
         h1, h2, h3 = st.columns(3)
         with h1:
@@ -1964,6 +1965,110 @@ elif seite == "💉 Medikamentenrechner":
                 f"RR syst.: {rr_syst} mmHg",
                 f"Organdysfunktion markiert: {len(organdysfunktion)}",
                 f"BE-FAST unauffällig: {befast_unauffaellig}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    else:
+        st.subheader("Klinische Konstellation")
+        p1, p2, p3 = st.columns(3)
+        with p1:
+            nrs = st.number_input("NRS (0-10)", min_value=0, max_value=10, value=6, key="pain_nrs")
+        with p2:
+            abdominelle_schmerzen = st.selectbox("Abdominelle Schmerzen", ["Nein", "Ja"], key="pain_abdominal")
+        with p3:
+            nichttraum_brustschmerz = st.selectbox("Nicht-traumatischer Brustschmerz", ["Nein", "Ja"], key="pain_nontrauma_chest")
+
+        q1, q2, q3 = st.columns(3)
+        with q1:
+            trauma_andere_ursache = st.selectbox("Trauma oder andere Ursache", ["Nein", "Ja"], key="pain_trauma_other")
+        with q2:
+            keine_deutliche_besserung = st.selectbox("Keine deutliche Besserung", ["Nein", "Ja"], key="pain_no_clear_improve")
+        with q3:
+            erweiterte_massnahmen = st.selectbox("Erweiterte Basismaßnahmen", ["Nein", "Ja"], key="pain_extended_measures")
+
+        meds = []
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+        ]
+        hinweise = []
+
+        if nrs < 3:
+            hinweise.append("SOP-Hinweis: Flussbild für starke Schmerzen ab NRS >= 3.")
+
+        if abdominelle_schmerzen == "Ja":
+            handlung.append("Verdacht abdominelle Schmerzen / Koliken: entsprechenden SOP-Pfad priorisieren")
+            handlung.append("Kliniktransport")
+        elif nichttraum_brustschmerz == "Ja":
+            handlung.append("Nicht-traumatischer Brustschmerz: ACS-SOP priorisieren")
+            handlung.append("Kliniktransport")
+        elif trauma_andere_ursache == "Ja":
+            if alter >= 12:
+                if float(gewicht) <= 50:
+                    paracetamol_mg = round(15.0 * float(gewicht), 0)
+                    meds.append(f"Paracetamol {int(paracetamol_mg)} mg i.v. (15 mg/kgKG)")
+                else:
+                    meds.append("Paracetamol 1 g i.v.")
+            else:
+                hinweise.append("Paracetamol-Dosierung im Flussbild vorrangig für Erw./Kind >12 Jahre angegeben.")
+
+            if nrs >= 6 or erweiterte_massnahmen == "Ja":
+                handlung.append("Erweiterte Basismaßnahmen")
+                if alter > 60:
+                    meds.append("Midazolam i.v.: 1 mg (Patient > 60 Jahre)")
+                elif float(gewicht) > 50:
+                    meds.append("Midazolam i.v.: 2 mg (Erw./Kind > 50 kg)")
+                elif float(gewicht) > 30:
+                    meds.append("Midazolam i.v.: 1 mg (Kind > 30 kg)")
+
+                if float(gewicht) > 30:
+                    esketamin_mg = round(0.125 * float(gewicht), 2)
+                    meds.append(f"Esketamin i.v.: {esketamin_mg} mg (0,125 mg/kgKG), max. einmalige Repetition")
+                    meds.append("ODER Fentanyl i.v.: 0,05 mg Einmalgaben alle 4 Minuten, Maximaldosis 2 µg/kgKG")
+                    hinweise.append("BTM-Dokumentation beachten")
+
+                if keine_deutliche_besserung == "Ja":
+                    handlung.append("Notarztruf auslösen")
+                else:
+                    handlung.append("Ruhigstellung, Schienung, Verband")
+            else:
+                handlung.append("Ruhigstellung, Schienung, Verband")
+
+            handlung.append("Kliniktransport")
+        else:
+            handlung.append("Ursache unklar: klinische Re-Evaluation und geeigneten SOP-Pfad priorisieren")
+            handlung.append("Kliniktransport")
+
+        if nrs > 8:
+            hinweise.append("Bei unerträglichen Schmerzen (NRS > 8) zuerst Midazolam/Esketamin/Fentanyl und anschließend Paracetamol erwägen.")
+
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühe notärztliche/klinische Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        if meds:
+            for i, med in enumerate(meds, start=1):
+                st.write(f"{i}. {med}")
+        else:
+            st.write("Keine spezifische medikamentöse Empfehlung in diesem Entscheidungszweig.")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        if hinweise:
+            st.subheader("Zusätzliche Hinweise")
+            for i, h in enumerate(hinweise, start=1):
+                st.write(f"{i}. {h}")
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"NRS: {nrs}",
+                f"Trauma/andere Ursache: {trauma_andere_ursache}",
+                f"Keine deutliche Besserung: {keine_deutliche_besserung}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
