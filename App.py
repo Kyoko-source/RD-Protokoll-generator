@@ -1410,6 +1410,7 @@ elif seite == "💉 Medikamentenrechner":
             "Schlaganfall",
             "Kardiales Lungenödem",
             "Hypertensiver Notfall",
+            "Nichttraumatischer Brustschmerz: ACS",
             "Starke Schmerzen",
         ],
     )
@@ -1965,6 +1966,85 @@ elif seite == "💉 Medikamentenrechner":
                 f"RR syst.: {rr_syst} mmHg",
                 f"Organdysfunktion markiert: {len(organdysfunktion)}",
                 f"BE-FAST unauffällig: {befast_unauffaellig}",
+                f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    elif sop == "Nichttraumatischer Brustschmerz: ACS":
+        st.subheader("Klinische Konstellation")
+        a1, a2, a3 = st.columns(3)
+        with a1:
+            nrs_acs = st.number_input("NRS (0-10)", min_value=0, max_value=10, value=5, key="acs_nrs")
+        with a2:
+            af = st.number_input("AF / min", min_value=4, max_value=60, value=16, key="acs_rr")
+        with a3:
+            st_hebung_persist = st.selectbox("Persistierende ST-Hebung", ["Nein", "Ja"], key="acs_ste")
+
+        b1, b2 = st.columns(2)
+        with b1:
+            neuer_schenkelblock = st.selectbox("Neuer Rechts-/Linksschenkelblock", ["Nein", "Ja"], key="acs_bundle_branch")
+        with b2:
+            keine_besserung_acs = st.selectbox("Keine Besserung", ["Nein", "Ja"], key="acs_no_improve")
+
+        meds = [
+            "ASS 250 mg i.v.",
+            "Heparin 5000 I.E.",
+        ]
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+        ]
+        hinweise = [
+            "Differenzialdiagnosen beachten: Spontanpneumothorax, Lungenembolie, akutes Aortenaneurysma",
+            "BTM-Dokumentation bei Opioidgabe beachten",
+        ]
+
+        if nrs_acs > 4:
+            meds.append("Morphin 3 mg i.v., einmalige Repetition nach 5 Minuten möglich")
+            handlung.append("Nasenkapnografie, Alarmgrenze AF < 10/min")
+            handlung.append("Voranmeldung Kardiologie und EKG-Übermittlung")
+        else:
+            handlung.append("ABCDE-Re-Evaluation")
+
+        if af < 10:
+            hinweise.append("Atemfrequenz unter Alarmgrenze: engmaschige Überwachung und Eskalation.")
+
+        if st_hebung_persist == "Ja" or neuer_schenkelblock == "Ja":
+            handlung.append("Sofortiger Transport in Kardiologie mit HKL-Option")
+        else:
+            handlung.append("Kliniktransport priorisieren")
+
+        if keine_besserung_acs == "Ja":
+            handlung.append("Notarztruf auslösen")
+
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühe kardiologische/geburtshilfliche Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        for i, med in enumerate(meds, start=1):
+            st.write(f"{i}. {med}")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        st.subheader("Zusätzliche Hinweise")
+        for i, h in enumerate(hinweise, start=1):
+            st.write(f"{i}. {h}")
+
+        st.info(
+            "Kardiologie-Kontakte (laut Vorlage): "
+            "Ahaus 02561 991013 | Bocholt 02871 201673 | Coesfeld 02541 8947500 | "
+            "Gronau 02562 9150 | MST Enschede 0031 53 4873999 | Wesel (kath.) 0281 1040"
+        )
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"NRS: {nrs_acs}",
+                f"AF: {af}/min",
+                f"ST-Hebung persistierend: {st_hebung_persist}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
             ],
         )
