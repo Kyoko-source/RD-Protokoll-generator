@@ -1406,6 +1406,7 @@ elif seite == "💉 Medikamentenrechner":
             "Anaphylaxie (SOPKB0105)",
             "Asthma/COPD Bronchialobstruktion (SOPKB0207)",
             "Hypoglykämie",
+            "Krampfanfall",
         ],
     )
 
@@ -1583,7 +1584,7 @@ elif seite == "💉 Medikamentenrechner":
             ],
         )
 
-    else:
+    elif sop == "Hypoglykämie":
         st.subheader("Klinische Konstellation")
         h1, h2, h3 = st.columns(3)
         with h1:
@@ -1646,6 +1647,80 @@ elif seite == "💉 Medikamentenrechner":
                 f"Bewusstseinsstörung: {bewusstseinsstoerung}",
                 f"Keine Besserung (5 Min.): {keine_besserung_hypo}",
                 f"Empfohlene Medikation: {len(meds)} Position(en)",
+            ],
+        )
+
+    else:
+        st.subheader("Klinische Konstellation")
+        k1, k2, k3 = st.columns(3)
+        with k1:
+            andauernder_anfall_1 = st.selectbox("Andauernder Anfall", ["Nein", "Ja"], key="seizure_persistent_1")
+        with k2:
+            bewusstlos = st.selectbox("Bewusstlos", ["Nein", "Ja"], key="seizure_unconscious")
+        with k3:
+            iv_zugang = st.selectbox("i.v. Zugang vorhanden", ["Nein", "Ja"], key="seizure_iv_access")
+
+        andauernder_anfall_2 = st.selectbox("Andauernder Anfall nach Intervention", ["Nein", "Ja"], key="seizure_persistent_2")
+
+        iv_midazolam_mg = round(0.05 * float(gewicht), 2)
+        meds = []
+        handlung = [
+            "Basismaßnahmen durchführen",
+            "Notarztruf prüfen",
+        ]
+        hinweise = []
+
+        if andauernder_anfall_1 == "Nein":
+            if bewusstlos == "Ja":
+                handlung.append("Stabile Seitenlage")
+            handlung.append("ABCDE-Re-Evaluation")
+            handlung.append("Klinik / Ende gemäß Gesamtlage")
+        else:
+            if iv_zugang == "Ja":
+                meds.append(f"Midazolam {iv_midazolam_mg} mg i.v. (0,05 mg/kgKG), langsam in mg-Schritten titrieren")
+            else:
+                if float(gewicht) <= 10:
+                    meds.append("Midazolam nasal 2,5 mg (= 0,5 ml)")
+                elif float(gewicht) < 20:
+                    meds.append("Midazolam nasal 5 mg (= 1 ml)")
+                else:
+                    meds.append("Midazolam nasal 10 mg (= 2 ml)")
+                hinweise.append("Intranasale Medikamentengabe gemäß SOP-Schema")
+
+            if andauernder_anfall_2 == "Ja":
+                handlung.append("Notarztruf auslösen")
+                handlung.append("Kliniktransport priorisieren")
+            else:
+                handlung.append("ABCDE-Re-Evaluation")
+                handlung.append("Klinik / Ende gemäß Gesamtlage")
+
+        if schwanger == "Ja":
+            hinweise.append("Schwangerschaft: frühzeitige notärztliche/klinische Rücksprache einplanen.")
+
+        st.subheader("Berechnete SOP-Medikation")
+        if meds:
+            for i, med in enumerate(meds, start=1):
+                st.write(f"{i}. {med}")
+        else:
+            st.write("Keine sofortige Midazolam-Gabe gemäß Entscheidungsweg erforderlich.")
+
+        st.subheader("SOP-Handlungshilfe")
+        for i, step in enumerate(handlung, start=1):
+            st.write(f"{i}. {step}")
+
+        if hinweise:
+            st.subheader("Zusätzliche Hinweise")
+            for i, h in enumerate(hinweise, start=1):
+                st.write(f"{i}. {h}")
+
+        render_live_summary(
+            "Live-Zusammenfassung Medikamentenrechner",
+            [
+                f"SOP: {sop}",
+                f"Alter/Gewicht: {alter} J / {gewicht} kg",
+                f"Andauernder Anfall initial: {andauernder_anfall_1}",
+                f"i.v. Zugang vorhanden: {iv_zugang}",
+                f"Midazolam i.v.-Rechner: {iv_midazolam_mg} mg",
             ],
         )
 
