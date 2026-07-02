@@ -1,4 +1,9 @@
 import streamlit as st
+from io import BytesIO
+from fpdf import FPDF
+from datetime import datetime
+
+
 def add_line(text, value):
     """
     Fügt nur Zeilen hinzu, wenn ein Wert vorhanden ist.
@@ -8,133 +13,290 @@ def add_line(text, value):
     return text
 
 
+def categorize_temperature(temp):
+    try:
+        t = float(temp)
+    except Exception:
+        return "Unbekannt", None
+    if t < 36.0:
+        return "Unterkühlung", t
+    if t < 37.5:
+        return "Normal", t
+    if t < 38.0:
+        return "Erhöht (subfebril)", t
+    return "Fieber", t
+
+
+def categorize_puls(p):
+    try:
+        p = int(p)
+    except Exception:
+        return "Unbekannt", None
+    if p < 50:
+        return "Bradykardie", p
+    if p <= 100:
+        return "Normal", p
+    if p <= 120:
+        return "Tachykardie", p
+    return "Starke Tachykardie", p
+
+
+def categorize_spo2(s):
+    try:
+        s = int(s)
+    except Exception:
+        return "Unbekannt", None
+    if s >= 95:
+        return "Normal", s
+    if s >= 90:
+        return "Leicht erniedrigt", s
+    return "Kritisch erniedrigt", s
+
+
+def categorize_af(af):
+    try:
+        af = int(af)
+    except Exception:
+        return "Unbekannt", None
+    if af < 10:
+        return "Bradypnoe", af
+    if af <= 20:
+        return "Normal", af
+    if af <= 30:
+        return "Tachypnoe", af
+    return "Schwere Tachypnoe", af
+
+
+def categorize_bz(bz):
+    try:
+        bz = float(bz)
+    except Exception:
+        return "Unbekannt", None
+    if bz < 70:
+        return "Hypoglykämie", bz
+    if bz <= 140:
+        return "Normal", bz
+    return "Hyperglykämie", bz
+
+
+def categorize_rr(sys, dia):
+    try:
+        s = int(sys)
+        d = int(dia)
+    except Exception:
+        return "Unbekannt", None
+    if s < 90:
+        return "Hypotonie", (s, d)
+    if s < 120:
+        return "Normal", (s, d)
+    if s < 140:
+        return "Leicht erhöht", (s, d)
+    if s < 180:
+        return "Hypertonie", (s, d)
+    return "Hypertensive Krise", (s, d)
+
+
 def generate_protocol():
 
     protocol = ""
+    patient = st.session_state.get("patient", {})
 
-    # --------------------------------------------------
-    # Vitalwerte
-    # --------------------------------------------------
+    # Header / Meta
+    meta = patient.get("meta", {})
+    if meta:
+        header_lines = []
+        if meta.get("name"):
+            header_lines.append(f"Patient: {meta.get('name')}")
+        if meta.get("geburtsdatum"):
+            header_lines.append(f"Geburtsdatum: {meta.get('geburtsdatum')}")
+        if meta.get("einsatzdatum"):
+            header_lines.append(f"Einsatzdatum: {meta.get('einsatzdatum')}")
+        if meta.get("ort"):
+            header_lines.append(f"Ort: {meta.get('ort')}")
+        if meta.get("einsatznummer"):
+            header_lines.append(f"Einsatz-Nr.: {meta.get('einsatznummer')}")
+        if header_lines:
+            protocol += " | ".join(header_lines) + "\n"
+            protocol += "=========================\n\n"
 
+    v = patient.get("vitalwerte", {})
+    x = patient.get("xabcde", {})
+    s = patient.get("samplers", {})
+    o = patient.get("opqrst", {})
+
+    # Vitalwerte (mit qualitativen Beschreibungen)
     vital = ""
-
+    rr_sys = v.get("rr_sys") or None
+    rr_dia = v.get("rr_dia") or None
     if rr_sys and rr_dia:
-        vital += f"RR {rr_sys}/{rr_dia} mmHg\n"
+        rr_cat, rr_vals = categorize_rr(rr_sys, rr_dia)
+        if isinstance(rr_vals, tuple):
+            vital += f"RR: {rr_cat} ({rr_vals[0]}/{rr_vals[1]} mmHg)\n"
+        else:
+            vital += f"RR: {rr_cat}\n"
 
-    if puls:
-        vital += f"Puls {puls}/min\n"
+    puls = v.get("puls") or None
+    if puls is not None and puls != 0:
+        p_cat, p_val = categorize_puls(puls)
+        if p_val is not None:
+            vital += f"Puls: {p_cat} ({p_val}/min)\n"
+        else:
+            vital += f"Puls: {p_cat}\n"
 
-    if spo2:
-        vital += f"SpO₂ {spo2}%\n"
+    spo2 = v.get("spo2") or None
+    if spo2 is not None and spo2 != 0:
+        s_cat, s_val = categorize_spo2(spo2)
+        if s_val is not None:
+            vital += f"SpO₂: {s_cat} ({s_val} %)\n"
+        else:
+            vital += f"SpO₂: {s_cat}\n"
 
-    if af:
-        vital += f"AF {af}/min\n"
+    af = v.get("af") or None
+    if af is not None and af != 0:
+        af_cat, af_val = categorize_af(af)
+        if af_val is not None:
+            vital += f"AF: {af_cat} ({af_val}/min)\n"
+        else:
+            vital += f"AF: {af_cat}\n"
 
-    if bz:
-        vital += f"BZ {bz} mg/dl\n"
+    bz = v.get("bz") or None
+    if bz is not None and bz != 0:
+        bz_cat, bz_val = categorize_bz(bz)
+        if bz_val is not None:
+            vital += f"BZ: {bz_cat} ({bz_val} mg/dl)\n"
+        else:
+            vital += f"BZ: {bz_cat}\n"
 
-    if temperatur:
-        vital += f"Temperatur {temperatur:.1f} °C\n"
+    temperatur = v.get("temperatur")
+    if temperatur is not None:
+        t_cat, t_val = categorize_temperature(temperatur)
+        if t_val is not None:
+            vital += f"Temperatur: {t_cat} ({t_val:.1f} °C)\n"
+        else:
+            vital += f"Temperatur: {t_cat}\n"
 
+    gcs = v.get("gcs")
     if gcs:
-        vital += f"GCS {gcs}\n"
+        # GCS: numeric but mit kurzer Interpretation
+        try:
+            g = int(gcs)
+            if g == 15:
+                g_cat = "Normal (vollständig orientiert)"
+            elif g >= 13:
+                g_cat = "Leicht eingeschränkt"
+            elif g >= 9:
+                g_cat = "Mäßig eingeschränkt"
+            else:
+                g_cat = "Schwer eingeschränkt / Intubationskriterium"
+        except Exception:
+            g_cat = "Unbekannt"
+        vital += f"GCS: {g_cat} ({gcs})\n"
 
-    if vital != "":
+    if vital:
         protocol += "VITALWERTE\n"
-        protocol += "-------------------------\n"
+        protocol += "=========================\n"
         protocol += vital + "\n"
 
-    # --------------------------------------------------
     # xABCDE
-    # --------------------------------------------------
-
     xabcde = ""
+    blutung = x.get("blutung")
+    if blutung and blutung != "Keine Angabe":
+        xabcde += f"x: {blutung}\n"
+        if x.get("blutung_lokalisation"):
+            xabcde += f"  Lokalisation: {x.get('blutung_lokalisation')}\n"
 
-    if x_blutung != "Keine Angabe":
-        xabcde += f"x: {x_blutung}\n"
+    if x.get("atemweg") and x.get("atemweg") != "Keine Angabe":
+        xabcde += f"A: Atemweg {x.get('atemweg')}\n"
 
-    if airway != "Keine Angabe":
-        xabcde += f"A: Atemweg {airway}\n"
+    if x.get("atmung") and x.get("atmung") != "Keine Angabe":
+        xabcde += f"B: Atmung {x.get('atmung')}\n"
 
-    if atmung != "Keine Angabe":
-        xabcde += f"B: Atmung {atmung}\n"
+    if x.get("haut") and x.get("haut") != "Keine Angabe":
+        xabcde += f"C: Haut {x.get('haut')}\n"
 
-    if haut != "Keine Angabe":
-        xabcde += f"C: Haut {haut}\n"
+    if x.get("avpu") and x.get("avpu") != "Keine Angabe":
+        xabcde += f"D: AVPU {x.get('avpu')}\n"
 
-    if avpu != "Keine Angabe":
-        xabcde += f"D: AVPU {avpu}\n"
+    if x.get("bodycheck") and x.get("bodycheck") != "Keine Angabe":
+        xabcde += f"E: {x.get('bodycheck')}\n"
+        if x.get("bodycheck_text"):
+            xabcde += f"  Auffälligkeiten: {x.get('bodycheck_text')}\n"
 
-    if bodycheck != "Keine Angabe":
-        xabcde += f"E: {bodycheck}\n"
-
-    if xabcde != "":
+    if xabcde:
         protocol += "xABCDE\n"
         protocol += "-------------------------\n"
         protocol += xabcde + "\n"
 
-    # --------------------------------------------------
     # SAMPLERS
-    # --------------------------------------------------
-
     samplers = ""
+    if s.get("symptome"):
+        samplers += f"S: {s.get('symptome')}\n"
 
-    if symptome != "":
-        samplers += f"S: {symptome}\n"
-
+    allergien = s.get("allergien")
     if allergien == "Keine bekannt":
         samplers += "A: Keine Allergien bekannt\n"
+    elif allergien == "Vorhanden":
+        samplers += f"A: {s.get('allergien_text','')}.\n"
 
-    if allergien == "Vorhanden":
-        samplers += f"A: {allergie_text}\n"
-
-    if medikamente_option == "Siehe Medikamentenplan":
+    medopt = s.get("medikamente_option")
+    if medopt == "Siehe Medikamentenplan":
         samplers += "M: Siehe Medikamentenplan\n"
+    elif medopt == "Medikamente eingeben":
+        samplers += f"M: {s.get('medikamente','')}\n"
 
-    if medikamente_option == "Medikamente eingeben":
-        samplers += f"M: {medikamente}\n"
+    if s.get("vorgeschichte"):
+        samplers += f"P: {s.get('vorgeschichte')}\n"
 
-    if vorgeschichte != "":
-        samplers += f"P: {vorgeschichte}\n"
+    letzte = s.get('letzte_mahlzeit')
+    if letzte and letzte != "Keine Angabe":
+        if letzte == 'Eigene Eingabe':
+            samplers += f"L: {s.get('letzte_mahlzeit_text','')}\n"
+        else:
+            samplers += f"L: {letzte}\n"
 
-    if letzte_mahlzeit != "":
-        samplers += f"L: {letzte_mahlzeit}\n"
+    if s.get('ereignis'):
+        samplers += f"E: {s.get('ereignis')}\n"
 
-    if ereignis != "":
-        samplers += f"E: {ereignis}\n"
+    # Risiken
+    risks = []
+    for k in ['raucher','alkohol','drogen','diabetes','hypertonie','antikoagulation']:
+        if s.get(k):
+            risks.append(k)
+    if s.get('risiken_sonstige'):
+        risks.append(s.get('risiken_sonstige'))
+    if risks:
+        samplers += "R: " + ", ".join(map(str,risks)) + "\n"
 
-    if samplers != "":
+    schw = s.get('schwangerschaft')
+    if schw and schw != 'Nicht relevant':
+        samplers += f"S (Schwangerschaft): {schw}\n"
+
+    if samplers:
         protocol += "SAMPLERS\n"
         protocol += "-------------------------\n"
         protocol += samplers + "\n"
 
-    # --------------------------------------------------
     # OPQRST
-    # --------------------------------------------------
-
-    if schmerz_vorhanden == "Ja":
-
+    if o.get('schmerz_vorhanden') == 'Ja' or o.get('nrs'):
         opqrst = ""
-
-        if onset != "Keine Angabe":
-            opqrst += f"O: {onset}\n"
-
-        if provocation != "":
-            opqrst += f"P: {provocation}\n"
-
-        if quality != "Keine Angabe":
-            opqrst += f"Q: {quality}\n"
-
-        if region != "":
-            opqrst += f"R: {region}\n"
-
-        if nrs > 0:
-            opqrst += f"S: NRS {nrs}/10\n"
-
-        if zeitverlauf != "":
-            opqrst += f"T: {zeitverlauf}\n"
-
-        if opqrst != "":
+        if o.get('onset'):
+            opqrst += f"O: {o.get('onset')}\n"
+        if o.get('provocation'):
+            opqrst += f"P: {o.get('provocation')}\n"
+        if o.get('quality'):
+            opqrst += f"Q: {o.get('quality')}\n"
+        if o.get('region'):
+            opqrst += f"R: {o.get('region')}\n"
+        if o.get('nrs'):
+            try:
+                n = int(o.get('nrs'))
+                if n > 0:
+                    opqrst += f"S: NRS {n}/10\n"
+            except Exception:
+                pass
+        if o.get('zeitverlauf'):
+            opqrst += f"T: {o.get('zeitverlauf')}\n"
+        if opqrst:
             protocol += "OPQRST\n"
             protocol += "-------------------------\n"
             protocol += opqrst + "\n"
@@ -153,6 +315,25 @@ st.set_page_config(
 st.title("🚑 RD-Protokoll Generator")
 st.caption("Dokumentationshilfe für den Rettungsdienst")
 
+# --- Custom styling -------------------------------------------------
+st.markdown(
+        """
+        <style>
+        .stApp { background: linear-gradient(180deg, #f7fbff 0%, #ffffff 100%); }
+        .header { background:#003366; color: white; padding: 12px 20px; border-radius:8px }
+        .card { background: #ffffff; padding: 12px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
+        .big-title { font-size:28px; font-weight:700; color:#003366 }
+        </style>
+        <div class='header'>
+            <div style='display:flex; align-items:center; gap:12px'>
+                <div style='font-size:22px'>🚑 RD-Protokoll Generator</div>
+                <div style='opacity:0.85'>— Hochwertige, ausfüllbare Einsatzdokumentation</div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+)
+
 # --------------------------------------------------
 # Patientenobjekt anlegen
 # --------------------------------------------------
@@ -167,7 +348,8 @@ if "patient" not in st.session_state:
 
         "samplers": {},
 
-        "opqrst": {}
+        "opqrst": {},
+        "meta": {}
 
     }
 
@@ -225,6 +407,18 @@ def checkbox_field(section, key, label):
 # --------------------------------------------------
 # Navigation
 # --------------------------------------------------
+
+# Sidebar: Patienten- / Einsatz-Metadaten
+with st.sidebar.expander("Patient / Einsatz (Metadaten)", expanded=True):
+    meta = patient.get("meta", {})
+    meta["name"] = st.text_input("Patientenname", value=meta.get("name", ""), key="meta_name")
+    meta["geburtsdatum"] = st.text_input("Geburtsdatum (JJJJ-MM-TT)", value=meta.get("geburtsdatum", ""), key="meta_geb")
+    meta["einsatzdatum"] = st.text_input("Einsatzdatum (JJJJ-MM-TT)", value=meta.get("einsatzdatum", ""), key="meta_einsatz")
+    meta["ort"] = st.text_input("Einsatzort", value=meta.get("ort", ""), key="meta_ort")
+    meta["einsatznummer"] = st.text_input("Einsatznummer", value=meta.get("einsatznummer", ""), key="meta_nr")
+    meta["notiz"] = st.text_input("Kurze Notiz / Einsatzgrund", value=meta.get("notiz", ""), key="meta_notiz")
+    patient["meta"] = meta
+
 
 seite = st.sidebar.radio(
 
@@ -782,7 +976,7 @@ elif seite == "📋 SAMPLERS":
 # PROTOKOLL
 # -----------------------------
 
-with tab5:
+elif seite == "📄 Protokoll":
 
     st.header("📄 Fertiges Protokoll")
 
@@ -830,3 +1024,46 @@ with tab5:
                 mime="text/plain"
 
             )
+
+            # PDF generieren
+            try:
+                pdf = FPDF()
+                pdf.add_page()
+                pdf.set_auto_page_break(auto=True, margin=15)
+                # Title
+                pdf.set_font("Arial", 'B', 16)
+                pdf.cell(0, 8, "RD-Protokoll", ln=1, align='C')
+                pdf.ln(2)
+                # Meta / header
+                meta = st.session_state.get('patient', {}).get('meta', {})
+                pdf.set_font("Arial", size=10)
+                if meta:
+                    if meta.get('name'):
+                        pdf.cell(0, 6, f"Patient: {meta.get('name')}", ln=1)
+                    if meta.get('geburtsdatum'):
+                        pdf.cell(0, 6, f"Geburtsdatum: {meta.get('geburtsdatum')}", ln=1)
+                    if meta.get('einsatzdatum'):
+                        pdf.cell(0, 6, f"Einsatzdatum: {meta.get('einsatzdatum')}", ln=1)
+                    if meta.get('ort'):
+                        pdf.cell(0, 6, f"Ort: {meta.get('ort')}", ln=1)
+                    pdf.ln(4)
+                pdf.cell(0, 6, f"Erstellt: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", ln=1)
+                pdf.ln(4)
+                pdf.set_font("Arial", size=12)
+                for line in protocol.splitlines():
+                    pdf.multi_cell(0, 6, line)
+                # Footer
+                pdf.set_y(-20)
+                pdf.set_font("Arial", size=8)
+                pdf.cell(0, 6, "Generiert mit RD-Protokoll Generator", align='C')
+                pdf_bytes = pdf.output(dest="S").encode('latin-1')
+                pdf_buffer = BytesIO(pdf_bytes)
+
+                st.download_button(
+                    "💾 Protokoll als PDF herunterladen",
+                    data=pdf_buffer,
+                    file_name="RD_Protokoll.pdf",
+                    mime="application/pdf"
+                )
+            except Exception:
+                st.info("PDF-Export nicht verfügbar (abhängige Bibliothek fehlt).")
