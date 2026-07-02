@@ -424,15 +424,11 @@ st.markdown(
         section[data-testid='stSidebar']{ display:none; }
         main .block-container { padding-top: 12px; padding-left: 80px; padding-right:80px }
         </style>
-        <div class='header'>
-            <div style='display:flex; align-items:center; gap:14px; flex-wrap:wrap;'>
-                <div class='header-title'>🚑 RD-Protokoll Generator</div>
-                <div class='header-sub'>Schnell. Klar. Einsatzbereit.</div>
-            </div>
-        </div>
         """,
         unsafe_allow_html=True,
 )
+
+st.markdown("""<div class='header'><div style='display:flex; align-items:center; gap:14px; flex-wrap:wrap;'><div class='header-title'>🚑 RD-Protokoll Generator</div><div class='header-sub'>Schnell. Klar. Einsatzbereit.</div></div></div>""", unsafe_allow_html=True)
 
 # --------------------------------------------------
 # Patientenobjekt anlegen
@@ -754,14 +750,6 @@ elif seite == "🩺 xABCDE":
                 st.rerun()
 
     selected = st.session_state["xabcde_selected"]
-    st.markdown(
-        "<style>"
-        "div[data-testid='stButton'] > button { min-height: 88px; font-size: 42px; font-weight: 900; letter-spacing: 0.18em; border-radius: 18px; }"
-        "div[data-testid='stButton'] > button[kind='primary'] { background: linear-gradient(135deg, rgba(75,140,255,0.95), rgba(48,212,161,0.75)); border: 1px solid rgba(120,190,255,0.9); box-shadow: 0 0 16px rgba(75,140,255,0.45); color: #ffffff; }"
-        "div[data-testid='stButton'] > button:hover { transform: translateY(-1px); }"
-        "</style>",
-        unsafe_allow_html=True,
-    )
 
     st.info(f"Aktive Sektion: {selected} — offene Reiter sind mit 🔴 und ! markiert.")
 
@@ -855,13 +843,6 @@ elif seite == "🩺 xABCDE":
 elif seite == "📋 SAMPLERS":
 
     st.header("📋 SAMPLERS")
-    st.markdown(
-        "<style>"
-        "div[data-testid='stButton'] > button { min-height: 88px; font-size: 34px; font-weight: 900; letter-spacing: 0.10em; border-radius: 18px; }"
-        "div[data-testid='stButton'] > button:hover { transform: translateY(-1px); }"
-        "</style>",
-        unsafe_allow_html=True,
-    )
 
     if "samplers_selected" not in st.session_state:
         st.session_state["samplers_selected"] = "S1"
@@ -951,13 +932,6 @@ elif seite == "📋 SAMPLERS":
 elif seite == "🔥 OPQRST":
 
     st.header("🔥 OPQRST – Schmerzassessment")
-    st.markdown(
-        "<style>"
-        "div[data-testid='stButton'] > button { min-height: 88px; font-size: 38px; font-weight: 900; letter-spacing: 0.14em; border-radius: 18px; }"
-        "div[data-testid='stButton'] > button:hover { transform: translateY(-1px); }"
-        "</style>",
-        unsafe_allow_html=True,
-    )
 
     if "opqrst_selected" not in st.session_state:
         st.session_state["opqrst_selected"] = "O"
