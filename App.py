@@ -108,6 +108,46 @@ def generate_protocol():
     s = patient.get("samplers", {})
     o = patient.get("opqrst", {})
 
+    # Narrative Einleitung (anonym, nur nicht-identifizierende Informationen)
+    try:
+        intro_parts = []
+        sex = v.get('geschlecht')
+        age = v.get('alter')
+        found = v.get('auffindesituation')
+        avpu = x.get('avpu')
+        ereignis = s.get('ereignis')
+
+        intro = ""
+        if sex or (age and int(age) > 0) or found or avpu or ereignis:
+            intro = "Pat."
+            if sex:
+                intro += f" {sex}"
+            if age and int(age) > 0:
+                intro += f", {int(age)} Jahre alt"
+            if found:
+                intro += f", {found}"
+
+            # Bewusstseinszustand aus AVPU
+            if avpu and avpu != "Keine Angabe":
+                if avpu == 'A':
+                    intro += ", Pat. ist wach, ansprechbar und orientiert"
+                elif avpu == 'V':
+                    intro += ", Pat. ist verbal ansprechbar"
+                elif avpu == 'P':
+                    intro += ", Pat. ist nur auf Schmerz ansprechbar"
+                elif avpu == 'U':
+                    intro += ", Pat. ist nicht ansprechbar"
+
+            if ereignis:
+                intro += f". Wir wurden gerufen, weil {ereignis}"
+
+            intro += "."
+
+        if intro:
+            protocol += intro + "\n\n"
+    except Exception:
+        pass
+
     # Vitalwerte (mit qualitativen Beschreibungen)
     vital = ""
     rr_sys = v.get("rr_sys") or None
@@ -299,19 +339,26 @@ st.set_page_config(
 st.title("🚑 RD-Protokoll Generator")
 st.caption("Dokumentationshilfe für den Rettungsdienst")
 
-# --- Custom styling -------------------------------------------------
+# --- Custom styling (Dark Mode, centered navigation) -----------------
 st.markdown(
         """
         <style>
-        .stApp { background: linear-gradient(180deg, #f7fbff 0%, #ffffff 100%); }
-        .header { background:#003366; color: white; padding: 12px 20px; border-radius:8px }
-        .card { background: #ffffff; padding: 12px; border-radius: 8px; box-shadow: 0 1px 4px rgba(0,0,0,0.08); }
-        .big-title { font-size:28px; font-weight:700; color:#003366 }
+        :root { --bg:#0b1020; --card:#0f1724; --muted:#9aa4b2; --accent:#0b66ff; --accent-2:#ff6b6b; --text:#e6eef8 }
+        .stApp { background: linear-gradient(180deg,var(--bg) 0%, #071025 100%); color:var(--text) }
+        .header { background: linear-gradient(90deg,var(--accent) 0%, #08306b 100%); color: white; padding: 14px 22px; border-radius:10px }
+        .card { background: var(--card); padding: 14px; border-radius: 10px; box-shadow: 0 6px 20px rgba(2,6,23,0.6); color:var(--text) }
+        .nav-button button { background: transparent; border:2px solid rgba(255,255,255,0.06); color:var(--text); padding:18px 26px; border-radius:10px; font-size:18px; font-weight:600 }
+        .nav-button button:hover { border-color: rgba(255,255,255,0.14); transform:translateY(-2px) }
+        .nav-button .active { background: linear-gradient(90deg,var(--accent) 0%, var(--accent-2) 100%); color:#fff }
+        .stButton>button { height:56px }
+        .css-1q8dd3e { color:var(--muted) }
+        .stTextInput>div>input, textarea, .stNumberInput input { background:#0b1220; color:var(--text); border:1px solid rgba(255,255,255,0.06) }
+        section[data-testid='stSidebar']{ display:none; }
         </style>
         <div class='header'>
-            <div style='display:flex; align-items:center; gap:12px'>
-                <div style='font-size:22px'>🚑 RD-Protokoll Generator</div>
-                <div style='opacity:0.85'>— Hochwertige, ausfüllbare Einsatzdokumentation</div>
+            <div style='display:flex; align-items:center; gap:14px'>
+                <div style='font-size:22px; font-weight:700'>🚑 RD-Protokoll Generator</div>
+                <div style='opacity:0.85; color:var(--muted)'>— Hochwertige, ausfüllbare Einsatzdokumentation (anonym)</div>
             </div>
         </div>
         """,
@@ -391,25 +438,33 @@ def checkbox_field(section, key, label):
 # Navigation
 # --------------------------------------------------
 
-seite = st.sidebar.radio(
+# Centered navigation in main area
+if 'seite' not in st.session_state:
+    st.session_state['seite'] = "❤️ Vitalwerte"
 
-    "Navigation",
+nav_options = [
+    "❤️ Vitalwerte",
+    "🩺 xABCDE",
+    "📋 SAMPLERS",
+    "🔥 OPQRST",
+    "📄 Protokoll"
+]
 
-    [
+nav_container = st.container()
+with nav_container:
+    # center the nav by surrounding with spacers
+    cols = st.columns([1, 3, 3, 3, 3, 3, 1])
+    for i, opt in enumerate(nav_options):
+        col = cols[i+1]
+        is_active = (st.session_state['seite'] == opt)
+        btn = col.button(opt, key=f"nav_{i}")
+        if btn:
+            st.session_state['seite'] = opt
+        # indicate active with a small note
+        if is_active:
+            col.markdown("<div style='text-align:center;color:#fff;margin-top:6px;font-weight:600'>Aktiv</div>", unsafe_allow_html=True)
 
-        "❤️ Vitalwerte",
-
-        "🩺 xABCDE",
-
-        "📋 SAMPLERS",
-
-        "🔥 OPQRST",
-
-        "📄 Protokoll"
-
-    ]
-
-)
+seite = st.session_state['seite']
 
 # --------------------------------------------------
 # VITALWERTE
@@ -494,6 +549,28 @@ if seite == "❤️ Vitalwerte":
             3,
             15,
             15
+        )
+
+    # Demographie / Auffindesituation (keine PII: kein Name, kein Geburtsdatum)
+    with c4:
+        patient["vitalwerte"]["geschlecht"] = st.selectbox(
+            "Geschlecht",
+            ["", "männlich", "weiblich", "divers", "Unbekannt"],
+            key="geschlecht"
+        )
+
+        patient["vitalwerte"]["alter"] = st.number_input(
+            "Alter (Jahre)",
+            min_value=0,
+            max_value=130,
+            value=0,
+            key="alter"
+        )
+
+        patient["vitalwerte"]["auffindesituation"] = st.selectbox(
+            "Auffindesituation",
+            ["", "sitzend vorgefunden", "liegend vorgefunden", "stehend vorgefunden", "am Boden", "auf Stuhl/Sofa", "in häuslicher Umgebung"],
+            key="auffindesituation"
         )
 
 # --------------------------------------------------
