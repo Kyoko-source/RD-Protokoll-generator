@@ -1106,8 +1106,8 @@ WORKFLOW_STEPS = [
     {"page": "🔥 OPQRST", "label": "Schmerzbild", "short_label": "Schmerz"},
     {"page": "⏱️ Maßnahmen", "label": "Maßnahmen", "short_label": "Maßn."},
     {"page": "🔎 Verdacht", "label": "Verdacht", "short_label": "Verdacht"},
-    {"page": "🔻 AMLS", "label": "AMLS-Trichter", "short_label": "AMLS"},
     {"page": "💉 Med-Rechner", "label": "Rechner", "short_label": "Rechner"},
+    {"page": "🔻 AMLS", "label": "AMLS-Trichter", "short_label": "AMLS"},
     {"page": "🗣️ Übergabe", "label": "Übergabe", "short_label": "Übergabe"},
     {"page": "📄 Protokoll", "label": "Protokoll", "short_label": "Protokoll"},
 ]
@@ -1856,12 +1856,70 @@ def build_amls_candidates(patient_data):
     def mentions(*terms):
         return any(term in text for term in terms)
 
+    def number(key):
+        try:
+            return float(v.get(key))
+        except (TypeError, ValueError):
+            return None
+
+    af = number("af")
+    spo2 = number("spo2")
+    puls = number("puls")
+    rr_sys = number("rr_sys")
+    temperature = number("temperatur")
+    gcs = number("gcs")
+
     if referral.get("diagnose"):
         add(
             f"Einweisungsdiagnose: {referral.get('diagnose')}",
             "Einweisung",
             f"Auf der Einweisung als ICD-10-GM {referral.get('icd_code', '–')} angegeben",
         )
+
+    # Vitalwerte aus dem Reiter "Patient" öffnen den Trichter dynamisch.
+    if af is not None and af > 20:
+        add("Hyperventilation", "Respiratorisch", f"Tachypnoe mit AF {af:g}/min")
+        add("Sepsis / schwere Infektion", "Infektiös", f"Tachypnoe mit AF {af:g}/min als mögliches systemisches Zeichen")
+        add("Schock", "Kreislauf", f"Tachypnoe mit AF {af:g}/min als mögliches Kompensationszeichen")
+        add("Lungenarterienembolie", "Kardiopulmonal", f"Tachypnoe mit AF {af:g}/min")
+        add("Pneumonie", "Respiratorisch", f"Tachypnoe mit AF {af:g}/min")
+        add("Metabolische Azidose", "Metabolisch", f"Tachypnoe mit AF {af:g}/min als mögliche Kompensation")
+    elif af is not None and 0 < af < 10:
+        add("Opiat-/Opioidintoxikation", "Toxikologisch", f"Bradypnoe mit AF {af:g}/min")
+        add("Zentrale Atemdepression", "Neurologisch", f"Bradypnoe mit AF {af:g}/min")
+        add("Respiratorische Erschöpfung", "Respiratorisch", f"Bradypnoe mit AF {af:g}/min")
+
+    if spo2 is not None and 0 < spo2 < 95:
+        add("Respiratorische Insuffizienz", "Respiratorisch", f"SpO₂ {spo2:g} %")
+        add("Pneumonie", "Respiratorisch", f"SpO₂ {spo2:g} %")
+        add("Lungenarterienembolie", "Kardiopulmonal", f"SpO₂ {spo2:g} %")
+        add("Kardiales Lungenödem", "Kardiopulmonal", f"SpO₂ {spo2:g} %")
+
+    if puls is not None and puls > 100:
+        add("Schock", "Kreislauf", f"Tachykardie mit Puls {puls:g}/min")
+        add("Sepsis / schwere Infektion", "Infektiös", f"Tachykardie mit Puls {puls:g}/min")
+        add("Tachyarrhythmie", "Kardial", f"Puls {puls:g}/min")
+        add("Schmerz-/Stressreaktion", "Sonstige", f"Puls {puls:g}/min")
+    elif puls is not None and 0 < puls < 50:
+        add("Bradyarrhythmie", "Kardial", f"Bradykardie mit Puls {puls:g}/min")
+        add("Medikamentenwirkung / Intoxikation", "Toxikologisch", f"Puls {puls:g}/min")
+        add("Intrakranielle Ursache", "Neurologisch", f"Puls {puls:g}/min")
+
+    if rr_sys is not None and 0 < rr_sys < 90:
+        add("Schock", "Kreislauf", f"Hypotonie mit RR systolisch {rr_sys:g} mmHg")
+        add("Sepsis / schwere Infektion", "Infektiös", f"Hypotonie mit RR systolisch {rr_sys:g} mmHg")
+        add("Blutung / Volumenmangel", "Kreislauf", f"Hypotonie mit RR systolisch {rr_sys:g} mmHg")
+        add("Anaphylaxie", "Allergologisch", f"Hypotonie mit RR systolisch {rr_sys:g} mmHg")
+
+    if temperature is not None and temperature >= 38:
+        add("Sepsis / schwere Infektion", "Infektiös", f"Fieber mit {temperature:g} °C")
+        add("Pneumonie", "Infektiös", f"Fieber mit {temperature:g} °C")
+        add("Harnwegsinfekt / Urosepsis", "Infektiös", f"Fieber mit {temperature:g} °C")
+
+    if gcs is not None and gcs < 15:
+        add("Intrakranielle Ursache", "Neurologisch", f"GCS {gcs:g}")
+        add("Intoxikation", "Toxikologisch", f"GCS {gcs:g}")
+        add("Metabolische Entgleisung", "Metabolisch", f"GCS {gcs:g}")
 
     respiratory = mentions("atemnot", "dyspnoe", "luftnot", "husten") or x.get("atmung") in {"Dyspnoe", "Bradypnoe", "Tachypnoe", "Apnoe"}
     if respiratory:
@@ -1954,6 +2012,26 @@ def amls_candidate_conflicts(candidate_name, patient_data):
     temperature = number("temperatur")
     puls = number("puls")
     af = number("af")
+    rr_sys = number("rr_sys")
+    gcs = number("gcs")
+
+    if "hyperventilation" in name:
+        if spo2 is not None and 0 < spo2 < 90:
+            conflicts.append(f"SpO₂ {spo2:g} % spricht für relevante Oxygenierungsstörung")
+        if rr_sys is not None and 0 < rr_sys < 90:
+            conflicts.append(f"RR systolisch {rr_sys:g} mmHg mit Hypotonie")
+        if gcs is not None and gcs < 15:
+            conflicts.append(f"GCS {gcs:g} nicht unauffällig")
+
+    if name == "schock" or "schock" in name:
+        if rr_sys is not None and rr_sys >= 100:
+            conflicts.append(f"RR systolisch {rr_sys:g} mmHg ohne Hypotonie")
+        if puls is not None and 50 <= puls <= 100:
+            conflicts.append(f"Puls {puls:g}/min ohne Tachykardie")
+        if x.get("rekap") == "< 2 Sekunden":
+            conflicts.append("Rekapillarisierungszeit < 2 Sekunden")
+        if x.get("haut") == "Rosig / warm":
+            conflicts.append("Haut rosig und warm")
 
     if "hypoglyk" in name and bz is not None and bz >= 70:
         conflicts.append(f"BZ {bz:g} mg/dL nicht hypoglykämisch")
@@ -1972,6 +2050,10 @@ def amls_candidate_conflicts(candidate_name, patient_data):
     if any(term in name for term in ("pneumonie", "infektion", "sepsis", "urosepsis", "gastroenteritis")):
         if temperature is not None and 36 <= temperature < 38:
             conflicts.append(f"Temperatur {temperature:g} °C ohne Fieber")
+        if puls is not None and 50 <= puls <= 100:
+            conflicts.append(f"Puls {puls:g}/min ohne Tachykardie")
+        if rr_sys is not None and rr_sys >= 100:
+            conflicts.append(f"RR systolisch {rr_sys:g} mmHg ohne Hypotonie")
 
     if any(term in name for term in ("schlaganfall", "tia", "neurologische ursache")):
         befast_keys = ("befast_balance", "befast_eyes", "befast_face", "befast_arms", "befast_speech")
@@ -1987,6 +2069,10 @@ def amls_candidate_conflicts(candidate_name, patient_data):
 
     if "rhythmusstörung" in name and puls is not None and 50 <= puls <= 100:
         conflicts.append(f"Puls {puls:g}/min im Normbereich")
+    if "tachyarrhythmie" in name and puls is not None and puls <= 100:
+        conflicts.append(f"Puls {puls:g}/min ohne Tachykardie")
+    if "bradyarrhythmie" in name and puls is not None and puls >= 50:
+        conflicts.append(f"Puls {puls:g}/min nicht bradykard")
 
     if "lungenarterienembolie" in name and af is not None and af <= 20 and spo2 is not None and spo2 >= 95:
         conflicts.append(f"AF {af:g}/min und SpO₂ {spo2:g} % unauffällig")
@@ -2114,6 +2200,28 @@ st.markdown(
     <style>
     [data-testid="column"]:nth-child(n+2):nth-child(-n+12) > [data-testid="stButton"] > button[kind='primary'] {{
         background: linear-gradient(135deg, {start_color} 0%, {end_color} 100%);
+    }}
+    </style>
+    """,
+    unsafe_allow_html=True,
+)
+
+protocol_workflow_index = workflow_step_index("📄 Protokoll")
+st.markdown(
+    f"""
+    <style>
+    @keyframes protocolGreenGlow {{
+        0%, 100% {{ box-shadow: 0 0 0 1px rgba(74,222,128,.30), 0 0 14px rgba(34,197,94,.38); }}
+        50% {{ box-shadow: 0 0 0 2px rgba(74,222,128,.58), 0 0 28px rgba(34,197,94,.72); }}
+    }}
+    .st-key-workflow_step_{protocol_workflow_index} button {{
+        background: linear-gradient(135deg, #087f5b 0%, #22c55e 100%) !important;
+        border-color: #69f0ae !important;
+        color: #ffffff !important;
+        animation: protocolGreenGlow 1.8s ease-in-out infinite !important;
+    }}
+    .st-key-workflow_step_{protocol_workflow_index} button:hover {{
+        background: linear-gradient(135deg, #0b9668 0%, #35d873 100%) !important;
     }}
     </style>
     """,
