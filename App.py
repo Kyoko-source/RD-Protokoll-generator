@@ -11,6 +11,13 @@ import urllib.error
 import urllib.request
 from copy import deepcopy
 
+try:
+    import pytesseract
+    from PIL import Image, ImageEnhance, ImageOps
+except ImportError:
+    pytesseract = None
+    Image = ImageEnhance = ImageOps = None
+
 
 def add_line(text, value):
     """
@@ -180,6 +187,56 @@ def lookup_icd10_diagnosis(code):
         "diagnosis": diagnosis,
         "source_url": source_url,
     }
+
+
+def extract_medication_plan_lines(image_bytes):
+    if pytesseract is None or Image is None:
+        raise RuntimeError("OCR-Komponenten sind nicht installiert.")
+
+    image = Image.open(BytesIO(image_bytes))
+    image = ImageOps.exif_transpose(image).convert("L")
+    if max(image.size) < 1800:
+        scale = 1800 / max(image.size)
+        image = image.resize((int(image.width * scale), int(image.height * scale)))
+    image = ImageEnhance.Contrast(image).enhance(1.7)
+    raw_text = pytesseract.image_to_string(image, lang="deu+eng", config="--psm 6")
+
+    personal_markers = (
+        "patient", "patientin", "name", "vorname", "nachname", "geboren", "geburtsdatum",
+        "geb.", "adresse", "straße", "strasse", "wohnort", "versichert", "krankenkasse",
+        "telefon", "mobil", "e-mail", "email", "arzt", "ärztin", "praxis", "anschrift",
+    )
+    medication_pattern = re.compile(
+        r"(?:\b\d+(?:[.,]\d+)?\s*(?:mg|µg|ug|mcg|g|ml|ie|i\.e\.|hub|tropfen|tbl|tabletten|kapseln)\b|"
+        r"\b\d+(?:[.,]\d+)?\s*[-–/]\s*\d+(?:[.,]\d+)?(?:\s*[-–/]\s*\d+(?:[.,]\d+)?)?\b|"
+        r"\b(?:morgens|mittags|abends|nachts|bei bedarf|täglich|taeglich)\b)",
+        flags=re.IGNORECASE,
+    )
+    safe_lines = []
+    for raw_line in raw_text.splitlines():
+        line = re.sub(r"\s+", " ", raw_line).strip(" \t|;:")
+        lower_line = line.lower()
+        if len(line) < 3 or any(marker in lower_line for marker in personal_markers):
+            continue
+        if medication_pattern.search(line):
+            line = re.sub(r"^(?:medikation|medikamente|arzneimittel)\s*[:\-]?\s*", "", line, flags=re.IGNORECASE)
+            if line and line not in safe_lines:
+                safe_lines.append(line[:180])
+
+    return "\n".join(safe_lines)
+
+
+def apply_medication_plan_preview():
+    medications = st.session_state.get("med_plan_preview_editor", "").strip()
+    if not medications:
+        return
+    patient_state = st.session_state.get("patient", {})
+    samplers = patient_state.setdefault("samplers", {})
+    samplers["medikamente_option"] = "Medikamente eingeben"
+    samplers["medikamente"] = medications
+    st.session_state["samplers_medikamente_option"] = "Medikamente eingeben"
+    st.session_state["samplers_medikamente"] = medications
+    st.session_state["med_plan_import_success"] = True
 
 
 def generate_protocol():
@@ -1689,6 +1746,77 @@ def render_vital_alerts(vitalwerte):
         st.warning("🟠 Auffällige Werte – Verlauf kontrollieren: " + " · ".join(warnings))
 
 
+def collect_missing_documentation(patient_data):
+    v = patient_data.get("vitalwerte", {})
+    x = patient_data.get("xabcde", {})
+    s = patient_data.get("samplers", {})
+    o = patient_data.get("opqrst", {})
+    fields = [
+        ("Patient", "Geschlecht", v.get("geschlecht")),
+        ("Patient", "Alter", v.get("alter")),
+        ("Patient", "Auffindesituation", v.get("auffindesituation")),
+        ("Vitalwerte", "SpO₂", v.get("spo2")),
+        ("Vitalwerte", "Atemfrequenz", v.get("af")),
+        ("Vitalwerte", "Blutdruck systolisch", v.get("rr_sys")),
+        ("Vitalwerte", "Blutdruck diastolisch", v.get("rr_dia")),
+        ("Vitalwerte", "Puls", v.get("puls")),
+        ("Vitalwerte", "GCS", v.get("gcs")),
+        ("Vitalwerte", "Blutzucker", v.get("bz")),
+        ("xABCDE", "Atemweg", x.get("atemweg")),
+        ("xABCDE", "Atmung", x.get("atmung")),
+        ("xABCDE", "Haut/Kreislauf", x.get("haut")),
+        ("xABCDE", "AVPU", x.get("avpu")),
+        ("xABCDE", "Bodycheck", x.get("bodycheck")),
+        ("SAMPLERS", "Symptome", s.get("symptome")),
+        ("SAMPLERS", "Allergien", s.get("allergien")),
+        ("SAMPLERS", "Medikamente", s.get("medikamente_option")),
+        ("SAMPLERS", "Vorgeschichte", s.get("vorgeschichte")),
+        ("SAMPLERS", "Ereignis", s.get("ereignis")),
+    ]
+    if o.get("schmerz_vorhanden") == "Ja":
+        fields.extend([
+            ("OPQRST", "Schmerzbeginn", o.get("onset")),
+            ("OPQRST", "Schmerzqualität", o.get("quality")),
+            ("OPQRST", "Schmerzregion", o.get("region")),
+            ("OPQRST", "NRS", o.get("nrs")),
+        ])
+    return [
+        {"section": section, "label": label}
+        for section, label, value in fields
+        if value in [None, "", 0, "Keine Angabe"]
+    ]
+
+
+def highlight_handover_text(text):
+    highlighted = html.escape(text)
+    patterns = [
+        (r"\b(Apnoe|bewusstlos|Schock|Sepsis|Schlaganfall|ACS|Hypoxie|kritisch|verlegt)\b", "#ff667a", "rgba(255,70,92,.16)"),
+        (r"\b(Dyspnoe|Tachypnoe|Bradypnoe|Tachykardie|Bradykardie|Hypotonie|Hypertonie|Blutung|Fieber|Intoxikation|auffällig|Schmerz)\w*\b", "#ffc857", "rgba(255,184,76,.15)"),
+        (r"\b(SpO(?:2|₂)?|AF|Puls|RR|GCS|BZ)\s*[:]?\s*\d+(?:[.,]\d+)?(?:/\d+(?:[.,]\d+)?)?(?:\s*%|\s*/min)?", "#63c7ff", "rgba(74,174,255,.14)"),
+        (r"\b(unauffällig|frei|stabil|wach|orientiert|isokor)\w*\b", "#5ce0a3", "rgba(57,211,142,.13)"),
+    ]
+    for pattern, color, background in patterns:
+        highlighted = re.sub(
+            pattern,
+            lambda match: f'<span style="color:{color}; background:{background}; padding:1px 4px; border-radius:5px; font-weight:850;">{match.group(0)}</span>',
+            highlighted,
+            flags=re.IGNORECASE,
+        )
+    return highlighted.replace("\n", "<br>")
+
+
+def render_colored_handover(title, text):
+    st.markdown(
+        f"""
+        <div style="margin:10px 0 18px; padding:18px; border-radius:20px; background:rgba(8,20,38,.72); border:1px solid rgba(255,255,255,.10); box-shadow:0 14px 30px rgba(2,8,24,.18);">
+            <div style="font-size:.76rem; text-transform:uppercase; letter-spacing:.14em; color:rgba(235,244,255,.58); font-weight:900; margin-bottom:12px;">{html.escape(title)}</div>
+            <div style="font-family:ui-monospace, SFMono-Regular, Menlo, monospace; line-height:1.75; color:#eef5ff;">{highlight_handover_text(text)}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def build_handover_text(patient_data):
     v = patient_data.get("vitalwerte", {})
     x = patient_data.get("xabcde", {})
@@ -2715,6 +2843,58 @@ elif seite == "📋 SAMPLERS":
         )
         if medikamente == "Medikamente eingeben":
             textarea_field("samplers", "medikamente", "Bitte Medikamente eingeben")
+
+        with st.expander("📷 Medikamentenplan fotografieren oder hochladen", expanded=False):
+            st.info(
+                "Datenschutz: Das Foto wird nur lokal im Arbeitsspeicher der App verarbeitet und nicht im "
+                "Patientendatensatz gespeichert. Übernommen werden ausschließlich die geprüften Medikamentenzeilen."
+            )
+            photo_col, upload_col = st.columns(2)
+            with photo_col:
+                medication_photo = st.camera_input("Foto aufnehmen", key="med_plan_camera")
+            with upload_col:
+                medication_upload = st.file_uploader(
+                    "Vorhandenes Foto auswählen",
+                    type=["jpg", "jpeg", "png", "webp"],
+                    key="med_plan_upload",
+                )
+
+            image_source = medication_photo or medication_upload
+            if st.button(
+                "Medikamente lokal erkennen",
+                key="run_med_plan_ocr",
+                use_container_width=True,
+                type="primary",
+                disabled=image_source is None,
+            ):
+                try:
+                    with st.spinner("Medikamentenzeilen werden lokal erkannt …"):
+                        recognized_medications = extract_medication_plan_lines(image_source.getvalue())
+                    if recognized_medications:
+                        st.session_state["med_plan_preview_editor"] = recognized_medications
+                        st.rerun()
+                    else:
+                        st.warning("Keine eindeutigen Medikamentenzeilen erkannt. Bitte Fotoausrichtung und Schärfe prüfen.")
+                except Exception as error:
+                    st.error(f"Lokale Texterkennung nicht verfügbar: {error}")
+
+            if "med_plan_preview_editor" in st.session_state:
+                st.warning("Bitte Erkennung sorgfältig prüfen. Namen, Dosierungen und Einnahmeschema können falsch erkannt werden.")
+                st.text_area(
+                    "Erkannte Medikamente – vor Übernahme bearbeiten",
+                    height=180,
+                    key="med_plan_preview_editor",
+                )
+                st.button(
+                    "Geprüfte Medikamente in SAMPLERS übernehmen",
+                    key="apply_med_plan_ocr",
+                    use_container_width=True,
+                    on_click=apply_medication_plan_preview,
+                )
+
+            if st.session_state.get("med_plan_import_success"):
+                st.success("Geprüfte Medikamentenzeilen wurden in SAMPLERS übernommen.")
+                st.session_state["med_plan_import_success"] = False
 
     elif samplers_selected == "P":
         st.subheader("P – Patientenvorgeschichte")
@@ -4644,11 +4824,21 @@ elif seite == "🗣️ Übergabe":
 
     mist_text, isbar_text = build_handover_text(patient)
 
-    st.subheader("MIST")
-    st.text_area("Übergabe MIST", mist_text, height=180, key="handover_mist")
+    missing_for_handover = collect_missing_documentation(patient)
+    if missing_for_handover:
+        st.warning(
+            f"{len(missing_for_handover)} Kernangaben fehlen noch. Die Übergabe wird trotzdem aus allen "
+            "vorhandenen Daten erzeugt."
+        )
 
-    st.subheader("ISBAR")
-    st.text_area("Übergabe ISBAR", isbar_text, height=220, key="handover_isbar")
+    render_colored_handover("MIST – farbcodierte Übergabe", mist_text)
+    render_colored_handover("ISBAR – farbcodierte Übergabe", isbar_text)
+
+    with st.expander("Rohtext zum Kopieren anzeigen", expanded=False):
+        st.markdown("**MIST**")
+        st.code(mist_text, language=None)
+        st.markdown("**ISBAR**")
+        st.code(isbar_text, language=None)
 
     render_live_summary(
         "Live-Zusammenfassung Übergabe",
@@ -4667,6 +4857,21 @@ elif seite == "🗣️ Übergabe":
 elif seite == "📄 Protokoll":
 
     st.header("📄 Fertiges Protokoll")
+
+    missing_documentation = collect_missing_documentation(patient)
+    if missing_documentation:
+        st.warning(
+            f"Noch {len(missing_documentation)} Angaben offen. Das Protokoll kann trotzdem erstellt werden; "
+            "fehlende Werte werden einfach nicht ausgegeben."
+        )
+        grouped_missing = {}
+        for item in missing_documentation:
+            grouped_missing.setdefault(item["section"], []).append(item["label"])
+        with st.expander("Offene Angaben anzeigen", expanded=True):
+            for section, labels in grouped_missing.items():
+                st.markdown(f"**{section}:** " + " · ".join(labels))
+    else:
+        st.success("Alle vorgesehenen Kernangaben sind dokumentiert.")
 
     protocol_done_col, protocol_reset_col = st.columns(2)
     with protocol_done_col:
@@ -4767,7 +4972,10 @@ if seite != "🛠️ Admin" and current_workflow_index is not None:
 
         with nav_info_col:
             current_done = workflow_completion.get(seite, False)
-            if current_done:
+            missing_before_protocol = collect_missing_documentation(patient) if next_step and next_step["page"] == "📄 Protokoll" else []
+            if missing_before_protocol:
+                st.warning(f"{len(missing_before_protocol)} Angaben offen – Weiter bleibt möglich.")
+            elif current_done:
                 st.success("Schritt wirkt vollständig. Du kannst direkt weitergehen.")
             else:
                 st.info(workflow_missing_hint(seite, patient) or "Schritt prüfen und dann fortfahren.")
@@ -4775,5 +4983,11 @@ if seite != "🛠️ Admin" and current_workflow_index is not None:
         with nav_next_col:
             if next_step:
                 if st.button(f"{next_step['label']} →", key="workflow_next_btn", use_container_width=True, type="primary"):
+                    if next_step["page"] == "📄 Protokoll":
+                        automatic_protocol = generate_protocol()
+                        if automatic_protocol.strip():
+                            st.session_state["generated_protocol_text"] = automatic_protocol
+                            st.session_state["protocol_generated"] = True
+                            st.session_state["workflow_manual_completion"]["📄 Protokoll"] = True
                     st.session_state["seite"] = next_step["page"]
                     st.rerun()
