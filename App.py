@@ -11,13 +11,6 @@ import urllib.error
 import urllib.request
 from copy import deepcopy
 
-try:
-    import pytesseract
-    from PIL import Image, ImageEnhance, ImageOps
-except ImportError:
-    pytesseract = None
-    Image = ImageEnhance = ImageOps = None
-
 
 def add_line(text, value):
     """
@@ -187,56 +180,6 @@ def lookup_icd10_diagnosis(code):
         "diagnosis": diagnosis,
         "source_url": source_url,
     }
-
-
-def extract_medication_plan_lines(image_bytes):
-    if pytesseract is None or Image is None:
-        raise RuntimeError("OCR-Komponenten sind nicht installiert.")
-
-    image = Image.open(BytesIO(image_bytes))
-    image = ImageOps.exif_transpose(image).convert("L")
-    if max(image.size) < 1800:
-        scale = 1800 / max(image.size)
-        image = image.resize((int(image.width * scale), int(image.height * scale)))
-    image = ImageEnhance.Contrast(image).enhance(1.7)
-    raw_text = pytesseract.image_to_string(image, lang="deu+eng", config="--psm 6")
-
-    personal_markers = (
-        "patient", "patientin", "name", "vorname", "nachname", "geboren", "geburtsdatum",
-        "geb.", "adresse", "straße", "strasse", "wohnort", "versichert", "krankenkasse",
-        "telefon", "mobil", "e-mail", "email", "arzt", "ärztin", "praxis", "anschrift",
-    )
-    medication_pattern = re.compile(
-        r"(?:\b\d+(?:[.,]\d+)?\s*(?:mg|µg|ug|mcg|g|ml|ie|i\.e\.|hub|tropfen|tbl|tabletten|kapseln)\b|"
-        r"\b\d+(?:[.,]\d+)?\s*[-–/]\s*\d+(?:[.,]\d+)?(?:\s*[-–/]\s*\d+(?:[.,]\d+)?)?\b|"
-        r"\b(?:morgens|mittags|abends|nachts|bei bedarf|täglich|taeglich)\b)",
-        flags=re.IGNORECASE,
-    )
-    safe_lines = []
-    for raw_line in raw_text.splitlines():
-        line = re.sub(r"\s+", " ", raw_line).strip(" \t|;:")
-        lower_line = line.lower()
-        if len(line) < 3 or any(marker in lower_line for marker in personal_markers):
-            continue
-        if medication_pattern.search(line):
-            line = re.sub(r"^(?:medikation|medikamente|arzneimittel)\s*[:\-]?\s*", "", line, flags=re.IGNORECASE)
-            if line and line not in safe_lines:
-                safe_lines.append(line[:180])
-
-    return "\n".join(safe_lines)
-
-
-def apply_medication_plan_preview():
-    medications = st.session_state.get("med_plan_preview_editor", "").strip()
-    if not medications:
-        return
-    patient_state = st.session_state.get("patient", {})
-    samplers = patient_state.setdefault("samplers", {})
-    samplers["medikamente_option"] = "Medikamente eingeben"
-    samplers["medikamente"] = medications
-    st.session_state["samplers_medikamente_option"] = "Medikamente eingeben"
-    st.session_state["samplers_medikamente"] = medications
-    st.session_state["med_plan_import_success"] = True
 
 
 def generate_protocol():
@@ -483,6 +426,16 @@ def generate_protocol():
             samplers_under_e += f"    L Letzte Mahlzeit: {s.get('letzte_mahlzeit_text','')}\n"
         else:
             samplers_under_e += f"    L Letzte Mahlzeit: {letzte}\n"
+
+    additional_last_events = [
+        ("Letzte Medikamenteneinnahme", s.get("letzte_medikamenteneinnahme")),
+        ("Letzter Stuhlgang", s.get("letzter_stuhlgang")),
+        ("Letzte Miktion", s.get("letzte_miktion")),
+        ("Letztes Erbrechen", s.get("letztes_erbrechen")),
+    ]
+    for label, value in additional_last_events:
+        if _is_valid_value(value):
+            samplers_under_e += f"    L {label}: {value}\n"
 
     if s.get('ereignis'):
         samplers_under_e += f"    E Ereignis: {s.get('ereignis')}\n"
@@ -1626,6 +1579,10 @@ def sync_samplers_from_session_state():
         "vorgeschichte",
         "letzte_mahlzeit",
         "letzte_mahlzeit_text",
+        "letzte_medikamenteneinnahme",
+        "letzter_stuhlgang",
+        "letzte_miktion",
+        "letztes_erbrechen",
         "ereignis",
         "raucher",
         "alkohol",
@@ -2221,6 +2178,8 @@ if st.session_state['seite'] == "❤️ Vitalwerte":
     sync_vitalwerte_from_session_state()
 elif st.session_state['seite'] == "🩺 xABCDE":
     sync_xabcde_from_session_state()
+elif st.session_state['seite'] == "📋 SAMPLERS":
+    sync_samplers_from_session_state()
 
 if 'xabcde_selected' not in st.session_state:
     st.session_state['xabcde_selected'] = "A"
@@ -2844,58 +2803,6 @@ elif seite == "📋 SAMPLERS":
         if medikamente == "Medikamente eingeben":
             textarea_field("samplers", "medikamente", "Bitte Medikamente eingeben")
 
-        with st.expander("📷 Medikamentenplan fotografieren oder hochladen", expanded=False):
-            st.info(
-                "Datenschutz: Das Foto wird nur lokal im Arbeitsspeicher der App verarbeitet und nicht im "
-                "Patientendatensatz gespeichert. Übernommen werden ausschließlich die geprüften Medikamentenzeilen."
-            )
-            photo_col, upload_col = st.columns(2)
-            with photo_col:
-                medication_photo = st.camera_input("Foto aufnehmen", key="med_plan_camera")
-            with upload_col:
-                medication_upload = st.file_uploader(
-                    "Vorhandenes Foto auswählen",
-                    type=["jpg", "jpeg", "png", "webp"],
-                    key="med_plan_upload",
-                )
-
-            image_source = medication_photo or medication_upload
-            if st.button(
-                "Medikamente lokal erkennen",
-                key="run_med_plan_ocr",
-                use_container_width=True,
-                type="primary",
-                disabled=image_source is None,
-            ):
-                try:
-                    with st.spinner("Medikamentenzeilen werden lokal erkannt …"):
-                        recognized_medications = extract_medication_plan_lines(image_source.getvalue())
-                    if recognized_medications:
-                        st.session_state["med_plan_preview_editor"] = recognized_medications
-                        st.rerun()
-                    else:
-                        st.warning("Keine eindeutigen Medikamentenzeilen erkannt. Bitte Fotoausrichtung und Schärfe prüfen.")
-                except Exception as error:
-                    st.error(f"Lokale Texterkennung nicht verfügbar: {error}")
-
-            if "med_plan_preview_editor" in st.session_state:
-                st.warning("Bitte Erkennung sorgfältig prüfen. Namen, Dosierungen und Einnahmeschema können falsch erkannt werden.")
-                st.text_area(
-                    "Erkannte Medikamente – vor Übernahme bearbeiten",
-                    height=180,
-                    key="med_plan_preview_editor",
-                )
-                st.button(
-                    "Geprüfte Medikamente in SAMPLERS übernehmen",
-                    key="apply_med_plan_ocr",
-                    use_container_width=True,
-                    on_click=apply_medication_plan_preview,
-                )
-
-            if st.session_state.get("med_plan_import_success"):
-                st.success("Geprüfte Medikamentenzeilen wurden in SAMPLERS übernommen.")
-                st.session_state["med_plan_import_success"] = False
-
     elif samplers_selected == "P":
         st.subheader("P – Patientenvorgeschichte")
         textarea_field("samplers", "vorgeschichte", "Vorerkrankungen")
@@ -2910,6 +2817,32 @@ elif seite == "📋 SAMPLERS":
         )
         if letzte_mahlzeit == "Eigene Eingabe":
             text_field("samplers", "letzte_mahlzeit_text", "Eigene Eingabe")
+
+        st.divider()
+        st.subheader("Weitere letzte Ereignisse")
+        last_left, last_right = st.columns(2, gap="large")
+        with last_left:
+            text_field(
+                "samplers",
+                "letzte_medikamenteneinnahme",
+                "Letzte Medikamenteneinnahme (wann / welches Medikament?)",
+            )
+            text_field(
+                "samplers",
+                "letzter_stuhlgang",
+                "Letzter Stuhlgang (wann / auffällig?)",
+            )
+        with last_right:
+            text_field(
+                "samplers",
+                "letzte_miktion",
+                "Letzte Miktion / Wasserlassen (wann / auffällig?)",
+            )
+            text_field(
+                "samplers",
+                "letztes_erbrechen",
+                "Letztes Erbrechen (wann / wie oft / Beschaffenheit?)",
+            )
 
     elif samplers_selected == "E":
         st.subheader("E – Ereignis")
