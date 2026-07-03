@@ -103,6 +103,33 @@ def categorize_rr(sys, dia):
     return "Hypertensive Krise", (s, d)
 
 
+def set_current_time(state_key):
+    st.session_state[state_key] = datetime.now().strftime("%H:%M")
+
+
+def reset_patient_case():
+    preserved = {
+        key: st.session_state[key]
+        for key in ("sop_admin_config", "admin_unlocked")
+        if key in st.session_state
+    }
+    st.session_state.clear()
+    st.session_state.update(preserved)
+    st.session_state["patient"] = {
+        "vitalwerte": {},
+        "xabcde": {},
+        "samplers": {},
+        "opqrst": {},
+        "massnahmen": {"timeline": [], "medikation": []},
+    }
+    st.session_state["seite"] = "❤️ Vitalwerte"
+    st.session_state["xabcde_selected"] = "A"
+    st.session_state["visited_pages"] = set()
+    st.session_state["workflow_manual_completion"] = {}
+    st.session_state["protocol_generated"] = False
+    st.session_state["generated_protocol_text"] = ""
+
+
 def generate_protocol():
 
     protocol = ""
@@ -665,6 +692,8 @@ st.markdown(
         transition: transform 0.24s ease, border-color 0.24s ease, box-shadow 0.24s ease, background 0.24s ease;
         backdrop-filter: blur(10px);
         -webkit-backdrop-filter: blur(10px);
+        min-height: 52px;
+        touch-action: manipulation;
     }
     [data-testid="stButton"] > button::before {
         content:"";
@@ -706,6 +735,7 @@ st.markdown(
             border-radius:14px !important;
             font-size:0.95rem !important;
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 20px rgba(2,8,24,0.12) !important;
+            min-height: 52px !important;
         }
         [data-testid="stTextInput"] input:focus,
         [data-testid="stNumberInput"] input:focus,
@@ -719,6 +749,7 @@ st.markdown(
             border:1px solid rgba(255,255,255,0.10) !important;
             border-radius:14px !important;
             box-shadow: inset 0 1px 0 rgba(255,255,255,0.03), 0 10px 20px rgba(2,8,24,0.12) !important;
+            min-height: 52px !important;
         }
         [data-testid="stSelectbox"] div[data-baseweb="select"] input {
             background: transparent !important;
@@ -742,8 +773,18 @@ st.markdown(
         }
         [data-testid="stRadio"] > label:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.08); }
         [data-testid="stSlider"] > div > div > div { border-radius:10px; }
-        [data-testid="stCheckbox"] > label { cursor:pointer; }
+        [data-testid="stCheckbox"] > label {
+            cursor:pointer;
+            min-height:48px;
+            display:flex;
+            align-items:center;
+        }
         [data-testid="stNumberInput"] { margin: 10px 0; }
+        [data-testid="stNumberInput"] button {
+            min-width:48px;
+            min-height:48px;
+            touch-action:manipulation;
+        }
         [data-testid="stTextArea"] { margin: 10px 0; }
         hr { border-color: rgba(255,255,255,0.06) !important; margin: 22px 0; }
         [data-testid="stAlert"] {
@@ -765,13 +806,37 @@ st.markdown(
         [data-testid="stExpander"] summary { padding-top: 0.2rem; padding-bottom: 0.2rem; }
         [data-testid="stCodeBlock"], code { border-radius: 16px !important; }
         section[data-testid='stSidebar']{ display:none; }
-        main .block-container { padding-top: 12px; padding-left: 80px; padding-right:80px }
+        main .block-container { padding-top: 12px; padding-left: 80px; padding-right:80px; padding-bottom:120px; }
         @media (max-width: 900px) {
             main .block-container { padding-left: 18px; padding-right: 18px; }
             .hero-card { padding: 20px 18px 18px; border-radius: 24px; }
             .hero-title { font-size: 1.72rem; }
             .workflow-shell { padding: 14px 14px 12px; border-radius: 20px; }
             .hero-ambulance-wrap { opacity: 0.18 !important; right: 8px !important; bottom: 4px !important; transform: scale(0.75) !important; }
+            [data-testid="stButton"] > button { min-height: 56px; font-size: 0.96rem; }
+            [data-testid="stTextInput"] input,
+            [data-testid="stNumberInput"] input,
+            [data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:56px !important; font-size:1rem !important; }
+        }
+        .st-key-tablet_bottom_nav {
+            position: fixed;
+            bottom: 0;
+            left: 80px;
+            right: 80px;
+            z-index: 999;
+            margin: 0;
+            padding: 12px;
+            border: 1px solid rgba(255,255,255,0.12);
+            border-bottom: none;
+            border-radius: 22px 22px 0 0;
+            background: rgba(7,17,31,0.94);
+            box-shadow: 0 -16px 34px rgba(2,8,24,0.38);
+            backdrop-filter: blur(18px);
+            -webkit-backdrop-filter: blur(18px);
+        }
+        .st-key-tablet_bottom_nav [data-testid="stAlert"] { margin:0; min-height:52px; }
+        @media (max-width: 900px) {
+            .st-key-tablet_bottom_nav { left:8px; right:8px; padding:10px; }
         }
         </style>
         """,
@@ -824,6 +889,31 @@ st.markdown(
     </div>
     """,
     unsafe_allow_html=True,
+)
+
+# Tablet-Browser öffnen für Zahlenfelder direkt die numerische Tastatur.
+components.html(
+    """
+    <script>
+    const configureTabletInputs = () => {
+        const doc = window.parent.document;
+        doc.querySelectorAll('[data-testid="stNumberInput"] input').forEach((input) => {
+            input.setAttribute('inputmode', 'decimal');
+            input.setAttribute('enterkeyhint', 'next');
+        });
+        doc.querySelectorAll('input[placeholder="14:32"], input[placeholder="14:35"]').forEach((input) => {
+            input.setAttribute('inputmode', 'numeric');
+        });
+    };
+    configureTabletInputs();
+    new MutationObserver(configureTabletInputs).observe(window.parent.document.body, {
+        childList: true,
+        subtree: true
+    });
+    </script>
+    """,
+    height=0,
+    width=0,
 )
 
 # --------------------------------------------------
@@ -1400,6 +1490,52 @@ def render_live_summary(title, lines):
         )
 
 
+def render_vital_alerts(vitalwerte):
+    critical = []
+    warnings = []
+
+    def number(key):
+        try:
+            return float(vitalwerte.get(key))
+        except (TypeError, ValueError):
+            return None
+
+    spo2 = number("spo2")
+    if spo2 is not None and spo2 > 0:
+        (critical if spo2 < 90 else warnings if spo2 < 95 else []).append(f"SpO₂ {spo2:g} %")
+
+    af = number("af")
+    if af is not None and af > 0:
+        (critical if af < 10 or af > 30 else warnings if af > 20 else []).append(f"AF {af:g}/min")
+
+    puls = number("puls")
+    if puls is not None and puls > 0:
+        (critical if puls < 50 or puls > 120 else warnings if puls > 100 else []).append(f"Puls {puls:g}/min")
+
+    rr_sys = number("rr_sys")
+    rr_dia = number("rr_dia")
+    if rr_sys is not None and rr_sys > 0:
+        rr_text = f"RR {rr_sys:g}/{rr_dia:g}" if rr_dia is not None else f"RR syst. {rr_sys:g}"
+        (critical if rr_sys < 90 or rr_sys >= 180 else warnings if rr_sys >= 140 else []).append(rr_text)
+
+    gcs = number("gcs")
+    if gcs is not None:
+        (critical if gcs <= 8 else warnings if gcs < 15 else []).append(f"GCS {gcs:g}")
+
+    bz = number("bz")
+    if bz is not None and bz > 0:
+        (critical if bz < 60 or bz > 250 else warnings if bz < 70 or bz > 140 else []).append(f"BZ {bz:g} mg/dL")
+
+    temperature = number("temperatur")
+    if temperature is not None:
+        (critical if temperature < 35 or temperature >= 40 else warnings if temperature < 36 or temperature >= 38 else []).append(f"Temp. {temperature:g} °C")
+
+    if critical:
+        st.error("🔴 Kritische Werte – sofort klinisch prüfen: " + " · ".join(critical))
+    if warnings:
+        st.warning("🟠 Auffällige Werte – Verlauf kontrollieren: " + " · ".join(warnings))
+
+
 def build_handover_text(patient_data):
     v = patient_data.get("vitalwerte", {})
     x = patient_data.get("xabcde", {})
@@ -1544,11 +1680,28 @@ if 'visited_pages' not in st.session_state:
 st.session_state['visited_pages'].add(st.session_state['seite'])
 
 topbar_left, topbar_right = st.columns([14, 2])
+with topbar_left:
+    new_case_col, _ = st.columns([2.4, 9.6])
+    with new_case_col:
+        if st.button("＋ Neuer Einsatz", key="new_case_btn", use_container_width=True, type="secondary"):
+            st.session_state["confirm_new_case"] = True
 with topbar_right:
     st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
     if st.button("Admin", key="top_admin_btn", use_container_width=True, type="secondary"):
         st.session_state["seite"] = "🛠️ Admin"
         st.rerun()
+
+if st.session_state.get("confirm_new_case"):
+    st.warning("Alle Eingaben des aktuellen Einsatzes werden gelöscht. Wirklich neu beginnen?")
+    confirm_col, cancel_col, _ = st.columns([2, 2, 8])
+    with confirm_col:
+        if st.button("Ja, Einsatz leeren", key="confirm_new_case_btn", use_container_width=True, type="primary"):
+            reset_patient_case()
+            st.rerun()
+    with cancel_col:
+        if st.button("Abbrechen", key="cancel_new_case_btn", use_container_width=True):
+            st.session_state["confirm_new_case"] = False
+            st.rerun()
 
 workflow_completion = workflow_completion_state(patient)
 workflow_total = len(WORKFLOW_STEPS)
@@ -1858,6 +2011,7 @@ elif seite == "❤️ Vitalwerte":
             f"GCS: {patient['vitalwerte'].get('gcs')}" if _is_valid_value(patient['vitalwerte'].get('gcs')) else "",
         ],
     )
+    render_vital_alerts(patient["vitalwerte"])
 
 # --------------------------------------------------
 # xABCDE
@@ -2232,9 +2386,20 @@ elif seite == "⏱️ Maßnahmen":
             st.info("Abschlussmarkierung für Maßnahmen entfernt.")
 
     st.subheader("🕒 Maßnahmen-Timeline")
-    t1, t2, t3 = st.columns([1, 2, 2])
+    t1, t2, t3 = st.columns([1.25, 2, 2])
     with t1:
-        timeline_zeit = st.text_input("Uhrzeit", placeholder="14:32", key="timeline_zeit")
+        timeline_time_input, timeline_now = st.columns([2, 1])
+        with timeline_time_input:
+            timeline_zeit = st.text_input("Uhrzeit", placeholder="14:32", key="timeline_zeit")
+        with timeline_now:
+            st.markdown("<div style='height:1.7rem'></div>", unsafe_allow_html=True)
+            st.button(
+                "Jetzt",
+                key="timeline_now_btn",
+                use_container_width=True,
+                on_click=set_current_time,
+                args=("timeline_zeit",),
+            )
     with t2:
         timeline_massnahme = st.text_input("Maßnahme", placeholder="z.B. O2 über Maske", key="timeline_massnahme")
     with t3:
@@ -2258,7 +2423,7 @@ elif seite == "⏱️ Maßnahmen":
 
     st.divider()
     st.subheader("💊 Medikationsmodul")
-    med1, med2, med3, med4, med5 = st.columns([2, 1, 1, 1, 2])
+    med1, med2, med3, med4, med5 = st.columns([2, 1, 1, 1.4, 2])
     with med1:
         med_name = st.text_input("Medikament", placeholder="z.B. Morphin", key="med_name")
     with med2:
@@ -2266,7 +2431,18 @@ elif seite == "⏱️ Maßnahmen":
     with med3:
         med_weg = st.selectbox("Applikation", ["i.v.", "i.m.", "p.o.", "intranasal", "inhalativ", "sonstiges"], key="med_weg")
     with med4:
-        med_zeit = st.text_input("Uhrzeit", placeholder="14:35", key="med_zeit")
+        med_time_input, med_now = st.columns([2, 1])
+        with med_time_input:
+            med_zeit = st.text_input("Uhrzeit", placeholder="14:35", key="med_zeit")
+        with med_now:
+            st.markdown("<div style='height:1.7rem'></div>", unsafe_allow_html=True)
+            st.button(
+                "Jetzt",
+                key="med_now_btn",
+                use_container_width=True,
+                on_click=set_current_time,
+                args=("med_zeit",),
+            )
     with med5:
         med_wirkung = st.text_input("Wirkung", placeholder="z.B. Schmerzreduktion", key="med_wirkung")
 
@@ -3899,26 +4075,26 @@ elif seite == "📄 Protokoll":
         )
 
 if seite != "🛠️ Admin" and current_workflow_index is not None:
-    st.divider()
-    nav_prev_col, nav_info_col, nav_next_col = st.columns([1.2, 2.6, 1.2])
-    previous_step = WORKFLOW_STEPS[current_workflow_index - 1] if current_workflow_index > 0 else None
-    next_step = WORKFLOW_STEPS[current_workflow_index + 1] if current_workflow_index < workflow_total - 1 else None
+    with st.container(key="tablet_bottom_nav"):
+        nav_prev_col, nav_info_col, nav_next_col = st.columns([1.2, 2.6, 1.2])
+        previous_step = WORKFLOW_STEPS[current_workflow_index - 1] if current_workflow_index > 0 else None
+        next_step = WORKFLOW_STEPS[current_workflow_index + 1] if current_workflow_index < workflow_total - 1 else None
 
-    with nav_prev_col:
-        if previous_step:
-            if st.button(f"← {previous_step['label']}", key="workflow_prev_btn", use_container_width=True):
-                st.session_state["seite"] = previous_step["page"]
-                st.rerun()
+        with nav_prev_col:
+            if previous_step:
+                if st.button(f"← {previous_step['label']}", key="workflow_prev_btn", use_container_width=True):
+                    st.session_state["seite"] = previous_step["page"]
+                    st.rerun()
 
-    with nav_info_col:
-        current_done = workflow_completion.get(seite, False)
-        if current_done:
-            st.success("Schritt wirkt vollständig. Du kannst direkt weitergehen.")
-        else:
-            st.info(workflow_missing_hint(seite, patient) or "Schritt prüfen und dann fortfahren.")
+        with nav_info_col:
+            current_done = workflow_completion.get(seite, False)
+            if current_done:
+                st.success("Schritt wirkt vollständig. Du kannst direkt weitergehen.")
+            else:
+                st.info(workflow_missing_hint(seite, patient) or "Schritt prüfen und dann fortfahren.")
 
-    with nav_next_col:
-        if next_step:
-            if st.button(f"{next_step['label']} →", key="workflow_next_btn", use_container_width=True, type="primary"):
-                st.session_state["seite"] = next_step["page"]
-                st.rerun()
+        with nav_next_col:
+            if next_step:
+                if st.button(f"{next_step['label']} →", key="workflow_next_btn", use_container_width=True, type="primary"):
+                    st.session_state["seite"] = next_step["page"]
+                    st.rerun()
