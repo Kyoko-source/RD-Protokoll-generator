@@ -1170,11 +1170,20 @@ def checkbox_field(section, key, label):
 def sync_vitalwerte_from_session_state():
     v = patient["vitalwerte"]
 
-    for key in ["geschlecht", "alter", "auffindesituation", "puls", "gcs", "bz", "kurzbericht"]:
-        if key in st.session_state:
-            v[key] = st.session_state[key]
-        elif key in v:
-            st.session_state[key] = v[key]
+    widget_keys = {
+        "geschlecht": "geschlecht",
+        "alter": "alter",
+        "auffindesituation": "auffindesituation",
+        "puls_input": "puls",
+        "gcs_input": "gcs",
+        "bz_input": "bz",
+        "kurzbericht": "kurzbericht",
+    }
+    for widget_key, patient_key in widget_keys.items():
+        if widget_key in st.session_state:
+            v[patient_key] = st.session_state[widget_key]
+        elif patient_key in v:
+            st.session_state[widget_key] = v[patient_key]
 
     if "spo2" in v and "spo2_category" not in st.session_state:
         spo2_value = v.get("spo2")
@@ -1198,7 +1207,6 @@ def sync_vitalwerte_from_session_state():
     elif spo2_category == "Kritisch ↓ (<90%)":
         v["spo2"] = 85
 
-    af_category = st.session_state.get("af_category")
     if "af" in v and "af_category" not in st.session_state:
         af_value = v.get("af")
         if af_value == 8:
@@ -1212,6 +1220,7 @@ def sync_vitalwerte_from_session_state():
         elif _is_valid_value(af_value):
             st.session_state["af_category"] = "Selber schreiben"
             st.session_state["af_input"] = af_value
+    af_category = st.session_state.get("af_category")
     if af_category == "Selber schreiben" and "af_input" in st.session_state:
         v["af"] = st.session_state["af_input"]
     elif af_category == "Bradypnoe (<10)":
@@ -1223,7 +1232,6 @@ def sync_vitalwerte_from_session_state():
     elif af_category == "Schwer (>30)":
         v["af"] = 35
 
-    rr_category = st.session_state.get("rr_category")
     if "rr_sys" in v and "rr_dia" in v and "rr_category" not in st.session_state:
         rr_pair = (v.get("rr_sys"), v.get("rr_dia"))
         if rr_pair == (85, 55):
@@ -1238,6 +1246,7 @@ def sync_vitalwerte_from_session_state():
             st.session_state["rr_category"] = "Selber schreiben"
             st.session_state["rr_sys_input"] = rr_pair[0]
             st.session_state["rr_dia_input"] = rr_pair[1]
+    rr_category = st.session_state.get("rr_category")
     if rr_category == "Selber schreiben":
         if "rr_sys_input" in st.session_state:
             v["rr_sys"] = st.session_state["rr_sys_input"]
@@ -1252,8 +1261,10 @@ def sync_vitalwerte_from_session_state():
     elif rr_category == "Hypertonie (>160/100)":
         v["rr_sys"], v["rr_dia"] = 170, 105
 
+    if "temperatur" in v and "temp_checkbox" not in st.session_state:
+        st.session_state["temp_checkbox"] = True
+
     if st.session_state.get("temp_checkbox"):
-        temp_category = st.session_state.get("temp_category")
         if "temperatur" in v and "temp_category" not in st.session_state:
             temp_value = v.get("temperatur")
             if temp_value == 35.5:
@@ -1267,6 +1278,7 @@ def sync_vitalwerte_from_session_state():
             elif _is_valid_value(temp_value):
                 st.session_state["temp_category"] = "Selber schreiben"
                 st.session_state["temp_input"] = temp_value
+        temp_category = st.session_state.get("temp_category")
         if temp_category == "Selber schreiben" and "temp_input" in st.session_state:
             v["temperatur"] = st.session_state["temp_input"]
         elif temp_category == "Unterkühlung (<36°C)":
@@ -1516,6 +1528,12 @@ def build_suspicion_assessment(patient_data):
 # Centered navigation in main area
 if 'seite' not in st.session_state:
     st.session_state['seite'] = "❤️ Vitalwerte"
+
+# Widget-Werte sichern, bevor ein Navigationsbutton die aktuelle Seite verlässt.
+# Das ist besonders bei Text- und Zahlenfeldern wichtig, deren letzter Wert erst
+# mit dem Klick auf den nächsten Reiter an Streamlit übertragen wird.
+if st.session_state['seite'] == "❤️ Vitalwerte":
+    sync_vitalwerte_from_session_state()
 
 if 'xabcde_selected' not in st.session_state:
     st.session_state['xabcde_selected'] = "A"
