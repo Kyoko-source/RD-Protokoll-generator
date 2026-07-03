@@ -6,6 +6,7 @@ from datetime import datetime
 import html
 import json
 import os
+import re
 import urllib.error
 import urllib.request
 from copy import deepcopy
@@ -120,6 +121,7 @@ def reset_patient_case():
         "xabcde": {},
         "samplers": {},
         "opqrst": {},
+        "einweisung": {},
         "massnahmen": {"timeline": [], "medikation": []},
     }
     st.session_state["seite"] = "❤️ Vitalwerte"
@@ -128,6 +130,55 @@ def reset_patient_case():
     st.session_state["workflow_manual_completion"] = {}
     st.session_state["protocol_generated"] = False
     st.session_state["generated_protocol_text"] = ""
+
+
+def normalize_icd10_code(value):
+    code = re.sub(r"\s+", "", str(value or "")).upper()
+    code = code.rstrip("!+*#")
+    if not re.fullmatch(r"[A-Z][0-9]{2}(?:\.[0-9A-Z]{1,2})?", code):
+        return None
+    return code
+
+
+@st.cache_data(ttl=86400, show_spinner=False)
+def lookup_icd10_diagnosis(code):
+    normalized = normalize_icd10_code(code)
+    if not normalized:
+        return {"ok": False, "error": "Bitte einen gültigen Code eingeben, z. B. J45 oder I63.9."}
+
+    slug = normalized.lower().replace(".", "-")
+    source_url = f"https://gesund.bund.de/icd-code-suche/{slug}"
+    request = urllib.request.Request(
+        source_url,
+        headers={"User-Agent": "RD-Protokoll-Generator/1.0"},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            page = response.read().decode("utf-8", errors="replace")
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError):
+        return {
+            "ok": False,
+            "code": normalized,
+            "error": "ICD-Suche derzeit nicht erreichbar. Bitte Verbindung prüfen und erneut versuchen.",
+        }
+
+    title_match = re.search(r"<title>(.*?)</title>", page, flags=re.IGNORECASE | re.DOTALL)
+    title = html.unescape(re.sub(r"\s+", " ", title_match.group(1))).strip() if title_match else ""
+    prefix = "ICD-10-Code:"
+    if not title.startswith(prefix):
+        return {
+            "ok": False,
+            "code": normalized,
+            "error": "Für diesen ICD-10-GM-Code wurde keine eindeutige Diagnose gefunden.",
+        }
+
+    diagnosis = title[len(prefix):].strip()
+    return {
+        "ok": True,
+        "code": normalized,
+        "diagnosis": diagnosis,
+        "source_url": source_url,
+    }
 
 
 def generate_protocol():
@@ -141,7 +192,16 @@ def generate_protocol():
     x = patient.get("xabcde", {})
     s = patient.get("samplers", {})
     o = patient.get("opqrst", {})
+    e = patient.get("einweisung", {})
     m = patient.get("massnahmen", {})
+
+    if e.get("icd_code") and e.get("diagnose"):
+        protocol += "ÄRZTLICHE EINWEISUNG\n"
+        protocol += "=" * 50 + "\n"
+        protocol += f"ICD-10-GM {e.get('icd_code')}: {e.get('diagnose')}\n"
+        if e.get("hinweis"):
+            protocol += f"Einweisungshinweis: {e.get('hinweis')}\n"
+        protocol += "\n"
 
     # Narrative Einleitung (anonym, nur nicht-identifizierende Informationen)
     try:
@@ -265,6 +325,22 @@ def generate_protocol():
         d_section = f"D — DISABILITY (Neurologischer Status):\n  Bewusstsein (AVPU): {x.get('avpu')}\n"
         if x.get("pupillen"):
             d_section += f"  Pupillen: {x.get('pupillen')}\n"
+
+    befast_values = [
+        ("Balance", x.get("befast_balance")),
+        ("Eyes", x.get("befast_eyes")),
+        ("Face", x.get("befast_face")),
+        ("Arms", x.get("befast_arms")),
+        ("Speech", x.get("befast_speech")),
+        ("Time", x.get("befast_time")),
+    ]
+    documented_befast = [(label, value) for label, value in befast_values if _is_valid_value(value)]
+    if documented_befast:
+        if not d_section:
+            d_section = "D — DISABILITY (Neurologischer Status):\n"
+        d_section += "  BE-FAST:\n"
+        for label, value in documented_befast:
+            d_section += f"    {label}: {value}\n"
     
     # GCS (immer hinzufügen, wenn vorhanden)
     if gcs:
@@ -756,6 +832,14 @@ st.markdown(
             box-shadow: none !important;
             border: none !important;
         }
+        [role="option"] {
+            min-height:52px !important;
+            padding:12px 14px !important;
+            font-size:0.98rem !important;
+            display:flex !important;
+            align-items:center !important;
+            touch-action:manipulation;
+        }
         [data-testid="stWidgetLabel"] p,
         [data-testid="stWidgetLabel"] span {
             font-weight: 800 !important;
@@ -772,12 +856,50 @@ st.markdown(
             border: 1px solid rgba(255,255,255,0.04);
         }
         [data-testid="stRadio"] > label:hover { background: rgba(255,255,255,0.05); border-color: rgba(255,255,255,0.08); }
+        [data-testid="stRadio"] div[role="radiogroup"] {
+            display:grid;
+            grid-template-columns:repeat(2, minmax(0, 1fr));
+            gap:10px;
+            margin-top:8px;
+        }
+        [data-testid="stRadio"] div[role="radiogroup"] > label {
+            min-height:54px;
+            margin:0 !important;
+            padding:10px 12px !important;
+            border-radius:14px;
+            border:1px solid rgba(255,255,255,0.09);
+            background:rgba(8,20,38,0.60);
+            cursor:pointer;
+            display:flex;
+            align-items:center;
+            touch-action:manipulation;
+            transition:border-color .18s ease, background .18s ease, transform .18s ease;
+        }
+        [data-testid="stRadio"] div[role="radiogroup"] > label:hover {
+            border-color:rgba(94,168,255,0.42);
+            background:rgba(94,168,255,0.09);
+        }
+        [data-testid="stRadio"] div[role="radiogroup"] > label:has(input:checked) {
+            border-color:rgba(94,168,255,0.72);
+            background:linear-gradient(135deg, rgba(75,140,255,0.24), rgba(92,222,177,0.12));
+            box-shadow:0 0 0 2px rgba(75,140,255,0.10);
+        }
+        [data-testid="stRadio"] div[role="radiogroup"] p { font-size:0.96rem !important; font-weight:750 !important; }
         [data-testid="stSlider"] > div > div > div { border-radius:10px; }
         [data-testid="stCheckbox"] > label {
             cursor:pointer;
-            min-height:48px;
+            min-height:54px;
             display:flex;
             align-items:center;
+            padding:10px 12px;
+            border-radius:14px;
+            border:1px solid rgba(255,255,255,0.09);
+            background:rgba(8,20,38,0.60);
+            touch-action:manipulation;
+        }
+        [data-testid="stCheckbox"] > label:has(input:checked) {
+            border-color:rgba(94,168,255,0.72);
+            background:linear-gradient(135deg, rgba(75,140,255,0.24), rgba(92,222,177,0.12));
         }
         [data-testid="stNumberInput"] { margin: 10px 0; }
         [data-testid="stNumberInput"] button {
@@ -817,6 +939,7 @@ st.markdown(
             [data-testid="stTextInput"] input,
             [data-testid="stNumberInput"] input,
             [data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:56px !important; font-size:1rem !important; }
+            [data-testid="stRadio"] div[role="radiogroup"] > label { min-height:58px; }
         }
         .st-key-tablet_bottom_nav {
             position: fixed;
@@ -932,6 +1055,8 @@ if "patient" not in st.session_state:
 
         "opqrst": {},
 
+        "einweisung": {},
+
         "massnahmen": {
             "timeline": [],
             "medikation": []
@@ -944,6 +1069,7 @@ patient.setdefault("vitalwerte", {})
 patient.setdefault("xabcde", {})
 patient.setdefault("samplers", {})
 patient.setdefault("opqrst", {})
+patient.setdefault("einweisung", {})
 patient.setdefault("massnahmen", {"timeline": [], "medikation": []})
 patient["massnahmen"].setdefault("timeline", [])
 patient["massnahmen"].setdefault("medikation", [])
@@ -1394,6 +1520,12 @@ def sync_xabcde_from_session_state():
         "pulsqualitaet",
         "avpu",
         "pupillen",
+        "befast_balance",
+        "befast_eyes",
+        "befast_face",
+        "befast_arms",
+        "befast_speech",
+        "befast_time",
         "bodycheck",
         "bodycheck_text",
         "unterkuehlung",
@@ -1541,6 +1673,7 @@ def build_handover_text(patient_data):
     x = patient_data.get("xabcde", {})
     s = patient_data.get("samplers", {})
     o = patient_data.get("opqrst", {})
+    e = patient_data.get("einweisung", {})
     m = patient_data.get("massnahmen", {})
 
     mist = []
@@ -1572,7 +1705,10 @@ def build_handover_text(patient_data):
         identity += f", {v.get('alter')} Jahre"
     isbar.append(f"I: {identity}")
     isbar.append(f"S: {s.get('symptome') or 'Kein Leitsymptom dokumentiert'}")
-    isbar.append(f"B: {s.get('vorgeschichte') or 'Keine relevante Vorgeschichte dokumentiert'}")
+    background = s.get("vorgeschichte") or "Keine relevante Vorgeschichte dokumentiert"
+    if e.get("icd_code") and e.get("diagnose"):
+        background += f"; Einweisung: ICD-10-GM {e.get('icd_code')} – {e.get('diagnose')}"
+    isbar.append(f"B: {background}")
     assess = x.get("atmung") or x.get("atemweg") or x.get("avpu") or "Keine strukturierte Einschätzung dokumentiert"
     isbar.append(f"A: {assess}")
     rec = "Transport in geeignete Zielklinik und strukturierte Übergabe empfohlen"
@@ -1596,6 +1732,18 @@ def build_suspicion_assessment(patient_data):
 
     suspicions = []
     recommendations = []
+
+    befast_normal_values = {None, "", "Keine Angabe", "Unauffällig", "Symmetrisch", "Kein Absinken"}
+    if any(
+        x.get(key) not in befast_normal_values
+        for key in ("befast_balance", "befast_eyes", "befast_face", "befast_arms", "befast_speech")
+    ):
+        suspicions.append("Auffälliges BE-FAST-Screening / akutes neurologisches Defizit")
+        recommendations.extend([
+            "Symptombeginn bzw. Last-Seen-Well-Zeit sichern",
+            "Zeitkritische Voranmeldung in einer geeigneten Stroke Unit erwägen",
+            "Neurologischen Verlauf und Blutzucker wiederholt kontrollieren",
+        ])
 
     if any(k in symptome for k in ["atemnot", "dyspnoe", "luftnot"]) or x.get("atmung") in ["Dyspnoe", "Tachypnoe", "Apnoe"] or (_is_valid_value(v.get("spo2")) and int(v.get("spo2")) < 90):
         suspicions.append("Respiratorische Insuffizienz / akute Dyspnoe")
@@ -1670,6 +1818,8 @@ if 'seite' not in st.session_state:
 # mit dem Klick auf den nächsten Reiter an Streamlit übertragen wird.
 if st.session_state['seite'] == "❤️ Vitalwerte":
     sync_vitalwerte_from_session_state()
+elif st.session_state['seite'] == "🩺 xABCDE":
+    sync_xabcde_from_session_state()
 
 if 'xabcde_selected' not in st.session_state:
     st.session_state['xabcde_selected'] = "A"
@@ -2057,87 +2207,159 @@ elif seite == "🩺 xABCDE":
 
     if selected == "A":
         st.subheader("A – Airway")
-        patient["xabcde"]["atemweg"] = st.radio(
-            "Atemweg",
-            ["Keine Angabe", "Frei", "Gefährdet", "Verlegt"],
-            key="atemweg"
-        )
-        patient["xabcde"]["hws"] = st.radio(
-            "HWS",
-            ["Keine Angabe", "Keine Immobilisation", "Stifneck", "Vakuummatratze"],
-            key="hws"
-        )
+        airway_col, hws_col = st.columns(2, gap="large")
+        with airway_col:
+            patient["xabcde"]["atemweg"] = st.radio(
+                "Atemweg",
+                ["Keine Angabe", "Frei", "Gefährdet", "Verlegt"],
+                key="atemweg"
+            )
+        with hws_col:
+            patient["xabcde"]["hws"] = st.radio(
+                "HWS",
+                ["Keine Angabe", "Keine Immobilisation", "Stifneck", "Vakuummatratze"],
+                key="hws"
+            )
 
     elif selected == "B":
         st.subheader("B – Breathing")
-        patient["xabcde"]["atmung"] = st.radio(
-            "Atmung",
-            ["Keine Angabe", "Unauffällig", "Dyspnoe", "Bradypnoe", "Tachypnoe", "Apnoe"],
-            key="atmung"
-        )
-        patient["xabcde"]["atemgeraeusche"] = st.radio(
-            "Atemgeräusche",
-            ["Keine Angabe", "Beidseits vorhanden", "Links abgeschwächt", "Rechts abgeschwächt", "Keine"],
-            key="atemgeraeusche"
-        )
-        patient["xabcde"]["sauerstoff"] = st.selectbox(
-            "Sauerstoffgabe",
-            ["Keine", "2 l/min", "4 l/min", "6 l/min", "10 l/min", "15 l/min"],
-            key="sauerstoff"
-        )
+        breathing_col, sounds_col = st.columns(2, gap="large")
+        with breathing_col:
+            patient["xabcde"]["atmung"] = st.radio(
+                "Atmung",
+                ["Keine Angabe", "Unauffällig", "Dyspnoe", "Bradypnoe", "Tachypnoe", "Apnoe"],
+                key="atmung"
+            )
+        with sounds_col:
+            patient["xabcde"]["atemgeraeusche"] = st.radio(
+                "Atemgeräusche",
+                ["Keine Angabe", "Beidseits vorhanden", "Links abgeschwächt", "Rechts abgeschwächt", "Keine"],
+                key="atemgeraeusche"
+            )
+        oxygen_col, _ = st.columns(2, gap="large")
+        with oxygen_col:
+            patient["xabcde"]["sauerstoff"] = st.selectbox(
+                "Sauerstoffgabe",
+                ["Keine", "2 l/min", "4 l/min", "6 l/min", "10 l/min", "15 l/min"],
+                key="sauerstoff"
+            )
 
     elif selected == "C":
         st.subheader("C – Circulation")
-        patient["xabcde"]["haut"] = st.radio(
-            "Haut",
-            ["Keine Angabe", "Rosig / warm", "Blass", "Kalt / schweißig", "Zyanotisch"],
-            key="haut"
-        )
-        patient["xabcde"]["rekap"] = st.radio(
-            "Rekapillarisierungszeit",
-            ["Keine Angabe", "< 2 Sekunden", "> 2 Sekunden"],
-            key="rekap"
-        )
-        patient["xabcde"]["pulsqualitaet"] = st.radio(
-            "Pulsqualität",
-            ["Keine Angabe", "Kräftig", "Schwach", "Fadenförmig"],
-            key="pulsqualitaet"
-        )
+        skin_col, recap_col = st.columns(2, gap="large")
+        with skin_col:
+            patient["xabcde"]["haut"] = st.radio(
+                "Haut",
+                ["Keine Angabe", "Rosig / warm", "Blass", "Kalt / schweißig", "Zyanotisch"],
+                key="haut"
+            )
+        with recap_col:
+            patient["xabcde"]["rekap"] = st.radio(
+                "Rekapillarisierungszeit",
+                ["Keine Angabe", "< 2 Sekunden", "> 2 Sekunden"],
+                key="rekap"
+            )
+        pulse_col, _ = st.columns(2, gap="large")
+        with pulse_col:
+            patient["xabcde"]["pulsqualitaet"] = st.radio(
+                "Pulsqualität",
+                ["Keine Angabe", "Kräftig", "Schwach", "Fadenförmig"],
+                key="pulsqualitaet"
+            )
 
     elif selected == "D":
         st.subheader("D – Disability")
-        patient["xabcde"]["avpu"] = st.radio(
-            "AVPU",
-            ["Keine Angabe", "A", "V", "P", "U"],
-            key="avpu"
-        )
-        patient["xabcde"]["pupillen"] = st.radio(
-            "Pupillen",
-            ["Keine Angabe", "Isokor", "Anisokor", "Lichtstarr"],
-            key="pupillen"
-        )
+        avpu_col, pupils_col = st.columns(2, gap="large")
+        with avpu_col:
+            patient["xabcde"]["avpu"] = st.radio(
+                "AVPU",
+                ["Keine Angabe", "A", "V", "P", "U"],
+                key="avpu"
+            )
+        with pupils_col:
+            patient["xabcde"]["pupillen"] = st.radio(
+                "Pupillen",
+                ["Keine Angabe", "Isokor", "Anisokor", "Lichtstarr"],
+                key="pupillen"
+            )
+
+        st.divider()
+        st.subheader("🧠 BE-FAST Schlaganfall-Screening")
+        st.caption("B Balance · E Eyes · F Face · A Arms · S Speech · T Time")
+        befast_left, befast_right = st.columns(2)
+        with befast_left:
+            patient["xabcde"]["befast_balance"] = st.selectbox(
+                "B – Balance",
+                ["Keine Angabe", "Unauffällig", "Akute Gang-/Standunsicherheit", "Akuter Schwindel / Ataxie"],
+                key="befast_balance",
+            )
+            patient["xabcde"]["befast_face"] = st.selectbox(
+                "F – Face",
+                ["Keine Angabe", "Symmetrisch", "Fazialisparese links", "Fazialisparese rechts"],
+                key="befast_face",
+            )
+            patient["xabcde"]["befast_speech"] = st.selectbox(
+                "S – Speech",
+                ["Keine Angabe", "Unauffällig", "Dysarthrie", "Aphasie", "Sprachverständnis gestört"],
+                key="befast_speech",
+            )
+        with befast_right:
+            patient["xabcde"]["befast_eyes"] = st.selectbox(
+                "E – Eyes",
+                ["Keine Angabe", "Unauffällig", "Akute Sehstörung", "Doppelbilder", "Gesichtsfeldausfall"],
+                key="befast_eyes",
+            )
+            patient["xabcde"]["befast_arms"] = st.selectbox(
+                "A – Arms",
+                ["Keine Angabe", "Kein Absinken", "Armabsinken links", "Armabsinken rechts", "Armabsinken beidseits"],
+                key="befast_arms",
+            )
+            patient["xabcde"]["befast_time"] = st.text_input(
+                "T – Time / Symptombeginn",
+                placeholder="z. B. 14:20 Uhr oder zuletzt gesund um 12:00 Uhr",
+                key="befast_time",
+            )
+
+        befast_normal_values = {"Unauffällig", "Symmetrisch", "Kein Absinken", "Keine Angabe", ""}
+        befast_positive = [
+            value
+            for key, value in patient["xabcde"].items()
+            if key in {"befast_balance", "befast_eyes", "befast_face", "befast_arms", "befast_speech"}
+            and value not in befast_normal_values
+        ]
+        if befast_positive:
+            st.error("🔴 BE-FAST auffällig: " + " · ".join(befast_positive))
+        elif all(
+            patient["xabcde"].get(key) not in [None, "", "Keine Angabe"]
+            for key in ("befast_balance", "befast_eyes", "befast_face", "befast_arms", "befast_speech")
+        ):
+            st.success("🟢 BE-FAST ohne dokumentierte Auffälligkeit")
 
     elif selected == "E":
         st.subheader("E – Exposure")
-        patient["xabcde"]["bodycheck"] = st.radio(
-            "Bodycheck",
-            ["Keine Angabe", "Unauffällig", "Auffällig"],
-            key="bodycheck"
-        )
+        bodycheck_col, exposure_flags_col = st.columns(2, gap="large")
+        with bodycheck_col:
+            patient["xabcde"]["bodycheck"] = st.radio(
+                "Bodycheck",
+                ["Keine Angabe", "Unauffällig", "Auffällig"],
+                key="bodycheck"
+            )
+        with exposure_flags_col:
+            st.markdown("**Weitere Befunde**")
+            patient["xabcde"]["unterkuehlung"] = st.checkbox(
+                "Unterkühlung",
+                key="unterkuehlung"
+            )
+            patient["xabcde"]["verbrennung"] = st.checkbox(
+                "Verbrennung",
+                key="verbrennung"
+            )
         if patient["xabcde"]["bodycheck"] == "Auffällig":
             patient["xabcde"]["bodycheck_text"] = st.text_area(
                 "Auffälligkeiten",
                 height=120,
                 key="bodycheck_text"
             )
-        patient["xabcde"]["unterkuehlung"] = st.checkbox(
-            "Unterkühlung",
-            key="unterkuehlung"
-        )
-        patient["xabcde"]["verbrennung"] = st.checkbox(
-            "Verbrennung",
-            key="verbrennung"
-        )
 
     render_live_summary(
         "Live-Zusammenfassung xABCDE",
@@ -2480,6 +2702,43 @@ elif seite == "🔎 Verdacht":
 
     st.header("🔎 Verdacht & Handlungshilfe")
     st.warning("Hinweis: Dies sind unterstützende Verdachtshinweise und keine ärztliche Diagnose.")
+
+    st.subheader("🏥 ICD-10-GM auf der ärztlichen Einweisung")
+    einweisung = patient["einweisung"]
+    with st.form("icd_lookup_form", clear_on_submit=False):
+        icd_input_col, icd_button_col = st.columns([4, 1])
+        with icd_input_col:
+            icd_input = st.text_input(
+                "ICD-10-GM-Code",
+                value=einweisung.get("icd_code", ""),
+                placeholder="z. B. J45.0 oder I63.9",
+                help="Untercodes können mit Punkt eingegeben werden.",
+            )
+        with icd_button_col:
+            st.markdown("<div style='height:1.7rem'></div>", unsafe_allow_html=True)
+            lookup_submitted = st.form_submit_button("Übersetzen", use_container_width=True, type="primary")
+
+    if lookup_submitted:
+        with st.spinner("ICD-10-GM-Code wird nachgeschlagen …"):
+            lookup_result = lookup_icd10_diagnosis(icd_input)
+        if lookup_result.get("ok"):
+            einweisung["icd_code"] = lookup_result["code"]
+            einweisung["diagnose"] = lookup_result["diagnosis"]
+            einweisung["source_url"] = lookup_result["source_url"]
+            st.success(f"{lookup_result['code']}: {lookup_result['diagnosis']}")
+        else:
+            st.warning(lookup_result.get("error", "ICD-Code konnte nicht aufgelöst werden."))
+
+    if einweisung.get("icd_code") and einweisung.get("diagnose"):
+        st.info(f"**{einweisung['icd_code']}** — {einweisung['diagnose']}")
+        st.caption("Bezeichnung aus der ICD-Code-Suche von gesund.bund.de; bitte mit der Einweisung abgleichen.")
+        clear_icd_col, _ = st.columns([1, 4])
+        with clear_icd_col:
+            if st.button("ICD-Eintrag löschen", key="clear_icd_entry", use_container_width=True):
+                patient["einweisung"] = {}
+                st.rerun()
+
+    st.divider()
 
     suspicions, recommendations = build_suspicion_assessment(patient)
 
