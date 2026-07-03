@@ -122,6 +122,7 @@ def reset_patient_case():
         "samplers": {},
         "opqrst": {},
         "einweisung": {},
+        "amls": {"excluded": [], "custom_candidates": [], "arbeitsdiagnose": ""},
         "massnahmen": {"timeline": [], "medikation": []},
     }
     st.session_state["seite"] = "❤️ Vitalwerte"
@@ -193,6 +194,7 @@ def generate_protocol():
     s = patient.get("samplers", {})
     o = patient.get("opqrst", {})
     e = patient.get("einweisung", {})
+    amls = patient.get("amls", {})
     m = patient.get("massnahmen", {})
 
     if e.get("icd_code") and e.get("diagnose"):
@@ -201,6 +203,14 @@ def generate_protocol():
         protocol += f"ICD-10-GM {e.get('icd_code')}: {e.get('diagnose')}\n"
         if e.get("hinweis"):
             protocol += f"Einweisungshinweis: {e.get('hinweis')}\n"
+        protocol += "\n"
+
+    if amls.get("arbeitsdiagnose"):
+        protocol += "AMLS-DIFFERENZIALDIAGNOSE\n"
+        protocol += "=" * 50 + "\n"
+        protocol += f"Arbeitsdiagnose: {amls.get('arbeitsdiagnose')}\n"
+        if amls.get("excluded"):
+            protocol += "Im Trichter zurückgestellt/ausgeschlossen: " + "; ".join(amls.get("excluded", [])) + "\n"
         protocol += "\n"
 
     # Narrative Einleitung (anonym, nur nicht-identifizierende Informationen)
@@ -1057,6 +1067,8 @@ if "patient" not in st.session_state:
 
         "einweisung": {},
 
+        "amls": {"excluded": [], "custom_candidates": [], "arbeitsdiagnose": ""},
+
         "massnahmen": {
             "timeline": [],
             "medikation": []
@@ -1070,6 +1082,10 @@ patient.setdefault("xabcde", {})
 patient.setdefault("samplers", {})
 patient.setdefault("opqrst", {})
 patient.setdefault("einweisung", {})
+patient.setdefault("amls", {"excluded": [], "custom_candidates": [], "arbeitsdiagnose": ""})
+patient["amls"].setdefault("excluded", [])
+patient["amls"].setdefault("custom_candidates", [])
+patient["amls"].setdefault("arbeitsdiagnose", "")
 patient.setdefault("massnahmen", {"timeline": [], "medikation": []})
 patient["massnahmen"].setdefault("timeline", [])
 patient["massnahmen"].setdefault("medikation", [])
@@ -1090,6 +1106,7 @@ WORKFLOW_STEPS = [
     {"page": "🔥 OPQRST", "label": "Schmerzbild", "short_label": "Schmerz"},
     {"page": "⏱️ Maßnahmen", "label": "Maßnahmen", "short_label": "Maßn."},
     {"page": "🔎 Verdacht", "label": "Verdacht", "short_label": "Verdacht"},
+    {"page": "🔻 AMLS", "label": "AMLS-Trichter", "short_label": "AMLS"},
     {"page": "💉 Med-Rechner", "label": "Rechner", "short_label": "Rechner"},
     {"page": "🗣️ Übergabe", "label": "Übergabe", "short_label": "Übergabe"},
     {"page": "📄 Protokoll", "label": "Protokoll", "short_label": "Protokoll"},
@@ -1223,6 +1240,7 @@ def workflow_completion_state(patient_data):
         "🔥 OPQRST": "🔥 OPQRST" in visited_pages or manual_done.get("🔥 OPQRST", False),
         "⏱️ Maßnahmen": "⏱️ Maßnahmen" in visited_pages or manual_done.get("⏱️ Maßnahmen", False),
         "🔎 Verdacht": "🔎 Verdacht" in visited_pages or manual_done.get("🔎 Verdacht", False),
+        "🔻 AMLS": bool(patient_data.get("amls", {}).get("arbeitsdiagnose")) or manual_done.get("🔻 AMLS", False),
         "🗣️ Übergabe": "🗣️ Übergabe" in visited_pages or manual_done.get("🗣️ Übergabe", False),
         "📄 Protokoll": "📄 Protokoll" in visited_pages or manual_done.get("📄 Protokoll", False),
     }
@@ -1249,6 +1267,7 @@ def workflow_missing_hint(page_name, patient_data):
         "🔥 OPQRST": "Schmerzqualität, Region oder NRS erfassen.",
         "⏱️ Maßnahmen": "Mindestens eine Maßnahme oder Medikation dokumentieren.",
         "🔎 Verdacht": "Vorher Vitalwerte, xABCDE oder Anamnese ausfüllen.",
+        "🔻 AMLS": "Differenzialdiagnosen prüfen und eine Arbeitsdiagnose festhalten.",
         "🗣️ Übergabe": "Vor Übergabe Maßnahmen und Kernbefunde vervollständigen.",
         "📄 Protokoll": "Protokoll generieren, damit der Schritt abgeschlossen ist.",
     }
@@ -1264,6 +1283,8 @@ def workflow_missing_hint(page_name, patient_data):
     if page_name == "⏱️ Maßnahmen" and (massnahmen.get("timeline") or massnahmen.get("medikation")):
         return ""
     if page_name == "🔎 Verdacht" and (_has_content(vital) or _has_content(xabcde) or _has_content(samplers) or _has_content(opqrst)):
+        return ""
+    if page_name == "🔻 AMLS" and patient_data.get("amls", {}).get("arbeitsdiagnose"):
         return ""
     if page_name == "🗣️ Übergabe" and (massnahmen.get("timeline") or massnahmen.get("medikation") or _has_content(vital)):
         return ""
@@ -1674,6 +1695,7 @@ def build_handover_text(patient_data):
     s = patient_data.get("samplers", {})
     o = patient_data.get("opqrst", {})
     e = patient_data.get("einweisung", {})
+    amls = patient_data.get("amls", {})
     m = patient_data.get("massnahmen", {})
 
     mist = []
@@ -1710,6 +1732,8 @@ def build_handover_text(patient_data):
         background += f"; Einweisung: ICD-10-GM {e.get('icd_code')} – {e.get('diagnose')}"
     isbar.append(f"B: {background}")
     assess = x.get("atmung") or x.get("atemweg") or x.get("avpu") or "Keine strukturierte Einschätzung dokumentiert"
+    if amls.get("arbeitsdiagnose"):
+        assess += f"; AMLS-Arbeitsdiagnose: {amls.get('arbeitsdiagnose')}"
     isbar.append(f"A: {assess}")
     rec = "Transport in geeignete Zielklinik und strukturierte Übergabe empfohlen"
     if o.get("nrs") and int(o.get("nrs", 0)) >= 7:
@@ -1805,6 +1829,169 @@ def build_suspicion_assessment(patient_data):
     dedup_recs = list(dict.fromkeys(recommendations))
     dedup_susp = list(dict.fromkeys(suspicions))
     return dedup_susp, dedup_recs
+
+
+def build_amls_candidates(patient_data):
+    v = patient_data.get("vitalwerte", {})
+    x = patient_data.get("xabcde", {})
+    s = patient_data.get("samplers", {})
+    o = patient_data.get("opqrst", {})
+    referral = patient_data.get("einweisung", {})
+    amls = patient_data.get("amls", {})
+
+    text = " ".join(
+        str(value or "")
+        for value in (
+            s.get("symptome"), s.get("ereignis"), s.get("vorgeschichte"),
+            o.get("region"), o.get("quality"), o.get("onset_text"),
+            v.get("kurzbericht"),
+        )
+    ).lower()
+    candidates = []
+
+    def add(name, category, rationale):
+        if name and not any(item["name"] == name for item in candidates):
+            candidates.append({"name": name, "category": category, "rationale": rationale})
+
+    def mentions(*terms):
+        return any(term in text for term in terms)
+
+    if referral.get("diagnose"):
+        add(
+            f"Einweisungsdiagnose: {referral.get('diagnose')}",
+            "Einweisung",
+            f"Auf der Einweisung als ICD-10-GM {referral.get('icd_code', '–')} angegeben",
+        )
+
+    respiratory = mentions("atemnot", "dyspnoe", "luftnot", "husten") or x.get("atmung") in {"Dyspnoe", "Bradypnoe", "Tachypnoe", "Apnoe"}
+    if respiratory:
+        add("Asthma/COPD-Exazerbation", "Respiratorisch", "Dyspnoe bzw. auffällige Atmung dokumentiert")
+        add("Pneumonie / respiratorischer Infekt", "Respiratorisch", "Atemwegsbeschwerden als mögliche infektiöse Ursache")
+        add("Lungenarterienembolie", "Kardiopulmonal", "Akute Dyspnoe erfordert Ausschluss einer Embolie")
+        add("Kardiales Lungenödem", "Kardiopulmonal", "Dyspnoe kann kardial bedingt sein")
+        add("Pneumothorax", "Respiratorisch", "Akute respiratorische Beschwerden als mögliche Ursache")
+
+    chest_pain = mentions("brust", "thorax", "retrosternal", "druck auf der brust") or any(
+        term in str(o.get("region") or "").lower() for term in ("brust", "thorax")
+    )
+    if chest_pain:
+        add("Akutes Koronarsyndrom", "Kardial", "Thoraxbeschwerden dokumentiert")
+        add("Lungenarterienembolie", "Kardiopulmonal", "Thoraxschmerz gehört zum gefährlichen Differenzial")
+        add("Aortensyndrom / Aortendissektion", "Vaskulär", "Zeitkritische Ursache bei akutem Thoraxschmerz")
+        add("Pneumothorax", "Respiratorisch", "Thoraxschmerz kann pleuropulmonal bedingt sein")
+        add("Muskuloskelettaler Thoraxschmerz", "Sonstige", "Nichtkardiale Ursache mitbedenken")
+
+    befast_normal = {None, "", "Keine Angabe", "Unauffällig", "Symmetrisch", "Kein Absinken"}
+    neuro_abnormal = any(
+        x.get(key) not in befast_normal
+        for key in ("befast_balance", "befast_eyes", "befast_face", "befast_arms", "befast_speech")
+    ) or mentions("lähmung", "sprachstörung", "bewusstlos", "verwirrt", "krampf", "synkope")
+    if neuro_abnormal:
+        add("Schlaganfall / TIA", "Neurologisch", "Neurologische Auffälligkeit bzw. BE-FAST-Befund")
+        add("Hypoglykämie", "Metabolisch", "Reversible neurologische Differenzialdiagnose")
+        add("Krampfanfall / postiktaler Zustand", "Neurologisch", "Bewusstseins- oder neurologische Störung")
+        add("Intoxikation", "Toxikologisch", "Bewusstseinsstörung kann toxisch bedingt sein")
+
+    if mentions("bauch", "abdomen", "kolik", "flanke", "epigastr"):
+        add("Akutes Abdomen", "Abdominell", "Abdominelle Beschwerden dokumentiert")
+        add("Gastroenteritis", "Abdominell", "Gastrointestinale Ursache möglich")
+        add("Gallenwegs-/Nierenkolik", "Abdominell", "Kolikartige oder flankige Beschwerden möglich")
+        add("Aortenaneurysma / vaskuläres Ereignis", "Vaskulär", "Gefährliche vaskuläre Ursache ausschließen")
+        add("Atypisches akutes Koronarsyndrom", "Kardial", "Oberbauchbeschwerden können kardial bedingt sein")
+
+    if mentions("fieber", "schüttelfrost", "infekt"):
+        add("Sepsis / schwere Infektion", "Infektiös", "Infektzeichen dokumentiert")
+        add("Pneumonie", "Infektiös", "Häufiger respiratorischer Infektfokus")
+        add("Harnwegsinfekt / Urosepsis", "Infektiös", "Möglicher Infektfokus")
+
+    try:
+        bz = float(v.get("bz"))
+    except (TypeError, ValueError):
+        bz = None
+    if bz is not None and 0 < bz < 70:
+        add("Hypoglykämie", "Metabolisch", f"BZ {bz:g} mg/dL")
+    elif bz is not None and bz > 250:
+        add("Hyperglykämische Stoffwechselentgleisung", "Metabolisch", f"BZ {bz:g} mg/dL")
+
+    if x.get("avpu") in {"V", "P", "U"}:
+        add("Intrakranielle Ursache", "Neurologisch", f"AVPU {x.get('avpu')} dokumentiert")
+        add("Intoxikation", "Toxikologisch", "Bewusstseinsstörung unklarer Ursache")
+        add("Metabolische Entgleisung", "Metabolisch", "Bewusstseinsstörung unklarer Ursache")
+
+    if len(candidates) < 4:
+        for name, category in (
+            ("Kardiale Ursache / Rhythmusstörung", "Kardial"),
+            ("Respiratorische Ursache", "Respiratorisch"),
+            ("Neurologische Ursache", "Neurologisch"),
+            ("Metabolische Entgleisung", "Metabolisch"),
+            ("Infektion / Sepsis", "Infektiös"),
+            ("Intoxikation", "Toxikologisch"),
+        ):
+            add(name, category, "Breiter AMLS-Sicherheitscheck bei noch unspezifischer Datenlage")
+
+    for custom_name in amls.get("custom_candidates", []):
+        add(custom_name, "Eigene Ergänzung", "Manuell zum Trichter hinzugefügt")
+
+    return candidates
+
+
+def amls_candidate_conflicts(candidate_name, patient_data):
+    """Return documented findings that are atypical, without treating them as exclusions."""
+    v = patient_data.get("vitalwerte", {})
+    x = patient_data.get("xabcde", {})
+    o = patient_data.get("opqrst", {})
+    name = candidate_name.lower()
+    conflicts = []
+
+    def number(key):
+        try:
+            return float(v.get(key))
+        except (TypeError, ValueError):
+            return None
+
+    spo2 = number("spo2")
+    bz = number("bz")
+    temperature = number("temperatur")
+    puls = number("puls")
+    af = number("af")
+
+    if "hypoglyk" in name and bz is not None and bz >= 70:
+        conflicts.append(f"BZ {bz:g} mg/dL nicht hypoglykämisch")
+    if ("hyperglyk" in name or "stoffwechselentgleisung" in name) and bz is not None and 70 <= bz <= 250:
+        conflicts.append(f"BZ {bz:g} mg/dL ohne deutliche Entgleisung")
+
+    if "pneumothorax" in name and x.get("atemgeraeusche") == "Beidseits vorhanden":
+        conflicts.append("Atemgeräusche beidseits vorhanden")
+
+    if any(term in name for term in ("asthma", "copd", "lungenödem", "respiratorische ursache")):
+        if x.get("atmung") == "Unauffällig":
+            conflicts.append("Atmung als unauffällig dokumentiert")
+        if spo2 is not None and spo2 >= 95:
+            conflicts.append(f"SpO₂ {spo2:g} % im Normbereich")
+
+    if any(term in name for term in ("pneumonie", "infektion", "sepsis", "urosepsis", "gastroenteritis")):
+        if temperature is not None and 36 <= temperature < 38:
+            conflicts.append(f"Temperatur {temperature:g} °C ohne Fieber")
+
+    if any(term in name for term in ("schlaganfall", "tia", "neurologische ursache")):
+        befast_keys = ("befast_balance", "befast_eyes", "befast_face", "befast_arms", "befast_speech")
+        normal_values = {"Unauffällig", "Symmetrisch", "Kein Absinken"}
+        documented = [x.get(key) for key in befast_keys if x.get(key) not in [None, "", "Keine Angabe"]]
+        if len(documented) == len(befast_keys) and all(value in normal_values for value in documented):
+            conflicts.append("BE-FAST vollständig unauffällig")
+
+    if "akutes koronarsyndrom" in name or candidate_name == "Kardiale Ursache / Rhythmusstörung":
+        region = str(o.get("region") or "").lower()
+        if region and not any(term in region for term in ("brust", "thorax", "oberbauch", "epigastr")):
+            conflicts.append(f"Schmerzregion {o.get('region')} atypisch")
+
+    if "rhythmusstörung" in name and puls is not None and 50 <= puls <= 100:
+        conflicts.append(f"Puls {puls:g}/min im Normbereich")
+
+    if "lungenarterienembolie" in name and af is not None and af <= 20 and spo2 is not None and spo2 >= 95:
+        conflicts.append(f"AF {af:g}/min und SpO₂ {spo2:g} % unauffällig")
+
+    return conflicts
 # --------------------------------------------------
 # Navigation
 # --------------------------------------------------
@@ -1916,6 +2103,7 @@ active_nav_palette = {
     "🔥 OPQRST": ("#ff8a4d", "#ff4f7b"),
     "⏱️ Maßnahmen": ("#2ac4df", "#3de99a"),
     "🔎 Verdacht": ("#f3b33d", "#ff6f4a"),
+    "🔻 AMLS": ("#ff6b6b", "#8b5cf6"),
     "💉 Med-Rechner": ("#22b8cf", "#4c6fff"),
     "🗣️ Übergabe": ("#7d6bff", "#5bbdff"),
     "📄 Protokoll": ("#4e72ff", "#5ac8ff"),
@@ -1924,7 +2112,7 @@ start_color, end_color = active_nav_palette.get(seite, ("#4b8cff", "#ff7a7a"))
 st.markdown(
     f"""
     <style>
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+10) > [data-testid="stButton"] > button[kind='primary'] {{
+    [data-testid="column"]:nth-child(n+2):nth-child(-n+12) > [data-testid="stButton"] > button[kind='primary'] {{
         background: linear-gradient(135deg, {start_color} 0%, {end_color} 100%);
     }}
     </style>
@@ -2725,12 +2913,11 @@ elif seite == "🔎 Verdacht":
             einweisung["icd_code"] = lookup_result["code"]
             einweisung["diagnose"] = lookup_result["diagnosis"]
             einweisung["source_url"] = lookup_result["source_url"]
-            st.success(f"{lookup_result['code']}: {lookup_result['diagnosis']}")
         else:
             st.warning(lookup_result.get("error", "ICD-Code konnte nicht aufgelöst werden."))
 
     if einweisung.get("icd_code") and einweisung.get("diagnose"):
-        st.info(f"**{einweisung['icd_code']}** — {einweisung['diagnose']}")
+        st.success(f"**{einweisung['icd_code']}** — {einweisung['diagnose']}")
         st.caption("Bezeichnung aus der ICD-Code-Suche von gesund.bund.de; bitte mit der Einweisung abgleichen.")
         clear_icd_col, _ = st.columns([1, 4])
         with clear_icd_col:
@@ -2759,6 +2946,131 @@ elif seite == "🔎 Verdacht":
             f"SpO2: {patient.get('vitalwerte', {}).get('spo2')}" if _is_valid_value(patient.get('vitalwerte', {}).get('spo2')) else "",
         ],
     )
+
+# --------------------------------------------------
+# AMLS-TRICHTER
+# --------------------------------------------------
+
+elif seite == "🔻 AMLS":
+
+    st.header("🔻 AMLS-Differenzialdiagnose-Trichter")
+    st.warning(
+        "Entscheidungsunterstützung, keine Diagnosestellung: Kandidaten aus dokumentierten Befunden ableiten, "
+        "kritische Differenzialdiagnosen aktiv prüfen und Ausschlüsse klinisch begründen."
+    )
+
+    amls = patient["amls"]
+    candidates = build_amls_candidates(patient)
+    candidate_names = [item["name"] for item in candidates]
+    amls["excluded"] = [name for name in amls.get("excluded", []) if name in candidate_names]
+    excluded = set(amls["excluded"])
+    remaining = [item for item in candidates if item["name"] not in excluded]
+    conflicts_by_name = {
+        item["name"]: [] if item["category"] == "Eigene Ergänzung" else amls_candidate_conflicts(item["name"], patient)
+        for item in candidates
+    }
+    green_count = sum(1 for item in candidates if item["name"] not in excluded and not conflicts_by_name[item["name"]])
+    yellow_count = sum(1 for item in candidates if item["name"] not in excluded and conflicts_by_name[item["name"]])
+
+    total_count = max(len(candidates), 1)
+    funnel_width = max(38, 100 - int((len(excluded) / total_count) * 62))
+    st.markdown(
+        f"""
+        <div style="margin:12px 0 20px; text-align:center;">
+            <div style="margin:auto; width:100%; padding:12px; border-radius:18px 18px 10px 10px; background:linear-gradient(135deg, rgba(94,168,255,.20), rgba(139,92,246,.18)); border:1px solid rgba(255,255,255,.12); font-weight:850;">Ausgangstrichter · {len(candidates)} Kandidaten · 🟢 {green_count} · 🟡 {yellow_count} · 🔴 {len(excluded)}</div>
+            <div style="margin:7px auto; width:72%; height:10px; background:rgba(255,255,255,.08); clip-path:polygon(8% 0,92% 0,84% 100%,16% 100%);"></div>
+            <div style="margin:auto; width:{funnel_width}%; min-width:260px; padding:14px; border-radius:12px 12px 22px 22px; background:linear-gradient(135deg, rgba(68,221,189,.18), rgba(94,168,255,.18)); border:1px solid rgba(92,255,177,.22); font-size:1.05rem; font-weight:900;">{len(remaining)} verbleibend</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    control_left, control_right = st.columns([1, 1])
+    with control_left:
+        with st.form("amls_custom_candidate_form", clear_on_submit=True):
+            custom_candidate = st.text_input("Fehlende Differenzialdiagnose ergänzen", placeholder="Eigene Verdachtsdiagnose")
+            add_custom = st.form_submit_button("Zum Trichter hinzufügen", use_container_width=True)
+        if add_custom and custom_candidate.strip():
+            cleaned_candidate = custom_candidate.strip()[:120]
+            if cleaned_candidate not in amls["custom_candidates"]:
+                amls["custom_candidates"].append(cleaned_candidate)
+            st.rerun()
+    with control_right:
+        st.markdown("<div style='height:1.7rem'></div>", unsafe_allow_html=True)
+        if st.button("↺ Trichter vollständig zurücksetzen", key="amls_reset", use_container_width=True):
+            amls["excluded"] = []
+            amls["custom_candidates"] = []
+            amls["arbeitsdiagnose"] = ""
+            st.rerun()
+
+    st.subheader("Kandidaten durch Antippen ausschließen")
+    st.markdown(
+        "🟢 **passend:** kein dokumentierter Widerspruch &nbsp;&nbsp; "
+        "🟡 **prüfen:** mindestens ein Wert weicht vom typischen Muster ab &nbsp;&nbsp; "
+        "🔴 **ausgeschlossen:** manuell angeklickt"
+    )
+    st.caption("Gelb ist kein Ausschluss. Rot markierte Kandidaten können durch erneutes Antippen zurückgeholt werden.")
+
+    candidate_styles = []
+    for idx, item in enumerate(candidates):
+        if item["name"] in excluded:
+            candidate_styles.append(
+                f".st-key-amls_candidate_{idx} button {{background:linear-gradient(135deg,#991b1b,#ef4444) !important; border-color:#ff8a8a !important; color:white !important; opacity:1 !important;}}"
+            )
+        elif conflicts_by_name[item["name"]]:
+            candidate_styles.append(
+                f".st-key-amls_candidate_{idx} button {{background:linear-gradient(135deg,#a16207,#f4b942) !important; border-color:#ffd978 !important; color:#fffbea !important; opacity:1 !important;}}"
+            )
+        else:
+            candidate_styles.append(
+                f".st-key-amls_candidate_{idx} button {{background:linear-gradient(135deg,#087f5b,#22a06b) !important; border-color:#63e6be !important; color:white !important; opacity:1 !important;}}"
+            )
+    st.markdown("<style>" + "".join(candidate_styles) + "</style>", unsafe_allow_html=True)
+
+    candidate_columns = st.columns(2, gap="large")
+    for idx, item in enumerate(candidates):
+        is_excluded = item["name"] in excluded
+        conflicts = conflicts_by_name[item["name"]]
+        with candidate_columns[idx % 2]:
+            label = f"✕ {item['name']}" if is_excluded else item["name"]
+            clicked = st.button(
+                label,
+                key=f"amls_candidate_{idx}",
+                use_container_width=True,
+                disabled=not is_excluded and len(remaining) <= 1,
+            )
+            st.caption(f"{item['category']} · {item['rationale']}")
+            if conflicts and not is_excluded:
+                st.caption("🟡 Abweichung: " + " · ".join(conflicts))
+            if clicked:
+                if is_excluded:
+                    amls["excluded"].remove(item["name"])
+                elif len(remaining) > 1:
+                    amls["excluded"].append(item["name"])
+                    if amls.get("arbeitsdiagnose") == item["name"]:
+                        amls["arbeitsdiagnose"] = ""
+                st.rerun()
+
+    remaining = [item for item in candidates if item["name"] not in set(amls["excluded"])]
+    if len(remaining) == 1:
+        final_candidate = remaining[0]["name"]
+        st.success(f"Letzter Kandidat im Trichter: **{final_candidate}**")
+        if st.button(
+            "Als dokumentierte Arbeitsdiagnose übernehmen",
+            key="amls_confirm_working_diagnosis",
+            use_container_width=True,
+            type="primary",
+        ):
+            amls["arbeitsdiagnose"] = final_candidate
+            st.session_state["workflow_manual_completion"]["🔻 AMLS"] = True
+            st.rerun()
+
+    if amls.get("arbeitsdiagnose"):
+        st.info(f"Dokumentierte Arbeitsdiagnose: **{amls['arbeitsdiagnose']}**")
+        if st.button("Arbeitsdiagnose zurücknehmen", key="amls_clear_working_diagnosis", use_container_width=True):
+            amls["arbeitsdiagnose"] = ""
+            st.session_state["workflow_manual_completion"]["🔻 AMLS"] = False
+            st.rerun()
 
 # --------------------------------------------------
 # MEDIKAMENTENRECHNER
