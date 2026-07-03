@@ -1167,6 +1167,194 @@ def checkbox_field(section, key, label):
     return value
 
 
+def sync_vitalwerte_from_session_state():
+    v = patient["vitalwerte"]
+
+    for key in ["geschlecht", "alter", "auffindesituation", "puls", "gcs", "bz", "kurzbericht"]:
+        if key in st.session_state:
+            v[key] = st.session_state[key]
+        elif key in v:
+            st.session_state[key] = v[key]
+
+    if "spo2" in v and "spo2_category" not in st.session_state:
+        spo2_value = v.get("spo2")
+        if spo2_value == 97:
+            st.session_state["spo2_category"] = "Normal (≥95%)"
+        elif spo2_value == 92:
+            st.session_state["spo2_category"] = "Leicht ↓ (90-94%)"
+        elif spo2_value == 85:
+            st.session_state["spo2_category"] = "Kritisch ↓ (<90%)"
+        elif _is_valid_value(spo2_value):
+            st.session_state["spo2_category"] = "Selber schreiben"
+            st.session_state["spo2_input"] = spo2_value
+
+    spo2_category = st.session_state.get("spo2_category")
+    if spo2_category == "Selber schreiben" and "spo2_input" in st.session_state:
+        v["spo2"] = st.session_state["spo2_input"]
+    elif spo2_category == "Normal (≥95%)":
+        v["spo2"] = 97
+    elif spo2_category == "Leicht ↓ (90-94%)":
+        v["spo2"] = 92
+    elif spo2_category == "Kritisch ↓ (<90%)":
+        v["spo2"] = 85
+
+    af_category = st.session_state.get("af_category")
+    if "af" in v and "af_category" not in st.session_state:
+        af_value = v.get("af")
+        if af_value == 8:
+            st.session_state["af_category"] = "Bradypnoe (<10)"
+        elif af_value == 15:
+            st.session_state["af_category"] = "Normal (10-20)"
+        elif af_value == 25:
+            st.session_state["af_category"] = "Tachypnoe (20-30)"
+        elif af_value == 35:
+            st.session_state["af_category"] = "Schwer (>30)"
+        elif _is_valid_value(af_value):
+            st.session_state["af_category"] = "Selber schreiben"
+            st.session_state["af_input"] = af_value
+    if af_category == "Selber schreiben" and "af_input" in st.session_state:
+        v["af"] = st.session_state["af_input"]
+    elif af_category == "Bradypnoe (<10)":
+        v["af"] = 8
+    elif af_category == "Normal (10-20)":
+        v["af"] = 15
+    elif af_category == "Tachypnoe (20-30)":
+        v["af"] = 25
+    elif af_category == "Schwer (>30)":
+        v["af"] = 35
+
+    rr_category = st.session_state.get("rr_category")
+    if "rr_sys" in v and "rr_dia" in v and "rr_category" not in st.session_state:
+        rr_pair = (v.get("rr_sys"), v.get("rr_dia"))
+        if rr_pair == (85, 55):
+            st.session_state["rr_category"] = "Hypotonie (<90/60)"
+        elif rr_pair == (120, 80):
+            st.session_state["rr_category"] = "Normal (90-140/60-90)"
+        elif rr_pair == (150, 95):
+            st.session_state["rr_category"] = "Erhöht (140-160/90-100)"
+        elif rr_pair == (170, 105):
+            st.session_state["rr_category"] = "Hypertonie (>160/100)"
+        elif _is_valid_value(rr_pair[0]) or _is_valid_value(rr_pair[1]):
+            st.session_state["rr_category"] = "Selber schreiben"
+            st.session_state["rr_sys_input"] = rr_pair[0]
+            st.session_state["rr_dia_input"] = rr_pair[1]
+    if rr_category == "Selber schreiben":
+        if "rr_sys_input" in st.session_state:
+            v["rr_sys"] = st.session_state["rr_sys_input"]
+        if "rr_dia_input" in st.session_state:
+            v["rr_dia"] = st.session_state["rr_dia_input"]
+    elif rr_category == "Hypotonie (<90/60)":
+        v["rr_sys"], v["rr_dia"] = 85, 55
+    elif rr_category == "Normal (90-140/60-90)":
+        v["rr_sys"], v["rr_dia"] = 120, 80
+    elif rr_category == "Erhöht (140-160/90-100)":
+        v["rr_sys"], v["rr_dia"] = 150, 95
+    elif rr_category == "Hypertonie (>160/100)":
+        v["rr_sys"], v["rr_dia"] = 170, 105
+
+    if st.session_state.get("temp_checkbox"):
+        temp_category = st.session_state.get("temp_category")
+        if "temperatur" in v and "temp_category" not in st.session_state:
+            temp_value = v.get("temperatur")
+            if temp_value == 35.5:
+                st.session_state["temp_category"] = "Unterkühlung (<36°C)"
+            elif temp_value == 37.0:
+                st.session_state["temp_category"] = "Normal (36-37.5°C)"
+            elif temp_value == 37.7:
+                st.session_state["temp_category"] = "Erhöht (37.5-38°C)"
+            elif temp_value == 38.5:
+                st.session_state["temp_category"] = "Fieber (>38°C)"
+            elif _is_valid_value(temp_value):
+                st.session_state["temp_category"] = "Selber schreiben"
+                st.session_state["temp_input"] = temp_value
+        if temp_category == "Selber schreiben" and "temp_input" in st.session_state:
+            v["temperatur"] = st.session_state["temp_input"]
+        elif temp_category == "Unterkühlung (<36°C)":
+            v["temperatur"] = 35.5
+        elif temp_category == "Normal (36-37.5°C)":
+            v["temperatur"] = 37.0
+        elif temp_category == "Erhöht (37.5-38°C)":
+            v["temperatur"] = 37.7
+        elif temp_category == "Fieber (>38°C)":
+            v["temperatur"] = 38.5
+
+
+def sync_xabcde_from_session_state():
+    x = patient["xabcde"]
+    for key in [
+        "atemweg",
+        "hws",
+        "atmung",
+        "atemgeraeusche",
+        "sauerstoff",
+        "haut",
+        "rekap",
+        "pulsqualitaet",
+        "avpu",
+        "pupillen",
+        "bodycheck",
+        "bodycheck_text",
+        "unterkuehlung",
+        "verbrennung",
+    ]:
+        if key in st.session_state:
+            x[key] = st.session_state[key]
+        elif key in x:
+            st.session_state[key] = x[key]
+
+
+def sync_samplers_from_session_state():
+    s = patient["samplers"]
+    for key in [
+        "symptome",
+        "allergien",
+        "allergien_text",
+        "medikamente_option",
+        "medikamente",
+        "vorgeschichte",
+        "letzte_mahlzeit",
+        "letzte_mahlzeit_text",
+        "ereignis",
+        "raucher",
+        "alkohol",
+        "drogen",
+        "diabetes",
+        "hypertonie",
+        "antikoagulation",
+        "risiken_sonstige",
+        "schwangerschaft",
+    ]:
+        state_key = f"samplers_{key}"
+        if state_key in st.session_state:
+            s[key] = st.session_state[state_key]
+        elif key in s:
+            st.session_state[state_key] = s[key]
+
+
+def sync_opqrst_from_session_state():
+    o = patient["opqrst"]
+    for key in [
+        "schmerz_vorhanden",
+        "onset",
+        "onset_text",
+        "provocation",
+        "provocation_text",
+        "quality",
+        "quality_text",
+        "region",
+        "radiation",
+        "nrs",
+        "severity_desc",
+        "zeitverlauf",
+        "dauer",
+    ]:
+        state_key = f"opqrst_{key}"
+        if state_key in st.session_state:
+            o[key] = st.session_state[state_key]
+        elif key in o:
+            st.session_state[state_key] = o[key]
+
+
 def _is_valid_value(value):
     return value not in [None, "", "Keine Angabe", 0]
 
