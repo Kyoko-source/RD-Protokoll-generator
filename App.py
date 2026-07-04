@@ -1626,6 +1626,10 @@ def sync_vitalwerte_from_session_state():
         "geschlecht": "geschlecht",
         "alter": "alter",
         "auffindesituation": "auffindesituation",
+        "spo2_input": "spo2",
+        "af_input": "af",
+        "rr_sys_input": "rr_sys",
+        "rr_dia_input": "rr_dia",
         "puls_input": "puls",
         "gcs_input": "gcs",
         "bz_input": "bz",
@@ -1637,110 +1641,15 @@ def sync_vitalwerte_from_session_state():
         elif patient_key in v:
             st.session_state[widget_key] = v[patient_key]
 
-    if "spo2" in v and "spo2_category" not in st.session_state:
-        spo2_value = v.get("spo2")
-        if spo2_value == 97:
-            st.session_state["spo2_category"] = "Normal (≥95%)"
-        elif spo2_value == 92:
-            st.session_state["spo2_category"] = "Leicht ↓ (90-94%)"
-        elif spo2_value == 85:
-            st.session_state["spo2_category"] = "Kritisch ↓ (<90%)"
-        elif _is_valid_value(spo2_value):
-            st.session_state["spo2_category"] = "Selber schreiben"
-            st.session_state["spo2_input"] = spo2_value
-
-    spo2_category = st.session_state.get("spo2_category")
-    if spo2_category == "Selber schreiben" and "spo2_input" in st.session_state:
-        v["spo2"] = st.session_state["spo2_input"]
-    elif spo2_category == "Normal (≥95%)":
-        v["spo2"] = 97
-    elif spo2_category == "Leicht ↓ (90-94%)":
-        v["spo2"] = 92
-    elif spo2_category == "Kritisch ↓ (<90%)":
-        v["spo2"] = 85
-
-    if "af" in v and "af_category" not in st.session_state:
-        af_value = v.get("af")
-        if af_value == 8:
-            st.session_state["af_category"] = "Bradypnoe (<10)"
-        elif af_value == 15:
-            st.session_state["af_category"] = "Normal (10-20)"
-        elif af_value == 25:
-            st.session_state["af_category"] = "Tachypnoe (20-30)"
-        elif af_value == 35:
-            st.session_state["af_category"] = "Schwer (>30)"
-        elif _is_valid_value(af_value):
-            st.session_state["af_category"] = "Selber schreiben"
-            st.session_state["af_input"] = af_value
-    af_category = st.session_state.get("af_category")
-    if af_category == "Selber schreiben" and "af_input" in st.session_state:
-        v["af"] = st.session_state["af_input"]
-    elif af_category == "Bradypnoe (<10)":
-        v["af"] = 8
-    elif af_category == "Normal (10-20)":
-        v["af"] = 15
-    elif af_category == "Tachypnoe (20-30)":
-        v["af"] = 25
-    elif af_category == "Schwer (>30)":
-        v["af"] = 35
-
-    if "rr_sys" in v and "rr_dia" in v and "rr_category" not in st.session_state:
-        rr_pair = (v.get("rr_sys"), v.get("rr_dia"))
-        if rr_pair == (85, 55):
-            st.session_state["rr_category"] = "Hypotonie (<90/60)"
-        elif rr_pair == (120, 80):
-            st.session_state["rr_category"] = "Normal (90-140/60-90)"
-        elif rr_pair == (150, 95):
-            st.session_state["rr_category"] = "Erhöht (140-160/90-100)"
-        elif rr_pair == (170, 105):
-            st.session_state["rr_category"] = "Hypertonie (>160/100)"
-        elif _is_valid_value(rr_pair[0]) or _is_valid_value(rr_pair[1]):
-            st.session_state["rr_category"] = "Selber schreiben"
-            st.session_state["rr_sys_input"] = rr_pair[0]
-            st.session_state["rr_dia_input"] = rr_pair[1]
-    rr_category = st.session_state.get("rr_category")
-    if rr_category == "Selber schreiben":
-        if "rr_sys_input" in st.session_state:
-            v["rr_sys"] = st.session_state["rr_sys_input"]
-        if "rr_dia_input" in st.session_state:
-            v["rr_dia"] = st.session_state["rr_dia_input"]
-    elif rr_category == "Hypotonie (<90/60)":
-        v["rr_sys"], v["rr_dia"] = 85, 55
-    elif rr_category == "Normal (90-140/60-90)":
-        v["rr_sys"], v["rr_dia"] = 120, 80
-    elif rr_category == "Erhöht (140-160/90-100)":
-        v["rr_sys"], v["rr_dia"] = 150, 95
-    elif rr_category == "Hypertonie (>160/100)":
-        v["rr_sys"], v["rr_dia"] = 170, 105
-
     if "temperatur" in v and "temp_checkbox" not in st.session_state:
-        st.session_state["temp_checkbox"] = True
-
+        st.session_state["temp_checkbox"] = _is_valid_value(v.get("temperatur"))
     if st.session_state.get("temp_checkbox"):
-        if "temperatur" in v and "temp_category" not in st.session_state:
-            temp_value = v.get("temperatur")
-            if temp_value == 35.5:
-                st.session_state["temp_category"] = "Unterkühlung (<36°C)"
-            elif temp_value == 37.0:
-                st.session_state["temp_category"] = "Normal (36-37.5°C)"
-            elif temp_value == 37.7:
-                st.session_state["temp_category"] = "Erhöht (37.5-38°C)"
-            elif temp_value == 38.5:
-                st.session_state["temp_category"] = "Fieber (>38°C)"
-            elif _is_valid_value(temp_value):
-                st.session_state["temp_category"] = "Selber schreiben"
-                st.session_state["temp_input"] = temp_value
-        temp_category = st.session_state.get("temp_category")
-        if temp_category == "Selber schreiben" and "temp_input" in st.session_state:
+        if "temp_input" in st.session_state:
             v["temperatur"] = st.session_state["temp_input"]
-        elif temp_category == "Unterkühlung (<36°C)":
-            v["temperatur"] = 35.5
-        elif temp_category == "Normal (36-37.5°C)":
-            v["temperatur"] = 37.0
-        elif temp_category == "Erhöht (37.5-38°C)":
-            v["temperatur"] = 37.7
-        elif temp_category == "Fieber (>38°C)":
-            v["temperatur"] = 38.5
+        elif _is_valid_value(v.get("temperatur")):
+            st.session_state["temp_input"] = v["temperatur"]
+    else:
+        v["temperatur"] = None
 
 
 def sync_xabcde_from_session_state():
@@ -2517,159 +2426,83 @@ if seite == "🛠️ Admin":
 elif seite == "❤️ Vitalwerte":
 
     st.header("❤️ Vitalwerte & Demographie")
-    
-    # --- GANZ OBEN: Demographie ---
-    st.subheader("👤 Patientendemographie")
-    d1, d2, d3 = st.columns(3)
-    
-    with d1:
-        patient["vitalwerte"]["geschlecht"] = st.selectbox(
-            "Geschlecht",
-            ["", "männlich", "weiblich", "divers", "Unbekannt"],
-            key="geschlecht"
-        )
-    
-    with d2:
-        patient["vitalwerte"]["alter"] = st.number_input(
-            "Alter (Jahre)",
-            min_value=0,
-            max_value=130,
-            value=0,
-            key="alter"
-        )
-    
-    with d3:
-        patient["vitalwerte"]["auffindesituation"] = st.selectbox(
-            "Auffindesituation",
-            ["", "sitzend vorgefunden", "liegend vorgefunden", "stehend vorgefunden", "am Boden", "auf Stuhl/Sofa", "in häuslicher Umgebung"],
-            key="auffindesituation"
-        )
-    
-    st.divider()
-    
-    # --- B: ATMUNG & OXYGENATION ---
-    st.subheader("B – ATMUNG & OXYGENATION")
-    
-    b1, b2 = st.columns(2)
-    
-    with b1:
-        spo2_cat = st.selectbox(
-            "SpO₂-Wert",
-            ["", "Normal (≥95%)", "Leicht ↓ (90-94%)", "Kritisch ↓ (<90%)", "Selber schreiben"],
-            key="spo2_category"
-        )
-        if spo2_cat == "Selber schreiben":
-            patient["vitalwerte"]["spo2"] = st.number_input("SpO₂ (%)", 0, 100, 0, key="spo2_input")
-        elif spo2_cat == "Normal (≥95%)":
-            patient["vitalwerte"]["spo2"] = 97
-        elif spo2_cat == "Leicht ↓ (90-94%)":
-            patient["vitalwerte"]["spo2"] = 92
-        elif spo2_cat == "Kritisch ↓ (<90%)":
-            patient["vitalwerte"]["spo2"] = 85
-    
-    with b2:
-        af_cat = st.selectbox(
-            "AF-Wert",
-            ["", "Bradypnoe (<10)", "Normal (10-20)", "Tachypnoe (20-30)", "Schwer (>30)", "Selber schreiben"],
-            key="af_category"
-        )
-        if af_cat == "Selber schreiben":
-            patient["vitalwerte"]["af"] = st.number_input("AF (/min)", 0, 60, 0, key="af_input")
-        elif af_cat == "Bradypnoe (<10)":
-            patient["vitalwerte"]["af"] = 8
-        elif af_cat == "Normal (10-20)":
-            patient["vitalwerte"]["af"] = 15
-        elif af_cat == "Tachypnoe (20-30)":
-            patient["vitalwerte"]["af"] = 25
-        elif af_cat == "Schwer (>30)":
-            patient["vitalwerte"]["af"] = 35
-    
-    st.divider()
-    
-    # --- C: ZIRKULATION ---
-    st.subheader("C – ZIRKULATION")
-    
-    c1, c2 = st.columns(2)
-    
-    with c1:
-        rr_cat = st.selectbox(
-            "RR-Wert",
-            ["", "Hypotonie (<90/60)", "Normal (90-140/60-90)", "Erhöht (140-160/90-100)", "Hypertonie (>160/100)", "Selber schreiben"],
-            key="rr_category"
-        )
 
-        if rr_cat == "Selber schreiben":
-            col_sys, col_dia = st.columns(2)
-            with col_sys:
-                patient["vitalwerte"]["rr_sys"] = st.number_input("sys", 0, 300, 0, key="rr_sys_input")
-            with col_dia:
-                patient["vitalwerte"]["rr_dia"] = st.number_input("dia", 0, 200, 0, key="rr_dia_input")
-        elif rr_cat == "Hypotonie (<90/60)":
-            patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 85, 55
-        elif rr_cat == "Normal (90-140/60-90)":
-            patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 120, 80
-        elif rr_cat == "Erhöht (140-160/90-100)":
-            patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 150, 95
-        elif rr_cat == "Hypertonie (>160/100)":
-            patient["vitalwerte"]["rr_sys"], patient["vitalwerte"]["rr_dia"] = 170, 105
-    
-    with c2:
-        patient["vitalwerte"]["puls"] = st.number_input("Pulsfrequenz (/min)", 0, 250, 0, key="puls_input")
-    
-    st.divider()
-    
-    # --- D: DISABILITY (Neurologischer Status) ---
-    st.subheader("D – DISABILITY (Neurologischer Status)")
-    
-    d1, d2 = st.columns(2)
-    
-    with d1:
-        patient["vitalwerte"]["gcs"] = st.number_input("Glasgow Coma Scale", 3, 15, 15, key="gcs_input")
-    
-    with d2:
-        patient["vitalwerte"]["bz"] = st.number_input("Blutzucker (mg/dL)", 0, 1000, 0, key="bz_input")
-    
-    st.divider()
-    
-    # --- E: EXPOSURE (Temperatur) ---
-    st.subheader("E – EXPOSURE (Ganzkörperuntersuchung)")
-    
-    temp_gemessen = st.checkbox("Temperatur gemessen", key="temp_checkbox")
-    
-    if temp_gemessen:
-        temp_cat = st.selectbox(
-            "Temp-Wert",
-            ["", "Unterkühlung (<36°C)", "Normal (36-37.5°C)", "Erhöht (37.5-38°C)", "Fieber (>38°C)", "Selber schreiben"],
-            key="temp_category"
-        )
-        if temp_cat == "Selber schreiben":
-            patient["vitalwerte"]["temperatur"] = st.number_input(
-                "Temp (°C)",
-                min_value=30.0,
-                max_value=45.0,
-                value=36.5,
-                step=0.1,
-                key="temp_input"
+    vitalwerte = patient["vitalwerte"]
+    demographic_done = all(_is_valid_value(vitalwerte.get(key)) for key in ("geschlecht", "alter", "auffindesituation"))
+    breathing_done = all(_is_valid_value(vitalwerte.get(key)) for key in ("spo2", "af"))
+    circulation_done = all(_is_valid_value(vitalwerte.get(key)) for key in ("rr_sys", "rr_dia", "puls"))
+    neuro_done = all(_is_valid_value(vitalwerte.get(key)) for key in ("gcs", "bz"))
+    exposure_done = bool(st.session_state.get("temp_checkbox")) and _is_valid_value(vitalwerte.get("temperatur"))
+
+    with st.expander(f"{'✓ ' if demographic_done else ''}Patientendemographie", expanded=not demographic_done):
+        d1, d2, d3 = st.columns(3)
+        with d1:
+            vitalwerte["geschlecht"] = st.selectbox(
+                "Geschlecht", ["", "männlich", "weiblich", "divers", "Unbekannt"], key="geschlecht"
             )
-        elif temp_cat == "Unterkühlung (<36°C)":
-            patient["vitalwerte"]["temperatur"] = 35.5
-        elif temp_cat == "Normal (36-37.5°C)":
-            patient["vitalwerte"]["temperatur"] = 37.0
-        elif temp_cat == "Erhöht (37.5-38°C)":
-            patient["vitalwerte"]["temperatur"] = 37.7
-        elif temp_cat == "Fieber (>38°C)":
-            patient["vitalwerte"]["temperatur"] = 38.5
-    
-    st.divider()
-    
-    # --- Kurzbericht ---
-    st.subheader("📝 Einsatz-Kurzbericht")
-    patient["vitalwerte"]["kurzbericht"] = st.text_area(
-        "Beschreibung des Einsatzes (optional)",
-        height=150,
-        key="kurzbericht",
-        placeholder="z.B. Sturz aus Höhe, Verkehrsunfall, Schmerzen seit 2 Stunden, ..."
-    )
+        with d2:
+            vitalwerte["alter"] = st.number_input("Alter (Jahre)", 0, 130, 0, key="alter")
+        with d3:
+            vitalwerte["auffindesituation"] = st.selectbox(
+                "Auffindesituation",
+                ["", "sitzend vorgefunden", "liegend vorgefunden", "stehend vorgefunden", "am Boden", "auf Stuhl/Sofa", "in häuslicher Umgebung"],
+                key="auffindesituation",
+            )
+
+    with st.expander(f"{'✓ ' if breathing_done else ''}B – Atmung & Oxygenation", expanded=not breathing_done):
+        b1, b2 = st.columns(2)
+        with b1:
+            vitalwerte["spo2"] = st.number_input("SpO₂ (%)", 0, 100, 0, key="spo2_input")
+            if _is_valid_value(vitalwerte["spo2"]):
+                st.caption(f"Automatische Einordnung: {categorize_spo2(vitalwerte['spo2'])[0]}")
+        with b2:
+            vitalwerte["af"] = st.number_input("Atemfrequenz (/min)", 0, 80, 0, key="af_input")
+            if _is_valid_value(vitalwerte["af"]):
+                st.caption(f"Automatische Einordnung: {categorize_af(vitalwerte['af'])[0]}")
+
+    with st.expander(f"{'✓ ' if circulation_done else ''}C – Zirkulation", expanded=not circulation_done):
+        rr_sys_col, rr_dia_col, pulse_col = st.columns(3)
+        with rr_sys_col:
+            vitalwerte["rr_sys"] = st.number_input("RR systolisch (mmHg)", 0, 300, 0, key="rr_sys_input")
+        with rr_dia_col:
+            vitalwerte["rr_dia"] = st.number_input("RR diastolisch (mmHg)", 0, 200, 0, key="rr_dia_input")
+        with pulse_col:
+            vitalwerte["puls"] = st.number_input("Puls (/min)", 0, 250, 0, key="puls_input")
+        rr_sys, rr_dia, pulse = vitalwerte.get("rr_sys"), vitalwerte.get("rr_dia"), vitalwerte.get("puls")
+        categories = []
+        if _is_valid_value(rr_sys) and _is_valid_value(rr_dia):
+            categories.append(f"RR: {categorize_rr(rr_sys, rr_dia)[0]}")
+        if _is_valid_value(pulse):
+            categories.append(f"Puls: {categorize_puls(pulse)[0]}")
+        if categories:
+            st.caption("Automatische Einordnung: " + " · ".join(categories))
+
+    with st.expander(f"{'✓ ' if neuro_done else ''}D – Neurologischer Status", expanded=not neuro_done):
+        d1, d2 = st.columns(2)
+        with d1:
+            vitalwerte["gcs"] = st.number_input("Glasgow Coma Scale", 3, 15, 15, key="gcs_input")
+        with d2:
+            vitalwerte["bz"] = st.number_input("Blutzucker (mg/dL)", 0, 1000, 0, key="bz_input")
+            if _is_valid_value(vitalwerte["bz"]):
+                st.caption(f"Automatische Einordnung: {categorize_bz(vitalwerte['bz'])[0]}")
+
+    with st.expander(f"{'✓ ' if exposure_done else ''}E – Temperatur", expanded=not exposure_done):
+        temp_gemessen = st.checkbox("Temperatur gemessen", key="temp_checkbox")
+        if temp_gemessen:
+            vitalwerte["temperatur"] = st.number_input(
+                "Temperatur (°C)", 30.0, 45.0, 36.5, 0.1, key="temp_input"
+            )
+            st.caption(f"Automatische Einordnung: {categorize_temperature(vitalwerte['temperatur'])[0]}")
+        else:
+            vitalwerte["temperatur"] = None
+
+    with st.expander("Einsatz-Kurzbericht (optional)", expanded=not bool(vitalwerte.get("kurzbericht"))):
+        vitalwerte["kurzbericht"] = st.text_area(
+            "Beschreibung des Einsatzes",
+            height=130,
+            key="kurzbericht",
+            placeholder="z. B. Sturz aus Höhe, Verkehrsunfall, Schmerzen seit zwei Stunden …",
+        )
 
     render_live_summary(
         "Live-Zusammenfassung Vitalwerte",
