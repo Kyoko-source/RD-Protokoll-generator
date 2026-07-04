@@ -164,6 +164,13 @@ DEVICE_GUIDES = {
         "model_note": "WEINMANN MEDUMAT Standard² – Softwarestand am Gerät beachten",
         "source_label": "WEINMANN Download-Center und Gerätesimulation",
         "source_url": "https://www.weinmann-emergency.com/de/download/downloadcenter/",
+        "topic_actions": {
+            "Simulation öffnen": {
+                "label": "🖥️ MEDUMAT-Simulator herunterladen ↗",
+                "url": "https://weinmann-emergency.canto.de/direct/other/a2oofh0s7l48p6eh1p3jenm53g/2t90BKBvMeu-glvC9B0Frdohrsk/original?content-type=application%2Fzip&name=MEDUMAT-Standard2-PC-Simulation_FW-5-13.zip",
+                "hint": "Offizielle WEINMANN-PC-Simulation, Version 5.13. Der Klick startet den Download direkt beim Hersteller.",
+            }
+        },
         "topics": {
             "Beatmungsbereitschaft herstellen": [
                 "Gerät, Schlauchsystem, Patientenventil, Maske und Sauerstoffversorgung prüfen.",
@@ -196,4 +203,3 @@ DEVICE_GUIDES = {
         },
     },
 }
-

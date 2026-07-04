@@ -2480,6 +2480,15 @@ if seite == "🧰 Geräte-Guide":
         on_change=lambda: st.session_state.update(device_guide_step=0),
     )
     steps = selected_device["topics"][selected_topic]
+    topic_action = selected_device.get("topic_actions", {}).get(selected_topic)
+    if topic_action:
+        st.info(topic_action["hint"])
+        st.link_button(
+            topic_action["label"],
+            topic_action["url"],
+            use_container_width=True,
+            type="primary",
+        )
     step_index = min(int(st.session_state.get("device_guide_step", 0)), len(steps) - 1)
     st.session_state["device_guide_step"] = step_index
 
