@@ -182,10 +182,220 @@ def lookup_icd10_diagnosis(code):
     }
 
 
+def build_protocol_narrative(patient_data):
+    v = patient_data.get("vitalwerte", {})
+    x = patient_data.get("xabcde", {})
+    s = patient_data.get("samplers", {})
+    o = patient_data.get("opqrst", {})
+    e = patient_data.get("einweisung", {})
+    amls = patient_data.get("amls", {})
+    m = patient_data.get("massnahmen", {})
+
+    def present(value):
+        return value not in [None, "", 0, "Keine Angabe"]
+
+    def clean(value):
+        return str(value).strip().rstrip(". ")
+
+    def join_items(items):
+        items = [item for item in items if item]
+        if len(items) < 2:
+            return "".join(items)
+        return ", ".join(items[:-1]) + " und " + items[-1]
+
+    sex = v.get("geschlecht")
+    subject = "Die Patientin" if sex == "weiblich" else "Der Patient" if sex == "männlich" else "Die behandelte Person"
+    paragraphs = []
+
+    intro = subject
+    has_intro_data = False
+    if present(v.get("alter")):
+        has_intro_data = True
+        intro += f" war {int(v.get('alter'))} Jahre alt"
+    if present(v.get("auffindesituation")):
+        has_intro_data = True
+        found_text = clean(v.get("auffindesituation"))
+        if "vorgefunden" not in found_text.lower() and "angetroffen" not in found_text.lower():
+            found_text += " angetroffen"
+        intro += (" und wurde " if present(v.get("alter")) else " wurde ") + found_text
+    intro += "."
+    if present(s.get("ereignis")):
+        has_intro_data = True
+        intro += f" Als Ereignis wurde dokumentiert: {clean(s.get('ereignis'))}."
+    if present(s.get("symptome")):
+        has_intro_data = True
+        intro += f" Als aktuelle Beschwerden wurden {clean(s.get('symptome'))} angegeben."
+    if has_intro_data:
+        paragraphs.append(intro)
+
+    primary = []
+    if present(x.get("atemweg")):
+        primary.append(f"Der Atemweg wurde als {clean(x.get('atemweg')).lower()} beurteilt")
+    if present(x.get("hws")):
+        primary.append(f"hinsichtlich der HWS wurde „{clean(x.get('hws'))}“ dokumentiert")
+    if primary:
+        paragraphs.append(". ".join(primary) + ".")
+
+    breathing = []
+    if present(x.get("atmung")):
+        breathing.append(f"die Atmung wurde als {clean(x.get('atmung')).lower()} eingeschätzt")
+    if present(v.get("af")):
+        af_cat, _ = categorize_af(v.get("af"))
+        breathing.append(f"die Atemfrequenz betrug {v.get('af')}/min ({af_cat})")
+    if present(v.get("spo2")):
+        spo2_cat, _ = categorize_spo2(v.get("spo2"))
+        breathing.append(f"die Sauerstoffsättigung lag bei {v.get('spo2')} % ({spo2_cat})")
+    if present(x.get("atemgeraeusche")):
+        breathing.append(f"die Atemgeräusche wurden als „{clean(x.get('atemgeraeusche'))}“ dokumentiert")
+    if present(x.get("sauerstoff")) and x.get("sauerstoff") != "Keine":
+        breathing.append(f"eine Sauerstoffgabe erfolgte mit {clean(x.get('sauerstoff'))}")
+    if breathing:
+        paragraphs.append("Respiratorisch zeigte sich folgender Befund: " + "; ".join(breathing) + ".")
+
+    circulation = []
+    if present(v.get("rr_sys")) and present(v.get("rr_dia")):
+        rr_cat, _ = categorize_rr(v.get("rr_sys"), v.get("rr_dia"))
+        circulation.append(f"Blutdruck {v.get('rr_sys')}/{v.get('rr_dia')} mmHg ({rr_cat})")
+    if present(v.get("puls")):
+        pulse_cat, _ = categorize_puls(v.get("puls"))
+        circulation.append(f"Puls {v.get('puls')}/min ({pulse_cat})")
+    if present(x.get("haut")):
+        circulation.append(f"Haut {clean(x.get('haut')).lower()}")
+    if present(x.get("rekap")):
+        circulation.append(f"Rekapillarisierungszeit {clean(x.get('rekap'))}")
+    if present(x.get("pulsqualitaet")):
+        circulation.append(f"Pulsqualität {clean(x.get('pulsqualitaet')).lower()}")
+    if circulation:
+        paragraphs.append("Kreislaufseitig wurden " + join_items(circulation) + " erhoben.")
+
+    neuro = []
+    avpu_text = {"A": "wach und ansprechbar", "V": "auf Ansprache reagierend", "P": "auf Schmerzreiz reagierend", "U": "nicht ansprechbar"}
+    if present(x.get("avpu")):
+        neuro.append(f"AVPU {x.get('avpu')} ({avpu_text.get(x.get('avpu'), clean(x.get('avpu')))})")
+    if present(v.get("gcs")):
+        neuro.append(f"GCS {v.get('gcs')}/15")
+    if present(x.get("pupillen")):
+        neuro.append(f"Pupillen {clean(x.get('pupillen')).lower()}")
+    if present(v.get("bz")):
+        bz_cat, _ = categorize_bz(v.get("bz"))
+        neuro.append(f"Blutzucker {v.get('bz')} mg/dL ({bz_cat})")
+    if neuro:
+        paragraphs.append("Neurologisch wurden " + join_items(neuro) + " dokumentiert.")
+
+    befast = []
+    for label, key in (("Balance", "befast_balance"), ("Eyes", "befast_eyes"), ("Face", "befast_face"), ("Arms", "befast_arms"), ("Speech", "befast_speech"), ("Time", "befast_time")):
+        if present(x.get(key)):
+            befast.append(f"{label}: {clean(x.get(key))}")
+    if befast:
+        paragraphs.append("Im BE-FAST-Screening wurden folgende Angaben erhoben: " + "; ".join(befast) + ".")
+
+    exposure = []
+    if present(x.get("bodycheck")):
+        exposure.append(f"Bodycheck {clean(x.get('bodycheck')).lower()}")
+    if present(x.get("bodycheck_text")):
+        exposure.append(f"Auffälligkeiten: {clean(x.get('bodycheck_text'))}")
+    if present(v.get("temperatur")):
+        temp_cat, _ = categorize_temperature(v.get("temperatur"))
+        exposure.append(f"Körpertemperatur {v.get('temperatur')} °C ({temp_cat})")
+    if x.get("unterkuehlung"):
+        exposure.append("Unterkühlung dokumentiert")
+    if x.get("verbrennung"):
+        exposure.append("Verbrennung dokumentiert")
+    if exposure:
+        paragraphs.append("Im Rahmen der weiteren Untersuchung wurden " + join_items(exposure) + " festgehalten.")
+
+    history = []
+    if present(s.get("allergien")):
+        if s.get("allergien") == "Keine bekannt":
+            history.append("keine bekannten Allergien")
+        elif s.get("allergien") == "Vorhanden" and present(s.get("allergien_text")):
+            history.append(f"folgende Allergien: {clean(s.get('allergien_text'))}")
+        else:
+            history.append(f"Allergiestatus: {clean(s.get('allergien'))}")
+    if s.get("medikamente_option") == "Siehe Medikamentenplan":
+        history.append("Medikation gemäß Medikamentenplan")
+    elif s.get("medikamente_option") == "Medikamente eingeben" and present(s.get("medikamente")):
+        history.append(f"Dauermedikation: {clean(s.get('medikamente'))}")
+    if present(s.get("vorgeschichte")):
+        history.append(f"Vorgeschichte: {clean(s.get('vorgeschichte'))}")
+    if history:
+        paragraphs.append("Anamnestisch wurden folgende Angaben dokumentiert: " + "; ".join(history) + ".")
+
+    risk_labels = {
+        "raucher": "Nikotinabusus",
+        "alkohol": "Alkoholkonsum",
+        "drogen": "Drogenkonsum",
+        "diabetes": "Diabetes mellitus",
+        "hypertonie": "arterielle Hypertonie",
+        "antikoagulation": "Antikoagulation",
+    }
+    risks = [label for key, label in risk_labels.items() if s.get(key)]
+    if present(s.get("risiken_sonstige")):
+        risks.append(clean(s.get("risiken_sonstige")))
+    if risks:
+        paragraphs.append("Als Risikofaktoren wurden " + join_items(risks) + " erfasst.")
+    if present(s.get("schwangerschaft")) and s.get("schwangerschaft") != "Nicht relevant":
+        paragraphs.append(f"Zum Schwangerschaftsstatus wurde „{clean(s.get('schwangerschaft'))}“ angegeben.")
+
+    last_events = []
+    last_meal = s.get("letzte_mahlzeit_text") if s.get("letzte_mahlzeit") == "Eigene Eingabe" else s.get("letzte_mahlzeit")
+    for label, value in (
+        ("letzte Nahrungsaufnahme", last_meal),
+        ("letzte Medikamenteneinnahme", s.get("letzte_medikamenteneinnahme")),
+        ("letzter Stuhlgang", s.get("letzter_stuhlgang")),
+        ("letzte Miktion", s.get("letzte_miktion")),
+        ("letztes Erbrechen", s.get("letztes_erbrechen")),
+    ):
+        if present(value):
+            last_events.append(f"{label}: {clean(value)}")
+    if last_events:
+        paragraphs.append("Zu den letzten Ereignissen wurde dokumentiert: " + "; ".join(last_events) + ".")
+
+    if o.get("schmerz_vorhanden") == "Ja":
+        pain = []
+        for label, value in (("Beginn", o.get("onset")), ("Auslöser/Linderung", o.get("provocation")), ("Qualität", o.get("quality")), ("Region", o.get("region")), ("Ausstrahlung", o.get("radiation")), ("Verlauf", o.get("zeitverlauf")), ("Dauer", o.get("dauer"))):
+            if present(value):
+                pain.append(f"{label}: {clean(value)}")
+        if present(o.get("nrs")):
+            pain.append(f"Schmerzintensität NRS {o.get('nrs')}/10")
+        if pain:
+            paragraphs.append("Die Schmerzanamnese ergab: " + "; ".join(pain) + ".")
+
+    if e.get("icd_code") and e.get("diagnose"):
+        paragraphs.append(f"Auf der ärztlichen Einweisung war ICD-10-GM {e.get('icd_code')} mit der Bezeichnung „{clean(e.get('diagnose'))}“ angegeben.")
+    if amls.get("arbeitsdiagnose"):
+        paragraphs.append(f"Als dokumentierte AMLS-Arbeitsdiagnose wurde „{clean(amls.get('arbeitsdiagnose'))}“ festgehalten.")
+
+    for entry in m.get("timeline", []):
+        if present(entry.get("massnahme")):
+            sentence = f"Um {entry.get('zeit', '--:--')} Uhr erfolgte die Maßnahme „{clean(entry.get('massnahme'))}“"
+            if present(entry.get("wirkung")):
+                sentence += f"; als Wirkung wurde „{clean(entry.get('wirkung'))}“ dokumentiert"
+            paragraphs.append(sentence + ".")
+    for medication in m.get("medikation", []):
+        if present(medication.get("name")):
+            sentence = f"Um {medication.get('zeit', '--:--')} Uhr wurde {clean(medication.get('name'))}"
+            if present(medication.get("dosis")):
+                sentence += f" in einer Dosis von {clean(medication.get('dosis'))}"
+            if present(medication.get("weg")):
+                sentence += f" über den Applikationsweg {clean(medication.get('weg'))}"
+            sentence += " verabreicht"
+            if present(medication.get("wirkung")):
+                sentence += f"; als Wirkung wurde „{clean(medication.get('wirkung'))}“ dokumentiert"
+            paragraphs.append(sentence + ".")
+
+    if present(v.get("kurzbericht")):
+        paragraphs.append(f"Ergänzender Einsatzbericht: {clean(v.get('kurzbericht'))}.")
+
+    return paragraphs
+
+
 def generate_protocol():
 
     protocol = ""
     patient = st.session_state.get("patient", {})
+    if not _has_content(patient):
+        return ""
 
     # Hinweis: Keine personenbezogenen Metadaten werden ausgegeben (Datenschutz)
 
@@ -196,6 +406,17 @@ def generate_protocol():
     e = patient.get("einweisung", {})
     amls = patient.get("amls", {})
     m = patient.get("massnahmen", {})
+
+    protocol += "RD-PROTOKOLL – DOKUMENTATIONSENTWURF\n"
+    protocol += "=" * 50 + "\n"
+    protocol += f"Erstellt am {datetime.now().strftime('%d.%m.%Y um %H:%M:%S')} Uhr\n"
+    protocol += "Enthält ausschließlich dokumentierte Angaben; vor Verwendung vollständig prüfen.\n\n"
+
+    narrative_paragraphs = build_protocol_narrative(patient)
+    if narrative_paragraphs:
+        protocol += "AUSFORMULIERTER EINSATZVERLAUF\n"
+        protocol += "=" * 50 + "\n"
+        protocol += "\n\n".join(narrative_paragraphs) + "\n\n"
 
     if e.get("icd_code") and e.get("diagnose"):
         protocol += "ÄRZTLICHE EINWEISUNG\n"
@@ -212,47 +433,6 @@ def generate_protocol():
         if amls.get("excluded"):
             protocol += "Im Trichter zurückgestellt/ausgeschlossen: " + "; ".join(amls.get("excluded", [])) + "\n"
         protocol += "\n"
-
-    # Narrative Einleitung (anonym, nur nicht-identifizierende Informationen)
-    try:
-        intro = "PATIENTENSITUATION:\n"
-        intro += "─" * 50 + "\n"
-        
-        sex = v.get('geschlecht')
-        age = v.get('alter')
-        found = v.get('auffindesituation')
-        avpu = x.get('avpu')
-        ereignis = s.get('ereignis')
-        
-        intro_desc = "Patient"
-        
-        if sex:
-            intro_desc += f" ({sex})"
-        if age and int(age) > 0:
-            intro_desc += f", {int(age)} Jahre alt"
-        
-        if found:
-            intro_desc += f"\nAuffindesituation: {found}"
-
-        # Bewusstseinszustand aus AVPU
-        if avpu and avpu != "Keine Angabe":
-            intro_desc += "\nBewusstseinszustand: "
-            if avpu == 'A':
-                intro_desc += "Wach, vollständig ansprechbar und orientiert"
-            elif avpu == 'V':
-                intro_desc += "Verbal ansprechbar"
-            elif avpu == 'P':
-                intro_desc += "Nur auf Schmerzreize ansprechbar"
-            elif avpu == 'U':
-                intro_desc += "Nicht ansprechbar (bewusstlos)"
-
-        if ereignis:
-            intro_desc += f"\n\nEinsatzmeldung: {ereignis}"
-
-        intro += intro_desc + "\n\n"
-        protocol += intro
-    except Exception:
-        pass
 
     # xABCDE - ausführlicher und strukturierter, mit integrierten Vitalwerten
     xabcde = ""
@@ -284,14 +464,14 @@ def generate_protocol():
         if not b_section:
             b_section = f"B — ATMUNG:\n"
         af_cat, af_val = categorize_af(af)
-        b_section += f"  Atemfrequenz: {af_cat}\n"
+        b_section += f"  Atemfrequenz: {af} /min ({af_cat})\n"
     
     # SpO2 (immer hinzufügen, wenn vorhanden)
     if spo2 and spo2 != 0:
         if not b_section:
             b_section = f"B — ATMUNG:\n"
         s_cat, s_val = categorize_spo2(spo2)
-        b_section += f"  Sauerstoffsättigung: {s_cat}\n"
+        b_section += f"  Sauerstoffsättigung: {spo2} % ({s_cat})\n"
     
     if b_section:
         xabcde += "\n" + b_section
@@ -314,14 +494,14 @@ def generate_protocol():
         if not c_section:
             c_section = f"C — ZIRKULATION (Kreislauf):\n"
         rr_cat, rr_vals = categorize_rr(rr_sys, rr_dia)
-        c_section += f"  Blutdruck: {rr_cat}\n"
+        c_section += f"  Blutdruck: {rr_sys}/{rr_dia} mmHg ({rr_cat})\n"
     
     # Pulsfrequenz (immer hinzufügen, wenn vorhanden)
     if puls and puls != 0:
         if not c_section:
             c_section = f"C — ZIRKULATION (Kreislauf):\n"
         p_cat, p_val = categorize_puls(puls)
-        c_section += f"  Pulsfrequenz: {p_cat}\n"
+        c_section += f"  Pulsfrequenz: {puls} /min ({p_cat})\n"
     
     if c_section:
         xabcde += "\n" + c_section
@@ -368,14 +548,14 @@ def generate_protocol():
                 g_cat = "Schwer eingeschränkt / Intubationskriterium"
         except Exception:
             g_cat = "Unbekannt"
-        d_section += f"  Glasgow Coma Scale: {g_cat}\n"
+        d_section += f"  Glasgow Coma Scale: {gcs}/15 ({g_cat})\n"
     
     # Blutzucker (immer hinzufügen, wenn vorhanden)
     if bz and bz != 0:
         if not d_section:
             d_section = f"D — DISABILITY (Neurologischer Status):\n"
         bz_cat, bz_val = categorize_bz(bz)
-        d_section += f"  Blutzucker: {bz_cat}\n"
+        d_section += f"  Blutzucker: {bz} mg/dL ({bz_cat})\n"
     
     if d_section:
         xabcde += "\n" + d_section
@@ -398,7 +578,7 @@ def generate_protocol():
         if not e_section:
             e_section = f"E — EXPOSURE (Ganzkörperuntersuchung):\n"
         t_cat, t_val = categorize_temperature(temperatur)
-        e_section += f"  Körpertemperatur: {t_cat}\n"
+        e_section += f"  Körpertemperatur: {temperatur} °C ({t_cat})\n"
     
     # SAMPLERS und OPQRST zusätzlich unter E aufführen
     samplers_under_e = ""
@@ -504,28 +684,6 @@ def generate_protocol():
         protocol += "xABCDE — STRUKTURIERTE UNTERSUCHUNG\n"
         protocol += "=" * 50 + "\n"
         protocol += xabcde + "\n"
-
-    # Klinischer Verlauf als Fließtext
-    try:
-        narrative = []
-        if s.get("symptome"):
-            narrative.append(f"Leitsymptomatisch zeigte sich {s.get('symptome')}. ")
-        if x.get("atemweg") and x.get("atemweg") != "Keine Angabe":
-            narrative.append(f"Der Atemweg war {x.get('atemweg').lower()}. ")
-        if x.get("atmung") and x.get("atmung") != "Keine Angabe":
-            narrative.append(f"Die Atmung wurde als {x.get('atmung').lower()} eingeschätzt. ")
-        if x.get("haut") and x.get("haut") != "Keine Angabe":
-            narrative.append(f"Kreislaufbezogen zeigte sich die Haut {x.get('haut').lower()}. ")
-        if x.get("avpu") and x.get("avpu") != "Keine Angabe":
-            narrative.append(f"Neurologisch ergab sich ein AVPU-Status {x.get('avpu')}. ")
-        if o.get("nrs") and int(o.get("nrs", 0)) > 0:
-            narrative.append(f"Die Schmerzintensität wurde mit NRS {o.get('nrs')}/10 angegeben. ")
-        if narrative:
-            protocol += "KLINISCHER VERLAUF (NARRATIV)\n"
-            protocol += "=" * 50 + "\n"
-            protocol += "".join(narrative).strip() + "\n\n"
-    except Exception:
-        pass
 
     # Maßnahmen-Timeline
     timeline_entries = m.get("timeline", [])
@@ -961,25 +1119,59 @@ st.markdown(
             [data-testid="stSelectbox"] div[data-baseweb="select"] > div { min-height:56px !important; font-size:1rem !important; }
             [data-testid="stRadio"] div[role="radiogroup"] > label { min-height:58px; }
         }
-        .st-key-tablet_bottom_nav {
+    .st-key-tablet_bottom_nav {
             position: fixed;
             bottom: 0;
             left: 80px;
             right: 80px;
             z-index: 999;
             margin: 0;
-            padding: 12px;
-            border: 1px solid rgba(255,255,255,0.12);
+            padding: 9px 12px;
+            border: 1px solid rgba(255,255,255,0.09);
             border-bottom: none;
-            border-radius: 22px 22px 0 0;
-            background: rgba(7,17,31,0.94);
-            box-shadow: 0 -16px 34px rgba(2,8,24,0.38);
+            border-radius: 18px 18px 0 0;
+            background: rgba(7,17,31,0.97);
+            box-shadow: 0 -10px 24px rgba(2,8,24,0.30);
             backdrop-filter: blur(18px);
             -webkit-backdrop-filter: blur(18px);
         }
-        .st-key-tablet_bottom_nav [data-testid="stAlert"] { margin:0; min-height:52px; }
+        .st-key-tablet_bottom_nav .workflow-nav-status {
+            min-height:44px;
+            display:flex;
+            align-items:center;
+            justify-content:center;
+            color:rgba(238,245,255,0.68);
+            font-size:0.82rem;
+            text-align:center;
+        }
+        .st-key-tablet_bottom_nav .workflow-nav-status.is-done { color:#86e7c2; }
+        .workflow-compact-head {
+            margin:8px 0 8px;
+            padding:12px 15px;
+            border-radius:18px;
+            border:1px solid rgba(255,255,255,0.08);
+            background:rgba(255,255,255,0.025);
+        }
+        .workflow-compact-row { display:flex; align-items:center; justify-content:space-between; gap:14px; }
+        .workflow-compact-title { color:#f5f9ff; font-size:1rem; font-weight:850; }
+        .workflow-compact-meta { color:rgba(238,245,255,0.58); font-size:0.78rem; white-space:nowrap; }
+        .workflow-compact-track { height:4px; margin-top:9px; border-radius:999px; background:rgba(255,255,255,0.07); overflow:hidden; }
+        .workflow-compact-fill { height:100%; border-radius:999px; background:#5ea8ff; }
+        .st-key-workflow_overview [data-testid="stExpander"] { margin-bottom:14px; box-shadow:none !important; }
+        .st-key-workflow_overview [data-testid="stButton"] > button {
+            min-height:42px;
+            padding:8px 10px;
+            box-shadow:none;
+            font-size:0.84rem;
+        }
+        /* Bewegungen sparsam einsetzen: Die Oberfläche soll im Einsatz ruhig bleiben. */
+        .hero-card, .workflow-shell, .rd-summary-card { animation:none !important; }
+        .hero-card::after, .hero-kicker-badge, .hero-ambulance-wrap,
+        .hero-ambulance-light-blue, .hero-ambulance-light-red { animation:none !important; }
         @media (max-width: 900px) {
             .st-key-tablet_bottom_nav { left:8px; right:8px; padding:10px; }
+            .workflow-compact-row { align-items:flex-start; }
+            .workflow-compact-meta { white-space:normal; text-align:right; }
         }
         </style>
         """,
@@ -2221,99 +2413,31 @@ current_workflow_index = workflow_step_index(st.session_state["seite"])
 if current_workflow_index is not None:
     st.markdown(
         f"""
-        <div style="margin:10px 0 16px; padding:18px 18px 16px; border-radius:26px; border:1px solid rgba(255,255,255,0.10); background:linear-gradient(180deg, rgba(255,255,255,0.055), rgba(255,255,255,0.02)); box-shadow:0 18px 40px rgba(2,8,24,0.22);">
-            <div style="display:flex; justify-content:space-between; gap:14px; align-items:center; flex-wrap:wrap; margin-bottom:12px;">
-                <div>
-                    <div style="font-size:0.76rem; text-transform:uppercase; letter-spacing:0.16em; color:rgba(238,245,255,0.58); font-weight:900;">Einsatz-Workflow</div>
-                    <div style="font-size:1.12rem; font-weight:900; color:#f5f9ff;">Schritt {current_workflow_index + 1} von {workflow_total}: {WORKFLOW_STEPS[current_workflow_index]['label']}</div>
-                </div>
-                <div style="padding:9px 13px; border-radius:999px; background:rgba(255,255,255,0.055); color:#dce9ff; font-weight:800; font-size:0.84rem; border:1px solid rgba(255,255,255,0.08);">{workflow_completed}/{workflow_total} abgeschlossen</div>
+        <div class="workflow-compact-head">
+            <div class="workflow-compact-row">
+                <div class="workflow-compact-title">{current_workflow_index + 1}. {WORKFLOW_STEPS[current_workflow_index]['label']}</div>
+                <div class="workflow-compact-meta">{workflow_completed}/{workflow_total} erledigt</div>
             </div>
-            <div style="height:10px; border-radius:999px; background:rgba(255,255,255,0.08); overflow:hidden; margin-bottom:12px;">
-                <div style="width:{(workflow_completed / workflow_total) * 100:.0f}%; height:100%; border-radius:999px; background:linear-gradient(90deg, #5ea8ff 0%, #44ddbd 52%, #ff9c7c 100%); box-shadow:0 0 18px rgba(94,168,255,0.22);"></div>
-            </div>
+            <div class="workflow-compact-track"><div class="workflow-compact-fill" style="width:{(workflow_completed / workflow_total) * 100:.0f}%"></div></div>
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    st.markdown(
-        """
-        <style>
-        [data-testid="stHorizontalBlock"] [data-testid="stButton"] > button {
-            padding: 10px 10px;
-            font-size: 0.88rem;
-            min-height: 44px;
-        }
-        </style>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    workflow_cols = st.columns(workflow_total, gap="small")
-    for idx, step in enumerate(WORKFLOW_STEPS):
-        with workflow_cols[idx]:
-            if workflow_completion.get(step["page"]):
-                prefix = "✓"
-            elif idx == current_workflow_index:
-                prefix = "•"
-            else:
-                prefix = ""
-            button_type = "primary" if idx == current_workflow_index else "secondary"
-            button_label = step.get("short_label", step["label"])
-            display_label = f"{prefix} {button_label}".strip()
-            if st.button(display_label, key=f"workflow_step_{idx}", use_container_width=True, type=button_type):
-                st.session_state["seite"] = step["page"]
-                st.rerun()
+    with st.container(key="workflow_overview"):
+        with st.expander("Alle Schritte anzeigen", expanded=False):
+            for row_start in range(0, workflow_total, 5):
+                workflow_cols = st.columns(min(5, workflow_total - row_start), gap="small")
+                for column, idx in zip(workflow_cols, range(row_start, min(row_start + 5, workflow_total))):
+                    step = WORKFLOW_STEPS[idx]
+                    with column:
+                        prefix = "✓" if workflow_completion.get(step["page"]) else ("•" if idx == current_workflow_index else "")
+                        display_label = f"{prefix} {step.get('short_label', step['label'])}".strip()
+                        if st.button(display_label, key=f"workflow_step_{idx}", use_container_width=True):
+                            st.session_state["seite"] = step["page"]
+                            st.rerun()
 
 seite = st.session_state['seite']
-
-active_nav_palette = {
-    "🛠️ Admin": ("#6d7dff", "#8e9dff"),
-    "❤️ Vitalwerte": ("#ff5b86", "#ff9a5a"),
-    "🩺 xABCDE": ("#4b8cff", "#35d8a6"),
-    "📋 SAMPLERS": ("#5f89ff", "#7a67f8"),
-    "🔥 OPQRST": ("#ff8a4d", "#ff4f7b"),
-    "⏱️ Maßnahmen": ("#2ac4df", "#3de99a"),
-    "🔎 Verdacht": ("#f3b33d", "#ff6f4a"),
-    "🔻 AMLS": ("#ff6b6b", "#8b5cf6"),
-    "💉 Med-Rechner": ("#22b8cf", "#4c6fff"),
-    "🗣️ Übergabe": ("#7d6bff", "#5bbdff"),
-    "📄 Protokoll": ("#4e72ff", "#5ac8ff"),
-}
-start_color, end_color = active_nav_palette.get(seite, ("#4b8cff", "#ff7a7a"))
-st.markdown(
-    f"""
-    <style>
-    [data-testid="column"]:nth-child(n+2):nth-child(-n+12) > [data-testid="stButton"] > button[kind='primary'] {{
-        background: linear-gradient(135deg, {start_color} 0%, {end_color} 100%);
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
-
-protocol_workflow_index = workflow_step_index("📄 Protokoll")
-st.markdown(
-    f"""
-    <style>
-    @keyframes protocolGreenGlow {{
-        0%, 100% {{ box-shadow: 0 0 0 1px rgba(74,222,128,.30), 0 0 14px rgba(34,197,94,.38); }}
-        50% {{ box-shadow: 0 0 0 2px rgba(74,222,128,.58), 0 0 28px rgba(34,197,94,.72); }}
-    }}
-    .st-key-workflow_step_{protocol_workflow_index} button {{
-        background: linear-gradient(135deg, #087f5b 0%, #22c55e 100%) !important;
-        border-color: #69f0ae !important;
-        color: #ffffff !important;
-        animation: protocolGreenGlow 1.8s ease-in-out infinite !important;
-    }}
-    .st-key-workflow_step_{protocol_workflow_index} button:hover {{
-        background: linear-gradient(135deg, #0b9668 0%, #35d873 100%) !important;
-    }}
-    </style>
-    """,
-    unsafe_allow_html=True,
-)
 
 # --------------------------------------------------
 # VITALWERTE
@@ -4907,11 +5031,18 @@ if seite != "🛠️ Admin" and current_workflow_index is not None:
             current_done = workflow_completion.get(seite, False)
             missing_before_protocol = collect_missing_documentation(patient) if next_step and next_step["page"] == "📄 Protokoll" else []
             if missing_before_protocol:
-                st.warning(f"{len(missing_before_protocol)} Angaben offen – Weiter bleibt möglich.")
+                nav_status = f"{len(missing_before_protocol)} Angaben offen · Weiter trotzdem möglich"
+                nav_status_class = ""
             elif current_done:
-                st.success("Schritt wirkt vollständig. Du kannst direkt weitergehen.")
+                nav_status = "✓ Schritt vollständig"
+                nav_status_class = "is-done"
             else:
-                st.info(workflow_missing_hint(seite, patient) or "Schritt prüfen und dann fortfahren.")
+                nav_status = workflow_missing_hint(seite, patient) or "Schritt prüfen und fortfahren"
+                nav_status_class = ""
+            st.markdown(
+                f'<div class="workflow-nav-status {nav_status_class}">{html.escape(nav_status)}</div>',
+                unsafe_allow_html=True,
+            )
 
         with nav_next_col:
             if next_step:
