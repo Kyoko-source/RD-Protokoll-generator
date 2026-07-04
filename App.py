@@ -11,6 +11,7 @@ import re
 import urllib.error
 import urllib.request
 from copy import deepcopy
+from device_guides import DEVICE_GUIDES
 
 
 def add_line(text, value):
@@ -2319,12 +2320,20 @@ if 'visited_pages' not in st.session_state:
 
 st.session_state['visited_pages'].add(st.session_state['seite'])
 
-topbar_left, topbar_right = st.columns([14, 2])
+topbar_left, topbar_guide, topbar_right = st.columns([12, 2, 2])
 with topbar_left:
     new_case_col, _ = st.columns([2.4, 9.6])
     with new_case_col:
         if st.button("＋ Neuer Einsatz", key="new_case_btn", use_container_width=True, type="secondary"):
             st.session_state["confirm_new_case"] = True
+with topbar_guide:
+    st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
+    if st.button("🧰 Geräte", key="top_device_guide_btn", use_container_width=True, type="secondary"):
+        st.session_state["device_guide_return_page"] = (
+            st.session_state["seite"] if workflow_step_index(st.session_state["seite"]) is not None else "❤️ Vitalwerte"
+        )
+        st.session_state["seite"] = "🧰 Geräte-Guide"
+        st.rerun()
 with topbar_right:
     st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
     if st.button("Admin", key="top_admin_btn", use_container_width=True, type="secondary"):
@@ -2406,7 +2415,116 @@ seite = st.session_state['seite']
 # VITALWERTE
 # --------------------------------------------------
 
-if seite == "🛠️ Admin":
+if seite == "🧰 Geräte-Guide":
+    guide_head_left, guide_head_right = st.columns([5, 1])
+    with guide_head_left:
+        st.header("🧰 Geräte-Guide")
+        st.caption("Aufgabenbezogene Kurzreferenzen für häufig eingesetzte Geräte")
+    with guide_head_right:
+        if st.button("← Zum Einsatz", key="device_guide_back", use_container_width=True):
+            st.session_state["seite"] = st.session_state.get("device_guide_return_page", "❤️ Vitalwerte")
+            st.rerun()
+
+    st.warning(
+        "Kurzreferenz – ersetzt weder Einweisung noch die aktuelle Gebrauchsanweisung. "
+        "Gerätemodell, Softwarestand und lokale Betreiberanweisung haben Vorrang."
+    )
+
+    device_names = list(DEVICE_GUIDES)
+    if st.session_state.get("device_guide_device") not in device_names:
+        st.session_state["device_guide_device"] = device_names[0]
+    selected_device_name = st.session_state["device_guide_device"]
+
+    for row_start in range(0, len(device_names), 3):
+        device_cols = st.columns(3, gap="large")
+        for device_col, device_index in zip(device_cols, range(row_start, min(row_start + 3, len(device_names)))):
+            device_name = device_names[device_index]
+            device = DEVICE_GUIDES[device_name]
+            with device_col:
+                is_selected = device_name == selected_device_name
+                if st.button(
+                    f"{device['icon']} {device_name}",
+                    key=f"device_guide_device_{device_index}",
+                    use_container_width=True,
+                    type="primary" if is_selected else "secondary",
+                ):
+                    st.session_state["device_guide_device"] = device_name
+                    st.session_state["device_guide_topic"] = next(iter(device["topics"]))
+                    st.session_state["device_guide_step"] = 0
+                    st.rerun()
+
+    selected_device_name = st.session_state["device_guide_device"]
+    selected_device = DEVICE_GUIDES[selected_device_name]
+    topic_names = list(selected_device["topics"])
+    if st.session_state.get("device_guide_topic") not in topic_names:
+        st.session_state["device_guide_topic"] = topic_names[0]
+    if "device_guide_step" not in st.session_state:
+        st.session_state["device_guide_step"] = 0
+
+    st.divider()
+    info_col, source_col = st.columns([4, 1])
+    with info_col:
+        st.subheader(f"{selected_device['icon']} {selected_device_name}")
+        st.caption(selected_device["model_note"])
+    with source_col:
+        st.link_button(
+            "Herstellerquelle ↗",
+            selected_device["source_url"],
+            use_container_width=True,
+        )
+
+    selected_topic = st.selectbox(
+        "Was möchtest du nachschauen?",
+        topic_names,
+        key="device_guide_topic",
+        on_change=lambda: st.session_state.update(device_guide_step=0),
+    )
+    steps = selected_device["topics"][selected_topic]
+    step_index = min(int(st.session_state.get("device_guide_step", 0)), len(steps) - 1)
+    st.session_state["device_guide_step"] = step_index
+
+    st.progress((step_index + 1) / len(steps), text=f"Schritt {step_index + 1} von {len(steps)}")
+    st.markdown(
+        f"""
+        <div style="margin:12px 0 18px; padding:24px 26px; min-height:118px; display:flex; align-items:center;
+                    border-radius:22px; border:1px solid rgba(94,168,255,.25);
+                    background:linear-gradient(135deg, rgba(94,168,255,.10), rgba(255,255,255,.025));
+                    box-shadow:0 16px 34px rgba(2,8,24,.20);">
+            <div>
+                <div style="font-size:.76rem; color:rgba(223,236,255,.56); font-weight:850; letter-spacing:.12em; text-transform:uppercase; margin-bottom:9px;">
+                    {html.escape(selected_topic)}
+                </div>
+                <div style="font-size:1.16rem; line-height:1.48; color:#f5f9ff; font-weight:750;">
+                    {html.escape(steps[step_index])}
+                </div>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    previous_col, overview_col, next_col = st.columns([1, 2, 1])
+    with previous_col:
+        if st.button("← Zurück", key="device_step_previous", use_container_width=True, disabled=step_index == 0):
+            st.session_state["device_guide_step"] = step_index - 1
+            st.rerun()
+    with overview_col:
+        with st.expander("Alle Schritte auf einen Blick", expanded=False):
+            for index, step in enumerate(steps, start=1):
+                marker = "→" if index - 1 == step_index else "✓" if index - 1 < step_index else "·"
+                st.markdown(f"{marker} **{index}.** {step}")
+    with next_col:
+        next_label = "Fertig ✓" if step_index == len(steps) - 1 else "Weiter →"
+        if st.button(next_label, key="device_step_next", use_container_width=True, type="primary"):
+            if step_index < len(steps) - 1:
+                st.session_state["device_guide_step"] = step_index + 1
+                st.rerun()
+            else:
+                st.toast("Kurzanleitung abgeschlossen")
+
+    st.caption(f"Quelle: {selected_device['source_label']} · Inhalte vor Produktivnutzung lokal prüfen und freigeben.")
+
+elif seite == "🛠️ Admin":
 
     st.header("🛠️ Adminbereich")
     st.caption("Passwortgeschützt: Alle SOP-Parameter zentral pflegen")
