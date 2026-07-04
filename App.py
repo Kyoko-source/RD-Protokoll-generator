@@ -1,5 +1,6 @@
 ﻿import streamlit as st
 import streamlit.components.v1 as components
+import base64
 from io import BytesIO
 from fpdf import FPDF
 from datetime import datetime
@@ -1185,6 +1186,12 @@ st.markdown(
             48%, 52% { opacity:1; filter:drop-shadow(0 0 10px rgba(79,166,255,.92)); }
         }
         .ambulance-beacon { animation:ambulanceBeacon 2.4s ease-in-out infinite; transform-origin:center; }
+        .ambulance-beacon-glow {
+            position:absolute; left:27%; top:14%; width:92px; height:48px;
+            border-radius:999px;
+            background:radial-gradient(ellipse, rgba(83,181,255,.42) 0%, rgba(62,151,255,.12) 42%, transparent 72%);
+            animation:ambulanceBeacon 2.4s ease-in-out infinite;
+        }
         @media (max-width: 900px) {
             .st-key-tablet_bottom_nav { left:8px; right:8px; padding:10px; }
             .workflow-compact-row { align-items:flex-start; }
@@ -1195,8 +1202,12 @@ st.markdown(
         unsafe_allow_html=True,
 )
 
+ambulance_asset_path = os.path.join(os.path.dirname(__file__), "assets", "ambulance-hero.png")
+with open(ambulance_asset_path, "rb") as ambulance_asset_file:
+    ambulance_asset_data = base64.b64encode(ambulance_asset_file.read()).decode("ascii")
+
 st.markdown(
-    """
+    f"""
     <div style="
         position:relative;
         overflow:hidden;
@@ -1210,35 +1221,9 @@ st.markdown(
             linear-gradient(135deg, rgba(18,32,58,0.92) 0%, rgba(10,22,40,0.88) 100%);
         box-shadow: 0 28px 60px rgba(2,8,24,0.32);
     ">
-        <div class="hero-ambulance-wrap" style="position:absolute; right:28px; bottom:7px; width:330px; height:160px; pointer-events:none; opacity:.78; z-index:0;">
-            <svg viewBox="0 0 430 205" width="100%" height="100%" aria-hidden="true" style="overflow:visible; filter:drop-shadow(0 18px 22px rgba(0,5,16,.42));">
-                <defs>
-                    <linearGradient id="amb-body" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f9fcff"/><stop offset="1" stop-color="#cbd7e4"/></linearGradient>
-                    <linearGradient id="amb-cab" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#eef6fc"/><stop offset="1" stop-color="#b8c9d9"/></linearGradient>
-                    <linearGradient id="amb-glass" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#76b5da"/><stop offset="1" stop-color="#173652"/></linearGradient>
-                    <linearGradient id="amb-red" x1="0" y1="0" x2="1" y2="0"><stop stop-color="#df2444"/><stop offset="1" stop-color="#9e1832"/></linearGradient>
-                    <radialGradient id="amb-wheel"><stop offset="0" stop-color="#667486"/><stop offset=".38" stop-color="#263342"/><stop offset="1" stop-color="#0b111a"/></radialGradient>
-                    <radialGradient id="beacon-glow"><stop stop-color="#69c3ff" stop-opacity=".78"/><stop offset="1" stop-color="#399cff" stop-opacity="0"/></radialGradient>
-                </defs>
-                <ellipse cx="231" cy="181" rx="171" ry="14" fill="#020813" opacity=".48"/>
-                <path d="M112 67h205c18 0 29 11 34 27l17 50v27H72v-48l22-42c4-9 9-14 18-14Z" fill="url(#amb-body)" stroke="#8295a8" stroke-width="2"/>
-                <path d="M72 123h69V79H98c-5 0-8 3-11 9Z" fill="url(#amb-cab)"/>
-                <path d="M88 116l15-31h31v31Z" fill="url(#amb-glass)" stroke="#9ab1c5" stroke-width="2"/>
-                <path d="M143 78h171c13 0 21 8 24 20l12 43H143Z" fill="#eef4f8"/>
-                <path d="M72 139h296v23H72Z" fill="url(#amb-red)"/>
-                <path d="M145 79v82M317 79v82" stroke="#9aabba" stroke-width="2"/>
-                <rect x="160" y="91" width="143" height="45" rx="4" fill="#dbe6ed" stroke="#9aabba" stroke-width="2"/>
-                <path d="M222 99h20v10h10v20h-10v10h-20v-10h-10v-20h10Z" fill="#d92342"/>
-                <path d="M163 147h135" stroke="#fff" stroke-width="3" opacity=".8"/>
-                <rect x="78" y="145" width="13" height="10" rx="3" fill="#ffc64d"/>
-                <rect x="350" y="145" width="13" height="10" rx="3" fill="#ff4f55"/>
-                <path d="M97 164h248" stroke="#718395" stroke-width="3"/>
-                <g><circle cx="126" cy="169" r="27" fill="url(#amb-wheel)"/><circle cx="126" cy="169" r="11" fill="#aebdca"/><circle cx="126" cy="169" r="4" fill="#475767"/></g>
-                <g><circle cx="317" cy="169" r="27" fill="url(#amb-wheel)"/><circle cx="317" cy="169" r="11" fill="#aebdca"/><circle cx="317" cy="169" r="4" fill="#475767"/></g>
-                <path d="M83 134h42" stroke="#354a5e" stroke-width="3"/><rect x="104" y="121" width="18" height="5" rx="2" fill="#53697c"/>
-                <g class="ambulance-beacon"><ellipse cx="230" cy="54" rx="42" ry="28" fill="url(#beacon-glow)"/><rect x="211" y="47" width="38" height="13" rx="5" fill="#55baff" stroke="#b9e7ff" stroke-width="2"/><rect x="205" y="58" width="50" height="4" rx="2" fill="#55697a"/></g>
-                <path d="M155 73h158" stroke="#fff" stroke-width="2" opacity=".75"/>
-            </svg>
+        <div class="hero-ambulance-wrap" style="position:absolute; right:22px; bottom:2px; width:390px; height:185px; pointer-events:none; opacity:.80; z-index:0;">
+            <div class="ambulance-beacon-glow"></div>
+            <img src="data:image/png;base64,{ambulance_asset_data}" alt="" style="position:relative; width:100%; height:100%; object-fit:contain; filter:drop-shadow(0 18px 22px rgba(0,5,16,.46));" />
         </div>
         <div style="display:flex; justify-content:space-between; gap:20px; align-items:flex-start; flex-wrap:wrap;">
             <div>
