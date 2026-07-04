@@ -1164,6 +1164,19 @@ st.markdown(
             box-shadow:none;
             font-size:0.84rem;
         }
+        @keyframes protocolGreenGlow {
+            0%, 100% { box-shadow:0 0 0 1px rgba(74,222,128,.28), 0 0 12px rgba(34,197,94,.32); }
+            50% { box-shadow:0 0 0 2px rgba(74,222,128,.52), 0 0 24px rgba(34,197,94,.62); }
+        }
+        .st-key-workflow_step_9 button {
+            color:#fff !important;
+            border-color:#69f0ae !important;
+            background:linear-gradient(135deg, #087f5b 0%, #22c55e 100%) !important;
+            animation:protocolGreenGlow 1.8s ease-in-out infinite !important;
+        }
+        .st-key-workflow_step_9 button:hover {
+            background:linear-gradient(135deg, #0b9668 0%, #35d873 100%) !important;
+        }
         /* Bewegungen sparsam einsetzen: Die Oberfläche soll im Einsatz ruhig bleiben. */
         .hero-card, .workflow-shell, .rd-summary-card { animation:none !important; }
         .hero-card::after, .hero-kicker-badge, .hero-ambulance-wrap,
