@@ -1182,15 +1182,17 @@ st.markdown(
         .hero-card, .workflow-shell, .rd-summary-card { animation:none !important; }
         .hero-card::after, .hero-kicker-badge, .hero-ambulance-wrap { animation:none !important; }
         @keyframes ambulanceBeacon {
-            0%, 42%, 58%, 100% { opacity:.42; filter:drop-shadow(0 0 3px rgba(79,166,255,.34)); }
-            48%, 52% { opacity:1; filter:drop-shadow(0 0 10px rgba(79,166,255,.92)); }
+            0%, 8%, 18%, 100% { opacity:.10; transform:scale(.96); filter:blur(1px); }
+            4%, 14% { opacity:.72; transform:scale(1.04); filter:blur(0); }
         }
         .ambulance-beacon { animation:ambulanceBeacon 2.4s ease-in-out infinite; transform-origin:center; }
         .ambulance-beacon-glow {
-            position:absolute; left:27%; top:14%; width:92px; height:48px;
+            position:absolute; left:25%; top:15%; width:96px; height:42px; z-index:2;
             border-radius:999px;
-            background:radial-gradient(ellipse, rgba(83,181,255,.42) 0%, rgba(62,151,255,.12) 42%, transparent 72%);
-            animation:ambulanceBeacon 2.4s ease-in-out infinite;
+            background:radial-gradient(ellipse, rgba(142,218,255,.90) 0%, rgba(55,157,255,.34) 30%, transparent 72%);
+            box-shadow:0 0 18px rgba(55,157,255,.32);
+            mix-blend-mode:screen;
+            animation:ambulanceBeacon 3.2s linear infinite;
         }
         @media (max-width: 900px) {
             .st-key-tablet_bottom_nav { left:8px; right:8px; padding:10px; }
