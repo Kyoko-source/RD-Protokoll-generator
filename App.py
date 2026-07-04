@@ -2760,17 +2760,34 @@ elif seite == "📋 SAMPLERS":
     if "samplers_selected" not in st.session_state:
         st.session_state["samplers_selected"] = "S1"
 
+    samplers_selected = st.session_state["samplers_selected"]
+    st.markdown(
+        f"""
+        <style>
+        .st-key-samplers_nav_{samplers_selected} button {{
+            color:#f5f9ff !important;
+            border-color:rgba(94,168,255,.52) !important;
+            background:rgba(94,168,255,.14) !important;
+            box-shadow:0 0 0 1px rgba(94,168,255,.10), 0 0 18px rgba(94,168,255,.12) !important;
+        }}
+        .st-key-samplers_nav_{samplers_selected} button:hover {{
+            background:rgba(94,168,255,.20) !important;
+            border-color:rgba(94,168,255,.66) !important;
+        }}
+        </style>
+        """,
+        unsafe_allow_html=True,
+    )
+
     s_col1, s_col2, s_col3, s_col4, s_col5, s_col6, s_col7, s_col8 = st.columns(8, gap="small")
     s_buttons = ["S1", "A", "M", "P", "L", "E", "R", "S2"]
     s_cols = [s_col1, s_col2, s_col3, s_col4, s_col5, s_col6, s_col7, s_col8]
     for label, col in zip(s_buttons, s_cols):
         with col:
-            if st.button(label, key=f"samplers_nav_{label}", use_container_width=True):
+            button_type = "primary" if label == samplers_selected else "secondary"
+            if st.button(label, key=f"samplers_nav_{label}", use_container_width=True, type=button_type):
                 st.session_state["samplers_selected"] = label
                 st.rerun()
-
-    samplers_selected = st.session_state["samplers_selected"]
-    st.info(f"Aktive SAMPLERS-Sektion: {samplers_selected}")
 
     if samplers_selected == "S1":
         st.subheader("S – Symptome")
