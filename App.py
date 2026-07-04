@@ -2346,6 +2346,25 @@ if current_workflow_index is not None:
         unsafe_allow_html=True,
     )
 
+    if current_workflow_index != workflow_step_index("📄 Protokoll"):
+        st.markdown(
+            f"""
+            <style>
+            .st-key-workflow_step_{current_workflow_index} button {{
+                color:#f5f9ff !important;
+                border-color:rgba(94,168,255,.52) !important;
+                background:rgba(94,168,255,.14) !important;
+                box-shadow:0 0 0 1px rgba(94,168,255,.10), 0 0 18px rgba(94,168,255,.12) !important;
+            }}
+            .st-key-workflow_step_{current_workflow_index} button:hover {{
+                background:rgba(94,168,255,.20) !important;
+                border-color:rgba(94,168,255,.66) !important;
+            }}
+            </style>
+            """,
+            unsafe_allow_html=True,
+        )
+
     with st.container(key="workflow_overview"):
         with st.expander("Alle Schritte anzeigen", expanded=False):
             for row_start in range(0, workflow_total, 5):
@@ -2355,7 +2374,13 @@ if current_workflow_index is not None:
                     with column:
                         prefix = "✓" if workflow_completion.get(step["page"]) else ("•" if idx == current_workflow_index else "")
                         display_label = f"{prefix} {step.get('short_label', step['label'])}".strip()
-                        if st.button(display_label, key=f"workflow_step_{idx}", use_container_width=True):
+                        button_type = "primary" if idx == current_workflow_index else "secondary"
+                        if st.button(
+                            display_label,
+                            key=f"workflow_step_{idx}",
+                            use_container_width=True,
+                            type=button_type,
+                        ):
                             st.session_state["seite"] = step["page"]
                             st.rerun()
 
