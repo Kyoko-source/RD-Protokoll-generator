@@ -12,6 +12,7 @@ import urllib.error
 import urllib.request
 from copy import deepcopy
 from device_guides import DEVICE_GUIDES
+from hospital_finder import CATEGORIES, TOWNS, build_dutch_protocol, suitable_hospitals
 
 
 def add_line(text, value):
@@ -126,6 +127,7 @@ def reset_patient_case():
         "einweisung": {},
         "amls": {"excluded": [], "custom_candidates": [], "arbeitsdiagnose": ""},
         "massnahmen": {"timeline": [], "medikation": []},
+        "transport": {},
     }
     st.session_state["seite"] = "❤️ Vitalwerte"
     st.session_state["xabcde_selected"] = "A"
@@ -408,11 +410,22 @@ def generate_protocol():
     e = patient.get("einweisung", {})
     amls = patient.get("amls", {})
     m = patient.get("massnahmen", {})
+    transport = patient.get("transport", {})
 
     protocol += "RD-PROTOKOLL – DOKUMENTATIONSENTWURF\n"
     protocol += "=" * 50 + "\n"
     protocol += f"Erstellt am {datetime.now().strftime('%d.%m.%Y um %H:%M:%S')} Uhr\n"
     protocol += "Enthält ausschließlich dokumentierte Angaben; vor Verwendung vollständig prüfen.\n\n"
+
+    if transport.get("hospital_name"):
+        protocol += "TRANSPORTZIEL\n"
+        protocol += "=" * 50 + "\n"
+        protocol += f"Ausgangsort: {transport.get('town', 'nicht dokumentiert')}\n"
+        protocol += f"Zielkategorie: {transport.get('category', 'nicht dokumentiert')}\n"
+        protocol += f"Gewählte Klinik: {transport.get('hospital_name')} ({transport.get('hospital_country', 'DE')})\n"
+        if transport.get("distance_km") is not None:
+            protocol += f"Geografische Entfernung: {transport.get('distance_km')} km Luftlinie; Fahrzeit separat prüfen.\n"
+        protocol += "Aufnahmefähigkeit und Transportentscheidung sind separat zu bestätigen.\n\n"
 
     narrative_paragraphs = build_protocol_narrative(patient)
     if narrative_paragraphs:
@@ -557,7 +570,11 @@ def generate_protocol():
         if not d_section:
             d_section = f"D — DISABILITY (Neurologischer Status):\n"
         bz_cat, bz_val = categorize_bz(bz)
-        d_section += f"  Blutzucker: {bz} mg/dL ({bz_cat})\n"
+        if transport.get("hospital_country") == "NL":
+            mmol_text = f"{float(bz) / 18.0182:.1f}".replace(".", ",")
+            d_section += f"  Blutzucker: {bz} mg/dL / {mmol_text} mmol/L ({bz_cat})\n"
+        else:
+            d_section += f"  Blutzucker: {bz} mg/dL ({bz_cat})\n"
     
     if d_section:
         xabcde += "\n" + d_section
@@ -1319,6 +1336,7 @@ patient["amls"].setdefault("excluded", [])
 patient["amls"].setdefault("custom_candidates", [])
 patient["amls"].setdefault("arbeitsdiagnose", "")
 patient.setdefault("massnahmen", {"timeline": [], "medikation": []})
+patient.setdefault("transport", {})
 patient["massnahmen"].setdefault("timeline", [])
 patient["massnahmen"].setdefault("medikation", [])
 
@@ -2320,12 +2338,20 @@ if 'visited_pages' not in st.session_state:
 
 st.session_state['visited_pages'].add(st.session_state['seite'])
 
-topbar_left, topbar_guide, topbar_right = st.columns([12, 2, 2])
+topbar_left, topbar_hospital, topbar_guide, topbar_right = st.columns([10, 2, 2, 2])
 with topbar_left:
     new_case_col, _ = st.columns([2.4, 9.6])
     with new_case_col:
         if st.button("＋ Neuer Einsatz", key="new_case_btn", use_container_width=True, type="secondary"):
             st.session_state["confirm_new_case"] = True
+with topbar_hospital:
+    st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
+    if st.button("🏥 Klinik", key="top_hospital_finder_btn", use_container_width=True, type="secondary"):
+        st.session_state["hospital_finder_return_page"] = (
+            st.session_state["seite"] if workflow_step_index(st.session_state["seite"]) is not None else "❤️ Vitalwerte"
+        )
+        st.session_state["seite"] = "🏥 Zielklinik"
+        st.rerun()
 with topbar_guide:
     st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
     if st.button("🧰 Geräte", key="top_device_guide_btn", use_container_width=True, type="secondary"):
@@ -2415,7 +2441,101 @@ seite = st.session_state['seite']
 # VITALWERTE
 # --------------------------------------------------
 
-if seite == "🧰 Geräte-Guide":
+if seite == "🏥 Zielklinik":
+    finder_head, finder_back = st.columns([5, 1])
+    with finder_head:
+        st.header("🏥 Zielklinik-Finder")
+        st.caption("Geeignete Kliniken im Kreis Borken und im niederländischen Grenzgebiet vorsortieren")
+    with finder_back:
+        if st.button("← Zum Einsatz", key="hospital_finder_back", use_container_width=True):
+            st.session_state["seite"] = st.session_state.get("hospital_finder_return_page", "❤️ Vitalwerte")
+            st.rerun()
+
+    st.warning(
+        "Planungshilfe ohne Live-Belegungsdaten: Leitstelle, lokale Transportstrategie, aktuelle Aufnahmefähigkeit "
+        "und medizinische Erfordernisse haben immer Vorrang. Entfernung ist zunächst Luftlinie – Fahrzeit im Routenlink prüfen."
+    )
+
+    location_col, category_col = st.columns(2)
+    with location_col:
+        selected_town = st.selectbox(
+            "Aktueller Ort im Kreis Borken",
+            list(TOWNS),
+            index=list(TOWNS).index(patient.get("transport", {}).get("town", "Vreden"))
+            if patient.get("transport", {}).get("town", "Vreden") in TOWNS else 0,
+            key="hospital_finder_town",
+        )
+    with category_col:
+        selected_category = st.selectbox(
+            "Zielkategorie",
+            CATEGORIES,
+            index=CATEGORIES.index(patient.get("transport", {}).get("category", CATEGORIES[0]))
+            if patient.get("transport", {}).get("category", CATEGORIES[0]) in CATEGORIES else 0,
+            key="hospital_finder_category",
+        )
+
+    results = suitable_hospitals(selected_town, selected_category)
+    if not results:
+        st.error("Für diese Kategorie ist noch keine lokal geprüfte Klinik in der Matrix hinterlegt.")
+    else:
+        st.subheader(f"Geeignete Häuser für {selected_category}")
+        st.caption("Nach Luftlinie vorsortiert · tatsächliche Route und grenzüberschreitende Aufnahme vorab bestätigen")
+        result_cols = st.columns(min(3, len(results)), gap="large")
+        for index, (result_col, hospital) in enumerate(zip(result_cols, results[:3])):
+            with result_col:
+                country_badge = "🇳🇱 Niederlande" if hospital["country"] == "NL" else "🇩🇪 Deutschland"
+                selected = patient.get("transport", {}).get("hospital_id") == hospital["id"]
+                st.markdown(
+                    f"""
+                    <div style="min-height:158px; padding:17px; margin-bottom:10px; border-radius:18px;
+                                border:1px solid {'rgba(94,168,255,.55)' if selected else 'rgba(255,255,255,.09)'};
+                                background:{'rgba(94,168,255,.11)' if selected else 'rgba(255,255,255,.025)'};">
+                        <div style="font-size:.75rem; color:rgba(230,240,255,.62); margin-bottom:7px;">{country_badge} · {hospital['distance_km']:.1f} km Luftlinie</div>
+                        <div style="font-size:1.02rem; color:#f5f9ff; font-weight:850; line-height:1.25;">{html.escape(hospital['name'])}</div>
+                        <div style="font-size:.78rem; color:rgba(230,240,255,.58); margin-top:8px;">{html.escape(hospital['address'])}</div>
+                    </div>
+                    """,
+                    unsafe_allow_html=True,
+                )
+                if st.button(
+                    "✓ Ausgewählt" if selected else "Als Ziel wählen",
+                    key=f"select_hospital_{hospital['id']}",
+                    use_container_width=True,
+                    type="primary" if selected else "secondary",
+                ):
+                    patient["transport"] = {
+                        "town": selected_town,
+                        "category": selected_category,
+                        "hospital_id": hospital["id"],
+                        "hospital_name": hospital["name"],
+                        "hospital_country": hospital["country"],
+                        "hospital_address": hospital["address"],
+                        "distance_km": round(hospital["distance_km"], 1),
+                    }
+                    st.session_state["generated_protocol_text"] = ""
+                    st.rerun()
+                route_col, source_col = st.columns(2)
+                with route_col:
+                    st.link_button("Route ↗", hospital["route_url"], use_container_width=True)
+                with source_col:
+                    st.link_button("Klinik ↗", hospital["source"], use_container_width=True)
+
+    selected_transport = patient.get("transport", {})
+    if selected_transport.get("hospital_name"):
+        st.divider()
+        st.success(
+            f"Gewähltes Ziel: **{selected_transport['hospital_name']}** · "
+            f"{selected_transport.get('category', '')} · {selected_transport.get('distance_km', '?')} km Luftlinie"
+        )
+        if selected_transport.get("hospital_country") == "NL":
+            st.info(
+                "Niederländisches Ziel gewählt: Beim Erstellen des Protokolls wird zusätzlich eine niederländische "
+                "Übergabefassung erzeugt. Der Blutzucker erscheint in mmol/L und ergänzend in mg/dL."
+            )
+            with st.expander("Niederländische Übergabe jetzt ansehen", expanded=False):
+                st.code(build_dutch_protocol(patient), language=None)
+
+elif seite == "🧰 Geräte-Guide":
     guide_head_left, guide_head_right = st.columns([5, 1])
     with guide_head_left:
         st.header("🧰 Geräte-Guide")
@@ -2653,6 +2773,9 @@ elif seite == "❤️ Vitalwerte":
             vitalwerte["bz"] = st.number_input("Blutzucker (mg/dL)", 0, 1000, 0, key="bz_input")
             if _is_valid_value(vitalwerte["bz"]):
                 st.caption(f"Automatische Einordnung: {categorize_bz(vitalwerte['bz'])[0]}")
+                if patient.get("transport", {}).get("hospital_country") == "NL":
+                    mmol_value = vitalwerte["bz"] / 18.0182
+                    st.caption(f"🇳🇱 Niederländische Einheit: {mmol_value:.1f} mmol/L".replace(".", ","))
 
     with st.expander(f"{'✓ ' if exposure_done else ''}E – Temperatur", expanded=not exposure_done):
         temp_gemessen = st.checkbox("Temperatur gemessen", key="temp_checkbox")
@@ -5012,6 +5135,18 @@ elif seite == "📄 Protokoll":
             file_name="RD_Protokoll.txt",
             mime="text/plain"
         )
+
+        if patient.get("transport", {}).get("hospital_country") == "NL":
+            dutch_protocol = build_dutch_protocol(patient)
+            st.subheader("🇳🇱 Nederlandse overdracht")
+            st.caption("Strukturierte niederländische Zusatzfassung für das gewählte Zielkrankenhaus")
+            st.text_area("Niederländisches Protokoll", dutch_protocol, height=520, key="dutch_protocol_preview")
+            st.download_button(
+                "💾 Niederländisches Protokoll herunterladen",
+                dutch_protocol,
+                file_name="RD_Protocol_NL.txt",
+                mime="text/plain",
+            )
 
         escaped_protocol = json.dumps(st.session_state["generated_protocol_text"])
         components.html(
