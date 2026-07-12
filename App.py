@@ -1,6 +1,5 @@
 ﻿import streamlit as st
 import streamlit.components.v1 as components
-import base64
 from io import BytesIO
 from fpdf import FPDF
 from datetime import datetime
@@ -950,23 +949,6 @@ st.markdown(
         line-height:1.2;
     }
     .rd-summary-empty .rd-summary-muted { color: rgba(234,243,255,0.62); font-size:0.88rem; }
-    .home-shell {
-        margin: 8px 0 22px;
-        padding: 4px 0 8px;
-    }
-    .home-title {
-        margin: 0 0 8px;
-        color:#fbfdff;
-        font-size:2.1rem;
-        font-weight:950;
-        letter-spacing:0;
-    }
-    .home-subtitle {
-        color:rgba(231,241,255,0.68);
-        font-size:0.96rem;
-        font-weight:650;
-        margin-bottom:18px;
-    }
     .st-key-new_case_btn button {
         max-width: 180px;
         min-height: 48px !important;
@@ -978,15 +960,24 @@ st.markdown(
     .st-key-home_tile_devices button {
         min-height: 178px !important;
         border-radius: 26px !important;
-        align-items:flex-start !important;
+        align-items:center !important;
         justify-content:center !important;
         padding: 24px 28px !important;
         font-size:1.35rem !important;
         font-weight:950 !important;
-        text-align:left !important;
+        text-align:center !important;
         letter-spacing:0 !important;
         box-shadow: 0 22px 42px rgba(2,8,24,0.26) !important;
         margin-bottom: 16px !important;
+        transform: translateY(0) scale(1) !important;
+        isolation:isolate;
+    }
+    .st-key-home_tile_protocol button:hover,
+    .st-key-home_tile_hospital button:hover,
+    .st-key-home_tile_icd10 button:hover,
+    .st-key-home_tile_devices button:hover {
+        transform: translateY(-5px) scale(1.012) !important;
+        box-shadow: 0 30px 56px rgba(2,8,24,0.34) !important;
     }
     .st-key-home_tile_protocol button {
         background:
@@ -1017,9 +1008,13 @@ st.markdown(
     .st-key-home_tile_icd10 button p,
     .st-key-home_tile_devices button p {
         color:#fff !important;
-        font-size:1.34rem !important;
-        line-height:1.18 !important;
+        width:100% !important;
+        font-size:1.42rem !important;
+        line-height:1.22 !important;
+        font-weight:900 !important;
+        text-align:center !important;
         white-space:pre-line !important;
+        text-shadow: 0 2px 12px rgba(0,0,0,0.24) !important;
     }
     [data-testid="stButton"] > button {
         position: relative;
@@ -1293,17 +1288,13 @@ st.markdown(
         unsafe_allow_html=True,
 )
 
-ambulance_asset_path = os.path.join(os.path.dirname(__file__), "assets", "ambulance-hero.png")
-with open(ambulance_asset_path, "rb") as ambulance_asset_file:
-    ambulance_asset_data = base64.b64encode(ambulance_asset_file.read()).decode("ascii")
-
 st.markdown(
-    f"""
+    """
     <div style="
         position:relative;
         overflow:hidden;
         margin: 10px 0 22px;
-        padding: 28px 30px 26px;
+        padding: 30px;
         border-radius: 30px;
         border: 1px solid rgba(255,255,255,0.14);
         background:
@@ -1312,32 +1303,8 @@ st.markdown(
             linear-gradient(135deg, rgba(18,32,58,0.92) 0%, rgba(10,22,40,0.88) 100%);
         box-shadow: 0 28px 60px rgba(2,8,24,0.32);
     ">
-        <div class="hero-ambulance-wrap" style="position:absolute; right:22px; bottom:2px; width:390px; height:185px; pointer-events:none; opacity:.80; z-index:0;">
-            <div class="ambulance-beacon-glow"></div>
-            <img src="data:image/png;base64,{ambulance_asset_data}" alt="" style="position:relative; width:100%; height:100%; object-fit:contain; filter:drop-shadow(0 18px 22px rgba(0,5,16,.46));" />
-        </div>
-        <div style="display:flex; justify-content:space-between; gap:20px; align-items:flex-start; flex-wrap:wrap;">
-            <div>
-                <div style="display:inline-flex; align-items:center; gap:10px; font-size:0.76rem; letter-spacing:0.16em; text-transform:uppercase; color:rgba(231,241,255,0.72); font-weight:900;">
-                    <span style="width:10px; height:10px; border-radius:999px; background:linear-gradient(135deg, #61b6ff 0%, #ff7b8f 100%); box-shadow:0 0 0 5px rgba(97,182,255,0.10);"></span>
-                    Blaulicht Bericht
-                </div>
-                <div style="margin-top:10px; font-size:2.35rem; line-height:0.98; font-weight:950; letter-spacing:-0.05em; color:#fbfdff;">
-                    Rettungsdienst-Dokumentation, die mitdenkt.
-                </div>
-                <div style="margin-top:10px; color:rgba(231,241,255,0.70); font-size:0.98rem; font-weight:600;">
-                    Einsatzbericht, Klinikfinder, ICD10 und Gerätewissen in einer Oberfläche.
-                </div>
-                <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:18px;">
-                    <div style="padding:10px 13px; border-radius:999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10); color:#eef5ff; font-size:0.8rem; font-weight:850;">17 SOPs <span style='opacity:0.72; font-weight:700;'>zentral steuerbar</span></div>
-                    <div style="padding:10px 13px; border-radius:999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10); color:#eef5ff; font-size:0.8rem; font-weight:850;">Workflow <span style='opacity:0.72; font-weight:700;'>schrittgef\u00fchrt</span></div>
-                    <div style="padding:10px 13px; border-radius:999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10); color:#eef5ff; font-size:0.8rem; font-weight:850;">Protokoll <span style='opacity:0.72; font-weight:700;'>einsatzbereit</span></div>
-                </div>
-            </div>
-            <div style="display:inline-flex; align-items:center; gap:8px; padding:11px 14px; border-radius:16px; background:linear-gradient(135deg, rgba(87,164,255,0.16), rgba(255,125,102,0.14)); border:1px solid rgba(255,255,255,0.10); color:#f4f8ff; font-size:0.80rem; font-weight:850; box-shadow: 0 14px 26px rgba(2,8,24,0.18);">
-                <span style="width:8px; height:8px; border-radius:999px; background:#5cffb1; box-shadow:0 0 0 5px rgba(92,255,177,0.10);"></span>
-                Live-System
-            </div>
+        <div style="font-size:2.65rem; line-height:1; font-weight:950; letter-spacing:0; color:#fbfdff; text-shadow:0 12px 32px rgba(2,8,24,0.32);">
+            Blaulicht Bericht
         </div>
     </div>
     """,
@@ -2532,16 +2499,6 @@ seite = st.session_state['seite']
 # --------------------------------------------------
 
 if seite == HOME_PAGE:
-    st.markdown(
-        """
-        <div class="home-shell">
-            <div class="home-title">Blaulicht Bericht</div>
-            <div class="home-subtitle">Deine zentrale Oberfläche für Einsatzdokumentation, Zielklinik, ICD10 und Geräte.</div>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
     tile_protocol, tile_hospital = st.columns(2, gap="large")
     with tile_protocol:
         if st.button("📄 Protokoll\nEinsatzbericht schreiben", key="home_tile_protocol", use_container_width=True):
