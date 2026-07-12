@@ -4,4 +4,5 @@ __pycache__/
 *.pyo
 .vscode/settings.json
 sop_admin_config.json
+employees.json
 .DS_Store

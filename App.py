@@ -3,10 +3,13 @@ import streamlit.components.v1 as components
 from io import BytesIO
 from fpdf import FPDF
 from datetime import datetime
+import hashlib
+import hmac
 import html
 import json
 import os
 import re
+import secrets
 import urllib.error
 import urllib.request
 from copy import deepcopy
@@ -113,7 +116,13 @@ def set_current_time(state_key):
 def reset_patient_case():
     preserved = {
         key: st.session_state[key]
-        for key in ("sop_admin_config", "admin_unlocked")
+        for key in (
+            "sop_admin_config",
+            "admin_unlocked",
+            "employee_authenticated",
+            "employee_profile",
+            "employee_password_change_required",
+        )
         if key in st.session_state
     }
     st.session_state.clear()
@@ -1387,6 +1396,7 @@ SUPABASE_URL = "https://ottkgqhtmjvhhtnwphmc.supabase.co"
 SUPABASE_ANON_KEY = "sb_publishable_87egwyr4tTwLh3tnZTDjkQ_eJh2eRZw"
 SUPABASE_ADMIN_EMAIL = "admin@rd-protokoll-generator.local"
 SOP_ADMIN_CONFIG_FILE = "sop_admin_config.json"
+EMPLOYEE_STORE_FILE = "employees.json"
 WORKFLOW_STEPS = [
     {"page": "❤️ Vitalwerte", "label": "Patient", "short_label": "Patient"},
     {"page": "🩺 xABCDE", "label": "Untersuchung", "short_label": "Untersuch."},
@@ -1507,6 +1517,267 @@ def check_admin_password(candidate_password):
     except urllib.error.URLError as error:
         st.error(f"Supabase-Anmeldung nicht erreichbar: {error.reason}")
         return False
+
+
+def _password_hash(password):
+    salt = secrets.token_hex(16)
+    iterations = 260000
+    digest = hashlib.pbkdf2_hmac(
+        "sha256",
+        str(password).encode("utf-8"),
+        salt.encode("utf-8"),
+        iterations,
+    ).hex()
+    return f"pbkdf2_sha256${iterations}${salt}${digest}"
+
+
+def _verify_password(password, stored_hash):
+    if not password or not stored_hash:
+        return False
+    try:
+        algorithm, iterations, salt, digest = stored_hash.split("$", 3)
+        if algorithm != "pbkdf2_sha256":
+            return False
+        candidate = hashlib.pbkdf2_hmac(
+            "sha256",
+            str(password).encode("utf-8"),
+            salt.encode("utf-8"),
+            int(iterations),
+        ).hex()
+        return hmac.compare_digest(candidate, digest)
+    except Exception:
+        return False
+
+
+def _load_employee_store():
+    if not os.path.exists(EMPLOYEE_STORE_FILE):
+        return {"employees": []}
+    try:
+        with open(EMPLOYEE_STORE_FILE, "r", encoding="utf-8") as file_obj:
+            data = json.load(file_obj)
+        if isinstance(data, dict) and isinstance(data.get("employees"), list):
+            return data
+    except Exception:
+        pass
+    return {"employees": []}
+
+
+def _save_employee_store(store):
+    with open(EMPLOYEE_STORE_FILE, "w", encoding="utf-8") as file_obj:
+        json.dump(store, file_obj, ensure_ascii=False, indent=2)
+
+
+def _employee_display_name(employee):
+    role = "Admin" if employee.get("role") == "admin" else "Mitarbeiter"
+    return f"{employee.get('name', 'Unbekannt')} · {role}"
+
+
+def _find_employee(store, employee_id):
+    for employee in store.get("employees", []):
+        if employee.get("id") == employee_id:
+            return employee
+    return None
+
+
+def _active_employees(store):
+    employees = [employee for employee in store.get("employees", []) if employee.get("active", True)]
+    return sorted(employees, key=lambda item: item.get("name", "").casefold())
+
+
+def _authenticate_employee(employee):
+    st.session_state["employee_authenticated"] = True
+    st.session_state["employee_profile"] = {
+        "id": employee.get("id"),
+        "name": employee.get("name"),
+        "role": employee.get("role", "employee"),
+    }
+    st.session_state["employee_password_change_required"] = False
+    st.session_state.pop("employee_pending_id", None)
+
+
+def _logout_employee():
+    for key in [
+        "employee_authenticated",
+        "employee_profile",
+        "employee_password_change_required",
+        "employee_pending_id",
+        "admin_unlocked",
+    ]:
+        st.session_state.pop(key, None)
+
+
+def render_employee_login():
+    store = _load_employee_store()
+    all_employees = store.get("employees", [])
+    employees = _active_employees(store)
+
+    st.markdown(
+        """
+        <div style="max-width:760px; margin:26px auto 10px; padding:24px; border-radius:26px; border:1px solid rgba(255,255,255,.12); background:rgba(255,255,255,.045); box-shadow:0 24px 50px rgba(2,8,24,.24);">
+            <div style="font-size:1.8rem; font-weight:950; color:#fbfdff; margin-bottom:6px;">Mitarbeiter-Login</div>
+            <div style="color:rgba(231,241,255,.68); font-weight:650;">Namen auswählen, Einmalpasswort eingeben und danach ein eigenes Passwort vergeben.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    if not all_employees:
+        st.warning("Noch keine Mitarbeiter angelegt. Erstelle jetzt den ersten Admin-Zugang.")
+        with st.form("first_employee_setup_form"):
+            admin_name = st.text_input("Name", placeholder="z. B. Max Mustermann")
+            password = st.text_input("Eigenes Admin-Passwort", type="password")
+            password_repeat = st.text_input("Passwort wiederholen", type="password")
+            submitted = st.form_submit_button("Ersten Admin anlegen", use_container_width=True, type="primary")
+        if submitted:
+            if not admin_name.strip():
+                st.error("Bitte einen Namen eintragen.")
+            elif len(password) < 8:
+                st.error("Das Passwort muss mindestens 8 Zeichen lang sein.")
+            elif password != password_repeat:
+                st.error("Die Passwörter stimmen nicht überein.")
+            else:
+                employee = {
+                    "id": secrets.token_hex(8),
+                    "name": admin_name.strip(),
+                    "role": "admin",
+                    "active": True,
+                    "password_hash": _password_hash(password),
+                    "temp_password_hash": "",
+                    "must_change_password": False,
+                    "created_at": datetime.now().isoformat(timespec="seconds"),
+                }
+                _save_employee_store({"employees": [employee]})
+                _authenticate_employee(employee)
+                st.success("Admin-Zugang erstellt.")
+                st.rerun()
+        st.stop()
+
+    if not employees:
+        st.error("Es gibt aktuell keine aktiven Mitarbeiterzugänge. Bitte einen Administrator kontaktieren.")
+        st.stop()
+
+    pending_employee = _find_employee(store, st.session_state.get("employee_pending_id"))
+    if pending_employee and st.session_state.get("employee_password_change_required"):
+        st.info(f"Einmalpasswort akzeptiert für **{pending_employee.get('name')}**. Bitte eigenes Passwort setzen.")
+        with st.form("employee_password_change_form"):
+            new_password = st.text_input("Neues Passwort", type="password")
+            new_password_repeat = st.text_input("Neues Passwort wiederholen", type="password")
+            submitted = st.form_submit_button("Passwort speichern und anmelden", use_container_width=True, type="primary")
+        if submitted:
+            if len(new_password) < 8:
+                st.error("Das Passwort muss mindestens 8 Zeichen lang sein.")
+            elif new_password != new_password_repeat:
+                st.error("Die Passwörter stimmen nicht überein.")
+            else:
+                pending_employee["password_hash"] = _password_hash(new_password)
+                pending_employee["temp_password_hash"] = ""
+                pending_employee["must_change_password"] = False
+                pending_employee["password_changed_at"] = datetime.now().isoformat(timespec="seconds")
+                _save_employee_store(store)
+                _authenticate_employee(pending_employee)
+                st.success("Passwort gespeichert.")
+                st.rerun()
+        st.stop()
+
+    employee_options = {employee["id"]: _employee_display_name(employee) for employee in employees}
+    with st.form("employee_login_form"):
+        employee_id = st.selectbox(
+            "Mitarbeiter suchen",
+            list(employee_options),
+            format_func=lambda item: employee_options.get(item, item),
+        )
+        password = st.text_input("Einmalpasswort oder eigenes Passwort", type="password")
+        submitted = st.form_submit_button("Einloggen", use_container_width=True, type="primary")
+
+    if submitted:
+        employee = _find_employee(store, employee_id)
+        if not employee:
+            st.error("Mitarbeiter wurde nicht gefunden.")
+        elif employee.get("must_change_password", False):
+            if _verify_password(password, employee.get("temp_password_hash")):
+                st.session_state["employee_pending_id"] = employee.get("id")
+                st.session_state["employee_password_change_required"] = True
+                st.rerun()
+            else:
+                st.error("Einmalpasswort ist falsch.")
+        elif _verify_password(password, employee.get("password_hash")):
+            _authenticate_employee(employee)
+            st.rerun()
+        else:
+            st.error("Passwort ist falsch.")
+
+    st.stop()
+
+
+def render_employee_admin_panel():
+    store = _load_employee_store()
+    employees = sorted(store.get("employees", []), key=lambda item: item.get("name", "").casefold())
+
+    st.subheader("Mitarbeiterprofile")
+    st.caption("Neue Mitarbeiter erhalten ein Einmalpasswort und müssen beim ersten Login ein eigenes Passwort setzen.")
+
+    with st.expander("Neuen Mitarbeiter anlegen", expanded=False):
+        with st.form("create_employee_form"):
+            name = st.text_input("Name", key="new_employee_name")
+            role = st.selectbox("Rolle", ["employee", "admin"], format_func=lambda value: "Admin" if value == "admin" else "Mitarbeiter")
+            temp_password = st.text_input("Einmalpasswort", value=secrets.token_urlsafe(8), key="new_employee_temp_password")
+            submitted = st.form_submit_button("Mitarbeiter anlegen", use_container_width=True, type="primary")
+        if submitted:
+            normalized_name = name.strip()
+            if not normalized_name:
+                st.error("Bitte einen Namen eintragen.")
+            elif any(item.get("name", "").casefold() == normalized_name.casefold() for item in employees):
+                st.error("Dieser Name existiert bereits.")
+            elif len(temp_password) < 6:
+                st.error("Das Einmalpasswort sollte mindestens 6 Zeichen haben.")
+            else:
+                store.setdefault("employees", []).append({
+                    "id": secrets.token_hex(8),
+                    "name": normalized_name,
+                    "role": role,
+                    "active": True,
+                    "password_hash": "",
+                    "temp_password_hash": _password_hash(temp_password),
+                    "must_change_password": True,
+                    "created_at": datetime.now().isoformat(timespec="seconds"),
+                })
+                _save_employee_store(store)
+                st.success(f"Mitarbeiter angelegt. Einmalpasswort: {temp_password}")
+                st.rerun()
+
+    if not employees:
+        st.info("Noch keine Mitarbeiter vorhanden.")
+        return
+
+    for employee in employees:
+        status = "aktiv" if employee.get("active", True) else "gesperrt"
+        setup_state = "Einmalpasswort offen" if employee.get("must_change_password") else "eigenes Passwort gesetzt"
+        with st.expander(f"{employee.get('name')} · {_employee_display_name(employee).split(' · ')[1]} · {status}", expanded=False):
+            st.caption(setup_state)
+            col_reset, col_toggle = st.columns(2)
+            with col_reset:
+                new_temp = st.text_input(
+                    "Neues Einmalpasswort",
+                    value=secrets.token_urlsafe(8),
+                    key=f"reset_temp_{employee['id']}",
+                )
+                if st.button("Einmalpasswort setzen", key=f"reset_employee_{employee['id']}", use_container_width=True):
+                    employee["temp_password_hash"] = _password_hash(new_temp)
+                    employee["must_change_password"] = True
+                    employee["password_hash"] = ""
+                    _save_employee_store(store)
+                    st.success(f"Neues Einmalpasswort: {new_temp}")
+                    st.rerun()
+            with col_toggle:
+                current_employee_id = st.session_state.get("employee_profile", {}).get("id")
+                if employee.get("id") == current_employee_id:
+                    st.info("Der eigene Zugang kann hier nicht gesperrt werden.")
+                else:
+                    toggle_label = "Zugang sperren" if employee.get("active", True) else "Zugang aktivieren"
+                    if st.button(toggle_label, key=f"toggle_employee_{employee['id']}", use_container_width=True):
+                        employee["active"] = not employee.get("active", True)
+                        _save_employee_store(store)
+                        st.rerun()
 
 
 def _has_content(values):
@@ -1639,6 +1910,15 @@ if "protocol_generated" not in st.session_state:
 
 if "generated_protocol_text" not in st.session_state:
     st.session_state["generated_protocol_text"] = ""
+
+if "employee_authenticated" not in st.session_state:
+    st.session_state["employee_authenticated"] = False
+
+if "employee_profile" not in st.session_state:
+    st.session_state["employee_profile"] = {}
+
+if not st.session_state.get("employee_authenticated", False):
+    render_employee_login()
 
 
 def sop_value(key, default_value):
@@ -2418,10 +2698,25 @@ if 'visited_pages' not in st.session_state:
 
 st.session_state['visited_pages'].add(st.session_state['seite'])
 
-topbar_left, _ = st.columns([2, 10])
+topbar_left, topbar_spacer, topbar_profile, topbar_admin, topbar_logout = st.columns([2, 5, 2.2, 1.4, 1.4])
 with topbar_left:
     if st.button("＋ Neuer Einsatz", key="new_case_btn", use_container_width=True, type="secondary"):
         st.session_state["confirm_new_case"] = True
+with topbar_profile:
+    profile = st.session_state.get("employee_profile", {})
+    st.markdown(
+        f"<div style='min-height:48px; display:flex; align-items:center; justify-content:center; color:rgba(238,245,255,.72); font-weight:800;'>👤 {html.escape(profile.get('name', ''))}</div>",
+        unsafe_allow_html=True,
+    )
+with topbar_admin:
+    if st.session_state.get("employee_profile", {}).get("role") == "admin":
+        if st.button("Admin", key="employee_admin_nav_btn", use_container_width=True, type="secondary"):
+            st.session_state["seite"] = "🛠️ Admin"
+            st.rerun()
+with topbar_logout:
+    if st.button("Abmelden", key="employee_logout_btn", use_container_width=True, type="secondary"):
+        _logout_employee()
+        st.rerun()
 
 if st.session_state.get("confirm_new_case"):
     st.warning("Alle Eingaben des aktuellen Einsatzes werden gelöscht. Wirklich neu beginnen?")
@@ -2757,7 +3052,13 @@ elif seite == "🧰 Geräte-Guide":
 elif seite == "🛠️ Admin":
 
     st.header("🛠️ Adminbereich")
-    st.caption("Passwortgeschützt: Alle SOP-Parameter zentral pflegen")
+    st.caption("Nur für Admin-Profile: Mitarbeiterzugänge und SOP-Parameter zentral pflegen")
+
+    if st.session_state.get("employee_profile", {}).get("role") != "admin":
+        st.error("Dieser Bereich ist nur für Administratoren freigegeben.")
+        st.stop()
+
+    st.session_state["admin_unlocked"] = True
 
     if not st.session_state.get("admin_unlocked", False):
         admin_pw = st.text_input("Admin-Passwort", type="password", key="admin_password_input")
@@ -2769,6 +3070,9 @@ elif seite == "🛠️ Admin":
             else:
                 st.error("Falsches Passwort")
     else:
+        render_employee_admin_panel()
+        st.divider()
+
         current_values = st.session_state["sop_admin_config"].get("value_overrides", {})
 
         st.info("Alle Felder wirken global auf die SOP-Logik. Änderungen erst nach Speichern aktiv.")
@@ -2801,12 +3105,6 @@ elif seite == "🛠️ Admin":
                 st.session_state["sop_admin_config"] = deepcopy(DEFAULT_SOP_ADMIN_CONFIG)
                 _save_sop_admin_config(st.session_state["sop_admin_config"])
                 st.success("Standardwerte wiederhergestellt")
-                st.rerun()
-
-        c3, c4 = st.columns(2)
-        with c4:
-            if st.button("🔒 Admin sperren", use_container_width=True):
-                st.session_state["admin_unlocked"] = False
                 st.rerun()
 
         st.subheader("Aktive Konfiguration")
