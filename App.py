@@ -113,6 +113,19 @@ def set_current_time(state_key):
     st.session_state[state_key] = datetime.now().strftime("%H:%M")
 
 
+def default_patient_case():
+    return {
+        "vitalwerte": {},
+        "xabcde": {},
+        "samplers": {},
+        "opqrst": {},
+        "einweisung": {},
+        "amls": {"excluded": [], "custom_candidates": [], "arbeitsdiagnose": ""},
+        "massnahmen": {"timeline": [], "medikation": []},
+        "transport": {},
+    }
+
+
 def reset_patient_case():
     preserved = {
         key: st.session_state[key]
@@ -127,22 +140,14 @@ def reset_patient_case():
     }
     st.session_state.clear()
     st.session_state.update(preserved)
-    st.session_state["patient"] = {
-        "vitalwerte": {},
-        "xabcde": {},
-        "samplers": {},
-        "opqrst": {},
-        "einweisung": {},
-        "amls": {"excluded": [], "custom_candidates": [], "arbeitsdiagnose": ""},
-        "massnahmen": {"timeline": [], "medikation": []},
-        "transport": {},
-    }
+    st.session_state["patient"] = default_patient_case()
     st.session_state["seite"] = "🏠 Startseite"
     st.session_state["xabcde_selected"] = "A"
     st.session_state["visited_pages"] = set()
     st.session_state["workflow_manual_completion"] = {}
     st.session_state["protocol_generated"] = False
     st.session_state["generated_protocol_text"] = ""
+    clear_current_case_draft()
 
 
 def normalize_icd10_code(value):
@@ -1351,26 +1356,7 @@ components.html(
 
 if "patient" not in st.session_state:
 
-    st.session_state.patient = {
-
-        "vitalwerte": {},
-
-        "xabcde": {},
-
-        "samplers": {},
-
-        "opqrst": {},
-
-        "einweisung": {},
-
-        "amls": {"excluded": [], "custom_candidates": [], "arbeitsdiagnose": ""},
-
-        "massnahmen": {
-            "timeline": [],
-            "medikation": []
-        }
-
-    }
+    st.session_state.patient = default_patient_case()
 
 patient = st.session_state.patient
 patient.setdefault("vitalwerte", {})
@@ -1397,6 +1383,7 @@ SUPABASE_ANON_KEY = "sb_publishable_87egwyr4tTwLh3tnZTDjkQ_eJh2eRZw"
 SUPABASE_ADMIN_EMAIL = "admin@rd-protokoll-generator.local"
 SOP_ADMIN_CONFIG_FILE = "sop_admin_config.json"
 EMPLOYEE_STORE_FILE = "employees.json"
+CASE_DRAFT_STORE_FILE = "case_drafts.json"
 WORKFLOW_STEPS = [
     {"page": "❤️ Vitalwerte", "label": "Patient", "short_label": "Patient"},
     {"page": "🩺 xABCDE", "label": "Untersuchung", "short_label": "Untersuch."},
@@ -1567,6 +1554,97 @@ def _save_employee_store(store):
         json.dump(store, file_obj, ensure_ascii=False, indent=2)
 
 
+def _load_case_draft_store():
+    if not os.path.exists(CASE_DRAFT_STORE_FILE):
+        return {"drafts": {}}
+    try:
+        with open(CASE_DRAFT_STORE_FILE, "r", encoding="utf-8") as file_obj:
+            data = json.load(file_obj)
+        if isinstance(data, dict) and isinstance(data.get("drafts"), dict):
+            return data
+    except Exception:
+        pass
+    return {"drafts": {}}
+
+
+def _save_case_draft_store(store):
+    with open(CASE_DRAFT_STORE_FILE, "w", encoding="utf-8") as file_obj:
+        json.dump(store, file_obj, ensure_ascii=False, indent=2)
+
+
+def _current_employee_id():
+    return st.session_state.get("employee_profile", {}).get("id")
+
+
+def _serializable_visited_pages():
+    visited = st.session_state.get("visited_pages", set())
+    if isinstance(visited, set):
+        return sorted(visited)
+    if isinstance(visited, list):
+        return visited
+    return []
+
+
+def load_current_case_draft():
+    employee_id = _current_employee_id()
+    if not employee_id or st.session_state.get("case_draft_loaded"):
+        return
+
+    store = _load_case_draft_store()
+    draft = store.get("drafts", {}).get(employee_id)
+    if isinstance(draft, dict):
+        st.session_state["patient"] = _deep_merge_dict(default_patient_case(), draft.get("patient", {}))
+        st.session_state["seite"] = draft.get("seite", HOME_PAGE)
+        st.session_state["visited_pages"] = set(draft.get("visited_pages", []))
+        st.session_state["workflow_manual_completion"] = draft.get("workflow_manual_completion", {})
+        st.session_state["protocol_generated"] = bool(draft.get("protocol_generated", False))
+        st.session_state["generated_protocol_text"] = draft.get("generated_protocol_text", "")
+        st.session_state["xabcde_selected"] = draft.get("xabcde_selected", "A")
+        st.session_state["case_draft_restored"] = True
+
+    st.session_state["case_draft_loaded"] = True
+
+
+def save_current_case_draft():
+    employee_id = _current_employee_id()
+    if not employee_id or not st.session_state.get("employee_authenticated"):
+        return
+
+    store = _load_case_draft_store()
+    patient_data = st.session_state.get("patient", default_patient_case())
+    has_case_content = _has_content(patient_data) or bool(st.session_state.get("generated_protocol_text"))
+    if not has_case_content:
+        if employee_id in store.get("drafts", {}):
+            store["drafts"].pop(employee_id, None)
+            _save_case_draft_store(store)
+        return
+
+    store.setdefault("drafts", {})[employee_id] = {
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+        "patient": patient_data,
+        "seite": st.session_state.get("seite", HOME_PAGE),
+        "visited_pages": _serializable_visited_pages(),
+        "workflow_manual_completion": st.session_state.get("workflow_manual_completion", {}),
+        "protocol_generated": st.session_state.get("protocol_generated", False),
+        "generated_protocol_text": st.session_state.get("generated_protocol_text", ""),
+        "xabcde_selected": st.session_state.get("xabcde_selected", "A"),
+    }
+    _save_case_draft_store(store)
+
+
+def clear_current_case_draft():
+    employee_id = _current_employee_id()
+    if not employee_id:
+        return
+
+    store = _load_case_draft_store()
+    if employee_id in store.get("drafts", {}):
+        store["drafts"].pop(employee_id, None)
+        _save_case_draft_store(store)
+    st.session_state["case_draft_loaded"] = True
+    st.session_state.pop("case_draft_restored", None)
+
+
 def _employee_display_name(employee):
     role = "Admin" if employee.get("role") == "admin" else "Mitarbeiter"
     return f"{employee.get('name', 'Unbekannt')} · {role}"
@@ -1592,6 +1670,7 @@ def _authenticate_employee(employee):
         "role": employee.get("role", "employee"),
     }
     st.session_state["employee_password_change_required"] = False
+    st.session_state["case_draft_loaded"] = False
     st.session_state.pop("employee_pending_id", None)
 
 
@@ -1602,6 +1681,8 @@ def _logout_employee():
         "employee_password_change_required",
         "employee_pending_id",
         "admin_unlocked",
+        "case_draft_loaded",
+        "case_draft_restored",
     ]:
         st.session_state.pop(key, None)
 
@@ -1919,6 +2000,9 @@ if "employee_profile" not in st.session_state:
 
 if not st.session_state.get("employee_authenticated", False):
     render_employee_login()
+
+load_current_case_draft()
+patient = st.session_state.patient
 
 
 def sop_value(key, default_value):
@@ -2689,6 +2773,8 @@ elif st.session_state['seite'] == "🩺 xABCDE":
     sync_xabcde_from_session_state()
 elif st.session_state['seite'] == "📋 SAMPLERS":
     sync_samplers_from_session_state()
+elif st.session_state['seite'] == "🔥 OPQRST":
+    sync_opqrst_from_session_state()
 
 if 'xabcde_selected' not in st.session_state:
     st.session_state['xabcde_selected'] = "A"
@@ -2698,10 +2784,16 @@ if 'visited_pages' not in st.session_state:
 
 st.session_state['visited_pages'].add(st.session_state['seite'])
 
-topbar_left, topbar_spacer, topbar_profile, topbar_admin, topbar_logout = st.columns([2, 5, 2.2, 1.4, 1.4])
+topbar_left, topbar_home, topbar_spacer, topbar_profile, topbar_admin, topbar_logout = st.columns([2, 2.2, 3.2, 2.2, 1.4, 1.4])
 with topbar_left:
     if st.button("＋ Neuer Einsatz", key="new_case_btn", use_container_width=True, type="secondary"):
         st.session_state["confirm_new_case"] = True
+with topbar_home:
+    if st.session_state.get("seite") != HOME_PAGE:
+        if st.button("← Hauptmenü", key="back_to_home_btn", use_container_width=True, type="secondary"):
+            st.session_state["seite"] = HOME_PAGE
+            save_current_case_draft()
+            st.rerun()
 with topbar_profile:
     profile = st.session_state.get("employee_profile", {})
     st.markdown(
@@ -2712,9 +2804,11 @@ with topbar_admin:
     if st.session_state.get("employee_profile", {}).get("role") == "admin":
         if st.button("Admin", key="employee_admin_nav_btn", use_container_width=True, type="secondary"):
             st.session_state["seite"] = "🛠️ Admin"
+            save_current_case_draft()
             st.rerun()
 with topbar_logout:
     if st.button("Abmelden", key="employee_logout_btn", use_container_width=True, type="secondary"):
+        save_current_case_draft()
         _logout_employee()
         st.rerun()
 
@@ -2729,6 +2823,9 @@ if st.session_state.get("confirm_new_case"):
         if st.button("Abbrechen", key="cancel_new_case_btn", use_container_width=True):
             st.session_state["confirm_new_case"] = False
             st.rerun()
+
+if st.session_state.pop("case_draft_restored", False):
+    st.info("Gespeicherter Einsatzentwurf wurde wiederhergestellt.")
 
 workflow_completion = workflow_completion_state(patient)
 workflow_total = len(WORKFLOW_STEPS)
@@ -2785,6 +2882,7 @@ if current_workflow_index is not None:
                             type=button_type,
                         ):
                             st.session_state["seite"] = step["page"]
+                            save_current_case_draft()
                             st.rerun()
 
 seite = st.session_state['seite']
@@ -5593,6 +5691,13 @@ elif seite == "📄 Protokoll":
             height=135,
         )
 
+        st.divider()
+        end_case_col, _ = st.columns([1.4, 4])
+        with end_case_col:
+            if st.button("✓ Einsatz beenden", key="finish_case_btn", use_container_width=True, type="primary"):
+                reset_patient_case()
+                st.rerun()
+
 if seite != "🛠️ Admin" and current_workflow_index is not None:
     with st.container(key="tablet_bottom_nav"):
         nav_prev_col, nav_info_col, nav_next_col = st.columns([1.2, 2.6, 1.2])
@@ -5603,6 +5708,7 @@ if seite != "🛠️ Admin" and current_workflow_index is not None:
             if previous_step:
                 if st.button(f"← {previous_step['label']}", key="workflow_prev_btn", use_container_width=True):
                     st.session_state["seite"] = previous_step["page"]
+                    save_current_case_draft()
                     st.rerun()
 
         with nav_info_col:
@@ -5632,4 +5738,7 @@ if seite != "🛠️ Admin" and current_workflow_index is not None:
                             st.session_state["protocol_generated"] = True
                             st.session_state["workflow_manual_completion"]["📄 Protokoll"] = True
                     st.session_state["seite"] = next_step["page"]
+                    save_current_case_draft()
                     st.rerun()
+
+save_current_case_draft()
