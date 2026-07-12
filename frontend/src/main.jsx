@@ -2934,9 +2934,62 @@ function App() {
     : <Login onLogin={handleLogin} />;
 }
 
+function isLocalDevHost() {
+  return ['localhost', '127.0.0.1'].includes(window.location.hostname) && window.location.port === '5173';
+}
+
+async function clearLocalServiceWorker() {
+  if (!('serviceWorker' in navigator)) return;
+
+  const registrations = await navigator.serviceWorker.getRegistrations();
+  const hadController = Boolean(navigator.serviceWorker.controller);
+  const cacheNames = 'caches' in window ? await caches.keys().catch(() => []) : [];
+
+  await Promise.all(registrations.map((registration) => registration.unregister()));
+  if ('caches' in window) {
+    await Promise.all(cacheNames.map((cacheName) => caches.delete(cacheName)));
+  }
+
+  const resetNeeded = hadController || registrations.length > 0 || cacheNames.length > 0;
+  if (resetNeeded && sessionStorage.getItem('nana_local_sw_reset') !== 'done') {
+    sessionStorage.setItem('nana_local_sw_reset', 'done');
+    window.location.reload();
+  }
+}
+
+function registerProductionServiceWorker() {
+  navigator.serviceWorker.register('/sw.js')
+    .then((registration) => {
+      registration.update().catch(() => {});
+      registration.addEventListener('updatefound', () => {
+        const worker = registration.installing;
+        if (!worker) return;
+
+        worker.addEventListener('statechange', () => {
+          if (worker.state === 'installed' && navigator.serviceWorker.controller) {
+            worker.postMessage({ type: 'SKIP_WAITING' });
+          }
+        });
+      });
+    })
+    .catch(() => {});
+
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (refreshing) return;
+    refreshing = true;
+    window.location.reload();
+  });
+}
+
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
+    if (isLocalDevHost()) {
+      clearLocalServiceWorker().catch(() => {});
+      return;
+    }
+
+    registerProductionServiceWorker();
   });
 }
 

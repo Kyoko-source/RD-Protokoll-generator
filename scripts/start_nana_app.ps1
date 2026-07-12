@@ -36,4 +36,5 @@ Start-Process -FilePath "cmd.exe" `
     -WindowStyle Minimized
 
 Start-Sleep -Seconds 3
-Start-Process "http://127.0.0.1:5173"
+$cacheBuster = Get-Date -Format "yyyyMMddHHmmss"
+Start-Process "http://127.0.0.1:5173/?nana=$cacheBuster"
