@@ -121,7 +121,13 @@ def default_patient_case():
         "samplers": {},
         "opqrst": {},
         "einweisung": {},
-        "amls": {"excluded": [], "custom_candidates": [], "arbeitsdiagnose": ""},
+        "amls": {
+            "excluded": [],
+            "custom_candidates": [],
+            "arbeitsdiagnose": "",
+            "leitsymptom": "",
+            "notizen": "",
+        },
         "massnahmen": {"timeline": [], "medikation": []},
         "transport": {},
         "einsatz": {},
@@ -141,6 +147,20 @@ def add_lines(title, rows):
     for label, value in documented:
         text += f"{label}: {value}\n"
     return text + "\n"
+
+
+def amls_item_text(item, secondary_key="hinweis"):
+    if isinstance(item, dict):
+        name = item.get("diagnose") or item.get("name") or item.get("text") or item.get("value")
+        secondary = item.get(secondary_key) or item.get("begruendung") or item.get("rationale") or item.get("status")
+        if valid(name) and valid(secondary):
+            return f"{name}: {secondary}"
+        if valid(name):
+            return str(name)
+        if valid(secondary):
+            return str(secondary)
+        return ""
+    return str(item) if valid(item) else ""
 
 
 def build_case_summary(patient):
@@ -238,7 +258,12 @@ def assess_protocol_quality(patient):
         "xABCDE Kernfelder sind dokumentiert." if not missing_x else "Fehlende xABCDE-Felder: " + ", ".join(missing_x),
     ))
 
-    diagnosis_ok = valid(amls.get("arbeitsdiagnose")) or valid(patient.get("einweisung", {}).get("diagnose"))
+    diagnosis_ok = (
+        valid(amls.get("arbeitsdiagnose"))
+        or valid(amls.get("leitsymptom"))
+        or bool(amls.get("custom_candidates"))
+        or valid(patient.get("einweisung", {}).get("diagnose"))
+    )
     items.append(quality_item(
         "diagnosis",
         "ok" if diagnosis_ok else "warning",
@@ -377,8 +402,33 @@ def generate_protocol_text(patient):
         ("Severity / NRS", o.get("severity")),
         ("Time / Verlauf", o.get("time")),
     ])
-    text += add_lines("VERDACHT & UEBERGABE", [
+    text += add_lines("AMLS / VERDACHTSDIAGNOSTIK", [
+        ("Leitsymptom", amls.get("leitsymptom")),
         ("Arbeitsdiagnose", amls.get("arbeitsdiagnose")),
+        ("Notizen / Begruendung", amls.get("notizen")),
+    ])
+
+    candidates = amls.get("custom_candidates", [])
+    if isinstance(candidates, list) and candidates:
+        lines = [amls_item_text(item, "hinweis") for item in candidates]
+        lines = [line for line in lines if valid(line)]
+        if lines:
+            text += "Differenzialdiagnosen / Kandidaten\n" + ("=" * 50) + "\n"
+            for line in lines:
+                text += f"- {line}\n"
+            text += "\n"
+
+    excluded = amls.get("excluded", [])
+    if isinstance(excluded, list) and excluded:
+        lines = [amls_item_text(item, "begruendung") for item in excluded]
+        lines = [line for line in lines if valid(line)]
+        if lines:
+            text += "AMLS-Ausschluesse / zurueckgestellte Diagnosen\n" + ("=" * 50) + "\n"
+            for line in lines:
+                text += f"- {line}\n"
+            text += "\n"
+
+    text += add_lines("UEBERGABE", [
         ("Uebergabe Ziel", handover.get("ziel")),
         ("Uebergabe Text", handover.get("text")),
     ])

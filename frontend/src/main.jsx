@@ -1261,7 +1261,7 @@ const emptyPatient = {
   samplers: {},
   opqrst: {},
   einweisung: {},
-  amls: { excluded: [], custom_candidates: [], arbeitsdiagnose: '' },
+  amls: { excluded: [], custom_candidates: [], arbeitsdiagnose: '', leitsymptom: '', notizen: '' },
   massnahmen: { timeline: [], medikation: [] },
   transport: {},
   einsatz: {},
@@ -1285,6 +1285,8 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const massnahmen = patient.massnahmen || { timeline: [], medikation: [] };
   const amls = patient.amls || {};
   const uebergabe = patient.uebergabe || {};
+  const amlsCandidates = Array.isArray(amls.custom_candidates) ? amls.custom_candidates : [];
+  const amlsExcluded = Array.isArray(amls.excluded) ? amls.excluded : [];
 
   useEffect(() => {
     api('/api/draft', {}, session.token)
@@ -1377,6 +1379,75 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         ...(current.amls || {}),
         [key]: value
       }
+    }));
+  }
+
+  function addAmlsCandidate() {
+    setPatient((current) => ({
+      ...current,
+      amls: {
+        ...(current.amls || {}),
+        excluded: Array.isArray((current.amls || {}).excluded) ? (current.amls || {}).excluded : [],
+        custom_candidates: [
+          ...(Array.isArray((current.amls || {}).custom_candidates) ? (current.amls || {}).custom_candidates : []),
+          { diagnose: '', hinweis: '' }
+        ]
+      }
+    }));
+  }
+
+  function updateAmlsCandidate(index, key, value) {
+    setPatient((current) => {
+      const candidates = [...(Array.isArray((current.amls || {}).custom_candidates) ? (current.amls || {}).custom_candidates : [])];
+      const existing = candidates[index];
+      candidates[index] = typeof existing === 'string' ? { diagnose: existing, [key]: value } : { ...(existing || {}), [key]: value };
+      return { ...current, amls: { ...(current.amls || {}), custom_candidates: candidates } };
+    });
+  }
+
+  function removeAmlsCandidate(index) {
+    setPatient((current) => {
+      const candidates = [...(Array.isArray((current.amls || {}).custom_candidates) ? (current.amls || {}).custom_candidates : [])];
+      candidates.splice(index, 1);
+      return { ...current, amls: { ...(current.amls || {}), custom_candidates: candidates } };
+    });
+  }
+
+  function addAmlsExcluded() {
+    setPatient((current) => ({
+      ...current,
+      amls: {
+        ...(current.amls || {}),
+        custom_candidates: Array.isArray((current.amls || {}).custom_candidates) ? (current.amls || {}).custom_candidates : [],
+        excluded: [
+          ...(Array.isArray((current.amls || {}).excluded) ? (current.amls || {}).excluded : []),
+          { diagnose: '', begruendung: '' }
+        ]
+      }
+    }));
+  }
+
+  function updateAmlsExcluded(index, key, value) {
+    setPatient((current) => {
+      const excluded = [...(Array.isArray((current.amls || {}).excluded) ? (current.amls || {}).excluded : [])];
+      const existing = excluded[index];
+      excluded[index] = typeof existing === 'string' ? { diagnose: existing, [key]: value } : { ...(existing || {}), [key]: value };
+      return { ...current, amls: { ...(current.amls || {}), excluded } };
+    });
+  }
+
+  function removeAmlsExcluded(index) {
+    setPatient((current) => {
+      const excluded = [...(Array.isArray((current.amls || {}).excluded) ? (current.amls || {}).excluded : [])];
+      excluded.splice(index, 1);
+      return { ...current, amls: { ...(current.amls || {}), excluded } };
+    });
+  }
+
+  function resetAmlsFunnel() {
+    setPatient((current) => ({
+      ...current,
+      amls: { ...(current.amls || {}), excluded: [], custom_candidates: [], arbeitsdiagnose: '', leitsymptom: '', notizen: '' }
     }));
   }
 
@@ -1643,6 +1714,13 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           onClick={() => setProtocolSection('opqrst')}
         >
           OPQRST
+        </button>
+        <button
+          type="button"
+          className={protocolSection === 'amls' ? 'active' : ''}
+          onClick={() => setProtocolSection('amls')}
+        >
+          AMLS
         </button>
         <button
           type="button"
@@ -1952,6 +2030,106 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             <legend>T · Time</legend>
             <label>Verlauf<textarea value={opqrst.time || ''} onChange={(event) => updateOpqrst('time', event.target.value)} rows={4} /></label>
           </fieldset>
+        </div>
+      </section>}
+
+      {protocolSection === 'amls' && <section className="work-panel">
+        <div className="section-head">
+          <h2>AMLS-Trichter</h2>
+          <span>Differenzialdiagnosen prüfen und begründen</span>
+        </div>
+
+        <div className="amls-summary">
+          <div>
+            <strong>{amlsCandidates.length}</strong>
+            <span>Kandidaten</span>
+          </div>
+          <div>
+            <strong>{amlsExcluded.length}</strong>
+            <span>zurückgestellt</span>
+          </div>
+          <div>
+            <strong>{amls.arbeitsdiagnose ? '1' : '0'}</strong>
+            <span>Arbeitsdiagnose</span>
+          </div>
+        </div>
+
+        <div className="assessment-grid">
+          <fieldset>
+            <legend>Verdacht</legend>
+            <label>
+              Leitsymptom / Hauptproblem
+              <input value={amls.leitsymptom || ''} onChange={(event) => updateAmls('leitsymptom', event.target.value)} />
+            </label>
+            <label>
+              Arbeitsdiagnose
+              <input value={amls.arbeitsdiagnose || ''} onChange={(event) => updateAmls('arbeitsdiagnose', event.target.value)} />
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>Begründung</legend>
+            <label>
+              Klinische Notiz / Entscheidungsgrundlage
+              <textarea value={amls.notizen || ''} onChange={(event) => updateAmls('notizen', event.target.value)} rows={6} />
+            </label>
+          </fieldset>
+        </div>
+
+        <div className="list-head">
+          <h3>Differenzialdiagnosen</h3>
+          <button type="button" onClick={addAmlsCandidate}>Kandidat hinzufügen</button>
+        </div>
+        <div className="dynamic-list">
+          {amlsCandidates.map((item, index) => {
+            const candidate = typeof item === 'string' ? { diagnose: item, hinweis: '' } : item || {};
+            return (
+              <div className="dynamic-row amls-row" key={`amls-candidate-${index}`}>
+                <input
+                  placeholder="Diagnose / Verdacht"
+                  value={candidate.diagnose || candidate.name || ''}
+                  onChange={(event) => updateAmlsCandidate(index, 'diagnose', event.target.value)}
+                />
+                <input
+                  placeholder="Hinweis, Befund oder warum möglich"
+                  value={candidate.hinweis || candidate.rationale || ''}
+                  onChange={(event) => updateAmlsCandidate(index, 'hinweis', event.target.value)}
+                />
+                <button type="button" onClick={() => removeAmlsCandidate(index)}>Entfernen</button>
+              </div>
+            );
+          })}
+          {amlsCandidates.length === 0 && <p className="muted">Noch keine Differenzialdiagnosen ergänzt.</p>}
+        </div>
+
+        <div className="list-head">
+          <h3>Ausschlüsse / zurückgestellt</h3>
+          <button type="button" onClick={addAmlsExcluded}>Ausschluss hinzufügen</button>
+        </div>
+        <div className="dynamic-list">
+          {amlsExcluded.map((item, index) => {
+            const excluded = typeof item === 'string' ? { diagnose: item, begruendung: '' } : item || {};
+            return (
+              <div className="dynamic-row amls-row" key={`amls-excluded-${index}`}>
+                <input
+                  placeholder="Diagnose"
+                  value={excluded.diagnose || excluded.name || ''}
+                  onChange={(event) => updateAmlsExcluded(index, 'diagnose', event.target.value)}
+                />
+                <input
+                  placeholder="Begründung"
+                  value={excluded.begruendung || excluded.rationale || ''}
+                  onChange={(event) => updateAmlsExcluded(index, 'begruendung', event.target.value)}
+                />
+                <button type="button" onClick={() => removeAmlsExcluded(index)}>Entfernen</button>
+              </div>
+            );
+          })}
+          {amlsExcluded.length === 0 && <p className="muted">Noch keine Ausschlüsse dokumentiert.</p>}
+        </div>
+
+        <div className="protocol-toolbar amls-actions">
+          <button type="button" onClick={resetAmlsFunnel}><RotateCcw size={16} /> AMLS zurücksetzen</button>
+          <button type="button" onClick={generateProtocol}>Protokoll mit AMLS generieren</button>
         </div>
       </section>}
 
