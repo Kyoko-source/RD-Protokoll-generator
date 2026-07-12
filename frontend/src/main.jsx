@@ -63,18 +63,24 @@ function clearLocalDraft(employeeId) {
 }
 
 function hasValue(value) {
-  return ![undefined, null, '', 'Keine Angabe'].includes(value) && !(Array.isArray(value) && value.length === 0);
+  return ![undefined, null, '', 'Keine Angabe', 'Selber eintragen'].includes(value) && !(Array.isArray(value) && value.length === 0);
 }
 
+const CUSTOM_STATUS = 'Selber eintragen';
+
 const vitalStatusOptions = {
-  spo2_status: ['Keine Angabe', 'Normal', 'Leicht erniedrigt', 'Kritisch erniedrigt', 'Nicht messbar'],
-  af_status: ['Keine Angabe', 'Bradypnoe', 'Normal', 'Tachypnoe', 'Schwere Tachypnoe', 'Apnoe'],
-  rr_status: ['Keine Angabe', 'Hypotonie', 'Normal', 'Leicht erhöht', 'Hypertonie', 'Hypertensive Krise', 'Nicht messbar'],
-  puls_status: ['Keine Angabe', 'Bradykardie', 'Normal', 'Tachykardie', 'Starke Tachykardie', 'Nicht tastbar'],
-  gcs_status: ['Keine Angabe', 'Normal', 'Leicht eingeschränkt', 'Mittelgradig eingeschränkt', 'Schwer eingeschränkt'],
-  bz_status: ['Keine Angabe', 'Hypoglykämie', 'Normal', 'Hyperglykämie', 'Nicht messbar'],
-  temperatur_status: ['Keine Angabe', 'Unterkühlung', 'Normal', 'Erhöht / subfebril', 'Fieber', 'Hohes Fieber', 'Nicht gemessen']
+  spo2_status: ['Keine Angabe', 'Normal', 'Leicht erniedrigt', 'Kritisch erniedrigt', 'Nicht messbar', CUSTOM_STATUS],
+  af_status: ['Keine Angabe', 'Bradypnoe', 'Normal', 'Tachypnoe', 'Schwere Tachypnoe', 'Apnoe', CUSTOM_STATUS],
+  rr_status: ['Keine Angabe', 'Hypotonie', 'Normal', 'Leicht erhöht', 'Hypertonie', 'Hypertensive Krise', 'Nicht messbar', CUSTOM_STATUS],
+  puls_status: ['Keine Angabe', 'Bradykardie', 'Normal', 'Tachykardie', 'Starke Tachykardie', 'Nicht tastbar', CUSTOM_STATUS],
+  gcs_status: ['Keine Angabe', 'Normal', 'Leicht eingeschränkt', 'Mittelgradig eingeschränkt', 'Schwer eingeschränkt', CUSTOM_STATUS],
+  bz_status: ['Keine Angabe', 'Hypoglykämie', 'Normal', 'Hyperglykämie', 'Nicht messbar', CUSTOM_STATUS],
+  temperatur_status: ['Keine Angabe', 'Unterkühlung', 'Normal', 'Erhöht / subfebril', 'Fieber', 'Hohes Fieber', 'Nicht gemessen', CUSTOM_STATUS]
 };
+
+function effectiveVitalStatus(vital, statusKey) {
+  return vital?.[statusKey] === CUSTOM_STATUS ? vital?.[`${statusKey}_custom`] : vital?.[statusKey];
+}
 
 function addProtocolBlock(title, rows) {
   const documented = rows.filter(([, value]) => hasValue(value));
@@ -95,9 +101,9 @@ function formatObservation(value, status = '', unit = '') {
 
 function formatBloodPressure(vital) {
   if (hasValue(vital.rr_sys) || hasValue(vital.rr_dia)) {
-    return formatObservation(`${vital.rr_sys || ''}/${vital.rr_dia || ''}`, vital.rr_status, 'mmHg');
+    return formatObservation(`${vital.rr_sys || ''}/${vital.rr_dia || ''}`, effectiveVitalStatus(vital, 'rr_status'), 'mmHg');
   }
-  return formatObservation('', vital.rr_status);
+  return formatObservation('', effectiveVitalStatus(vital, 'rr_status'));
 }
 
 function renderListBlock(title, items, formatter) {
@@ -122,12 +128,12 @@ function generateLocalProtocolText(patient) {
     ['Alter', vital.alter],
     ['Geschlecht', vital.geschlecht],
     ['RR', formatBloodPressure(vital)],
-    ['Puls', formatObservation(vital.puls, vital.puls_status, '/min')],
-    ['SpO2', formatObservation(vital.spo2, vital.spo2_status, '%')],
-    ['Atemfrequenz', formatObservation(vital.af, vital.af_status, '/min')],
-    ['BZ', formatObservation(vital.bz, vital.bz_status, 'mg/dL')],
-    ['Temperatur', formatObservation(vital.temperatur, vital.temperatur_status, '°C')],
-    ['GCS', formatObservation(vital.gcs, vital.gcs_status, '/15')],
+    ['Puls', formatObservation(vital.puls, effectiveVitalStatus(vital, 'puls_status'), '/min')],
+    ['SpO2', formatObservation(vital.spo2, effectiveVitalStatus(vital, 'spo2_status'), '%')],
+    ['Atemfrequenz', formatObservation(vital.af, effectiveVitalStatus(vital, 'af_status'), '/min')],
+    ['BZ', formatObservation(vital.bz, effectiveVitalStatus(vital, 'bz_status'), 'mg/dL')],
+    ['Temperatur', formatObservation(vital.temperatur, effectiveVitalStatus(vital, 'temperatur_status'), '°C')],
+    ['GCS', formatObservation(vital.gcs, effectiveVitalStatus(vital, 'gcs_status'), '/15')],
     ['Kurzbericht', vital.kurzbericht],
   ]);
   text += addProtocolBlock('xABCDE', [
@@ -1505,6 +1511,25 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     }));
   }
 
+  function renderVitalStatus(statusKey, label) {
+    return (
+      <label>
+        {label}
+        <select value={vitalwerte[statusKey] || 'Keine Angabe'} onChange={(event) => updateVital(statusKey, event.target.value)}>
+          {vitalStatusOptions[statusKey].map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+        {vitalwerte[statusKey] === CUSTOM_STATUS && (
+          <input
+            className="inline-custom-input"
+            value={vitalwerte[`${statusKey}_custom`] || ''}
+            onChange={(event) => updateVital(`${statusKey}_custom`, event.target.value)}
+            placeholder="Eigene Einordnung eintragen"
+          />
+        )}
+      </label>
+    );
+  }
+
   function updateXabcde(key, value) {
     setPatient((current) => ({
       ...current,
@@ -2075,72 +2100,37 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             RR diastolisch optional
             <input value={vitalwerte.rr_dia || ''} onChange={(event) => updateVital('rr_dia', event.target.value)} inputMode="numeric" />
           </label>
-          <label>
-            RR Einordnung
-            <select value={vitalwerte.rr_status || 'Keine Angabe'} onChange={(event) => updateVital('rr_status', event.target.value)}>
-              {vitalStatusOptions.rr_status.map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
+          {renderVitalStatus('rr_status', 'RR Einordnung')}
           <label>
             Puls optional
             <input value={vitalwerte.puls || ''} onChange={(event) => updateVital('puls', event.target.value)} inputMode="numeric" />
           </label>
-          <label>
-            Puls Einordnung
-            <select value={vitalwerte.puls_status || 'Keine Angabe'} onChange={(event) => updateVital('puls_status', event.target.value)}>
-              {vitalStatusOptions.puls_status.map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
+          {renderVitalStatus('puls_status', 'Puls Einordnung')}
           <label>
             SpO2 optional
             <input value={vitalwerte.spo2 || ''} onChange={(event) => updateVital('spo2', event.target.value)} inputMode="numeric" />
           </label>
-          <label>
-            SpO2 Einordnung
-            <select value={vitalwerte.spo2_status || 'Keine Angabe'} onChange={(event) => updateVital('spo2_status', event.target.value)}>
-              {vitalStatusOptions.spo2_status.map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
+          {renderVitalStatus('spo2_status', 'SpO2 Einordnung')}
           <label>
             Atemfrequenz optional
             <input value={vitalwerte.af || ''} onChange={(event) => updateVital('af', event.target.value)} inputMode="numeric" />
           </label>
-          <label>
-            Atemfrequenz Einordnung
-            <select value={vitalwerte.af_status || 'Keine Angabe'} onChange={(event) => updateVital('af_status', event.target.value)}>
-              {vitalStatusOptions.af_status.map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
+          {renderVitalStatus('af_status', 'Atemfrequenz Einordnung')}
           <label>
             BZ optional
             <input value={vitalwerte.bz || ''} onChange={(event) => updateVital('bz', event.target.value)} inputMode="numeric" />
           </label>
-          <label>
-            BZ Einordnung
-            <select value={vitalwerte.bz_status || 'Keine Angabe'} onChange={(event) => updateVital('bz_status', event.target.value)}>
-              {vitalStatusOptions.bz_status.map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
+          {renderVitalStatus('bz_status', 'BZ Einordnung')}
           <label>
             Temperatur optional
             <input value={vitalwerte.temperatur || ''} onChange={(event) => updateVital('temperatur', event.target.value)} inputMode="decimal" />
           </label>
-          <label>
-            Temperatur Einordnung
-            <select value={vitalwerte.temperatur_status || 'Keine Angabe'} onChange={(event) => updateVital('temperatur_status', event.target.value)}>
-              {vitalStatusOptions.temperatur_status.map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
+          {renderVitalStatus('temperatur_status', 'Temperatur Einordnung')}
           <label>
             GCS optional
             <input value={vitalwerte.gcs || ''} onChange={(event) => updateVital('gcs', event.target.value)} inputMode="numeric" />
           </label>
-          <label>
-            GCS Einordnung
-            <select value={vitalwerte.gcs_status || 'Keine Angabe'} onChange={(event) => updateVital('gcs_status', event.target.value)}>
-              {vitalStatusOptions.gcs_status.map((item) => <option key={item} value={item}>{item}</option>)}
-            </select>
-          </label>
+          {renderVitalStatus('gcs_status', 'GCS Einordnung')}
         </div>
 
         <label className="wide-field">

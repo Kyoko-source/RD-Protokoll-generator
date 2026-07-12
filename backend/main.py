@@ -148,7 +148,7 @@ def default_patient_case():
 
 
 def valid(value):
-    return value not in [None, "", [], {}, "Keine Angabe"]
+    return value not in [None, "", [], {}, "Keine Angabe", "Selber eintragen"]
 
 
 def add_lines(title, rows):
@@ -172,10 +172,17 @@ def format_observation(value, status_value="", unit=""):
     return status_text
 
 
+def effective_vital_status(vital, status_key):
+    status_value = vital.get(status_key)
+    if status_value == "Selber eintragen":
+        return vital.get(f"{status_key}_custom")
+    return status_value
+
+
 def format_blood_pressure(vital):
     rr_sys = vital.get("rr_sys")
     rr_dia = vital.get("rr_dia")
-    status_value = vital.get("rr_status")
+    status_value = effective_vital_status(vital, "rr_status")
     if valid(rr_sys) or valid(rr_dia):
         return format_observation(f"{rr_sys or ''}/{rr_dia or ''}", status_value, "mmHg")
     return format_observation("", status_value)
@@ -536,10 +543,10 @@ def assess_protocol_quality(patient):
     ))
 
     core_vital_groups = [
-        ("Puls", ["puls", "puls_status"]),
-        ("SpO2", ["spo2", "spo2_status"]),
-        ("RR", ["rr_sys", "rr_dia", "rr_status"]),
-        ("GCS", ["gcs", "gcs_status"]),
+        ("Puls", ["puls", "puls_status", "puls_status_custom"]),
+        ("SpO2", ["spo2", "spo2_status", "spo2_status_custom"]),
+        ("RR", ["rr_sys", "rr_dia", "rr_status", "rr_status_custom"]),
+        ("GCS", ["gcs", "gcs_status", "gcs_status_custom"]),
     ]
     missing_core = [label for label, keys in core_vital_groups if not any(valid(vital.get(key)) for key in keys)]
     items.append(quality_item(
@@ -665,12 +672,12 @@ def generate_protocol_text(patient):
         ("Alter", vital.get("alter")),
         ("Geschlecht", vital.get("geschlecht")),
         ("RR", format_blood_pressure(vital)),
-        ("Puls", format_observation(vital.get("puls"), vital.get("puls_status"), "/min")),
-        ("SpO2", format_observation(vital.get("spo2"), vital.get("spo2_status"), "%")),
-        ("Atemfrequenz", format_observation(vital.get("af"), vital.get("af_status"), "/min")),
-        ("BZ", format_observation(vital.get("bz"), vital.get("bz_status"), "mg/dL")),
-        ("Temperatur", format_observation(vital.get("temperatur"), vital.get("temperatur_status"), "°C")),
-        ("GCS", format_observation(vital.get("gcs"), vital.get("gcs_status"), "/15")),
+        ("Puls", format_observation(vital.get("puls"), effective_vital_status(vital, "puls_status"), "/min")),
+        ("SpO2", format_observation(vital.get("spo2"), effective_vital_status(vital, "spo2_status"), "%")),
+        ("Atemfrequenz", format_observation(vital.get("af"), effective_vital_status(vital, "af_status"), "/min")),
+        ("BZ", format_observation(vital.get("bz"), effective_vital_status(vital, "bz_status"), "mg/dL")),
+        ("Temperatur", format_observation(vital.get("temperatur"), effective_vital_status(vital, "temperatur_status"), "°C")),
+        ("GCS", format_observation(vital.get("gcs"), effective_vital_status(vital, "gcs_status"), "/15")),
         ("Kurzbericht", vital.get("kurzbericht")),
     ])
     text += add_lines("xABCDE", [
