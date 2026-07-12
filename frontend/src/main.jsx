@@ -89,6 +89,37 @@ const samplersSections = [
   { key: 'S2', label: 'S2', title: 'Schwangerschaft' }
 ];
 
+const xabcdeSections = [
+  { key: 'X', label: 'X', title: 'Kritische Blutung' },
+  { key: 'A', label: 'A', title: 'Airway' },
+  { key: 'B', label: 'B', title: 'Breathing' },
+  { key: 'C', label: 'C', title: 'Circulation' },
+  { key: 'D', label: 'D', title: 'Disability' },
+  { key: 'E', label: 'E', title: 'Exposure' }
+];
+
+const xabcdeOptions = {
+  blutung: ['Keine Angabe', 'Keine starke Blutung', 'Starke Blutung kontrolliert', 'Starke Blutung unkontrolliert'],
+  atemweg: ['Keine Angabe', 'Frei', 'Gefährdet', 'Verlegt'],
+  hws: ['Keine Angabe', 'Keine Immobilisation', 'Stifneck', 'Vakuummatratze'],
+  atmung: ['Keine Angabe', 'Unauffällig', 'Dyspnoe', 'Bradypnoe', 'Tachypnoe', 'Apnoe'],
+  atemgeraeusche: ['Keine Angabe', 'Beidseits vorhanden', 'Links abgeschwächt', 'Rechts abgeschwächt', 'Keine'],
+  sauerstoff: ['Keine', '2 l/min', '4 l/min', '6 l/min', '10 l/min', '15 l/min'],
+  haut: ['Keine Angabe', 'Rosig / warm', 'Blass', 'Kalt / schweißig', 'Zyanotisch'],
+  rekap: ['Keine Angabe', '< 2 Sekunden', '> 2 Sekunden'],
+  pulsqualitaet: ['Keine Angabe', 'Kräftig', 'Schwach', 'Fadenförmig'],
+  avpu: ['Keine Angabe', 'A', 'V', 'P', 'U'],
+  pupillen: ['Keine Angabe', 'Isokor', 'Anisokor', 'Lichtstarr'],
+  bodycheck: ['Keine Angabe', 'Unauffällig', 'Auffällig'],
+  befast_balance: ['Keine Angabe', 'Unauffällig', 'Akute Gang-/Standunsicherheit', 'Akuter Schwindel / Ataxie'],
+  befast_face: ['Keine Angabe', 'Symmetrisch', 'Fazialisparese links', 'Fazialisparese rechts'],
+  befast_speech: ['Keine Angabe', 'Unauffällig', 'Dysarthrie', 'Aphasie', 'Sprachverständnis gestört'],
+  befast_eyes: ['Keine Angabe', 'Unauffällig', 'Akute Sehstörung', 'Doppelbilder', 'Gesichtsfeldausfall'],
+  befast_arms: ['Keine Angabe', 'Kein Absinken', 'Armabsinken links', 'Armabsinken rechts', 'Armabsinken beidseits']
+};
+
+const befastNormalValues = new Set(['Unauffällig', 'Symmetrisch', 'Kein Absinken', 'Keine Angabe', '']);
+
 const riskFactorLabels = {
   raucher: 'Raucher',
   alkohol: 'Alkoholkonsum',
@@ -206,12 +237,21 @@ function generateLocalProtocolText(patient) {
   ]);
   text += addProtocolBlock('xABCDE', [
     ['X Blutung', x.blutung],
+    ['Blutung Lokalisation', x.blutung_lokalisation],
     ['A Atemweg', x.atemweg],
+    ['HWS', x.hws],
     ['B Atmung', x.atmung],
+    ['Atemgeräusche', x.atemgeraeusche],
+    ['Sauerstoff', x.sauerstoff],
     ['C Hautzeichen', x.haut],
+    ['Rekapillarisierungszeit', x.rekap],
+    ['Pulsqualität', x.pulsqualitaet],
     ['D AVPU', x.avpu],
+    ['Pupillen', x.pupillen],
     ['E Bodycheck', x.bodycheck],
     ['Auffaelligkeiten', x.bodycheck_text],
+    ['Unterkühlung', x.unterkuehlung ? 'Ja' : ''],
+    ['Verbrennung', x.verbrennung ? 'Ja' : ''],
     ['BE-FAST Balance', x.befast_balance],
     ['BE-FAST Eyes', x.befast_eyes],
     ['BE-FAST Face', x.befast_face],
@@ -1487,6 +1527,7 @@ const emptyPatient = {
 function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSync }) {
   const [patient, setPatient] = useState(emptyPatient);
   const [protocolSection, setProtocolSection] = useState('vitalwerte');
+  const [xabcdeSection, setXabcdeSection] = useState('A');
   const [samplersSection, setSamplersSection] = useState('S1');
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
@@ -1651,6 +1692,155 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         [key]: value
       }
     }));
+  }
+
+  function toggleXabcdeFlag(key) {
+    updateXabcde(key, !Boolean(xabcde[key]));
+  }
+
+  function renderXabcdeSelect(key, label) {
+    const options = xabcdeOptions[key];
+    return (
+      <label>
+        {label}
+        <select value={xabcde[key] || options[0]} onChange={(event) => updateXabcde(key, event.target.value)}>
+          {options.map((item) => <option key={item} value={item}>{item}</option>)}
+        </select>
+      </label>
+    );
+  }
+
+  function xabcdeSectionComplete(sectionKey) {
+    if (sectionKey === 'X') return hasValue(xabcde.blutung);
+    if (sectionKey === 'A') return hasValue(xabcde.atemweg) && hasValue(xabcde.hws);
+    if (sectionKey === 'B') return hasValue(xabcde.atmung) && hasValue(xabcde.atemgeraeusche);
+    if (sectionKey === 'C') return hasValue(xabcde.haut) && hasValue(xabcde.rekap) && hasValue(xabcde.pulsqualitaet);
+    if (sectionKey === 'D') return hasValue(xabcde.avpu) && hasValue(xabcde.pupillen);
+    if (sectionKey === 'E') return hasValue(xabcde.bodycheck) && (xabcde.bodycheck !== 'Auffällig' || hasValue(xabcde.bodycheck_text));
+    return false;
+  }
+
+  function befastStatus() {
+    const keys = ['befast_balance', 'befast_eyes', 'befast_face', 'befast_arms', 'befast_speech'];
+    const documented = keys.filter((key) => hasValue(xabcde[key]));
+    const positives = keys.map((key) => xabcde[key]).filter((value) => hasValue(value) && !befastNormalValues.has(value));
+    if (positives.length > 0) return { level: 'critical', text: `BE-FAST auffällig: ${positives.join(' · ')}` };
+    if (documented.length === keys.length) return { level: 'ok', text: 'BE-FAST ohne dokumentierte Auffälligkeit' };
+    return null;
+  }
+
+  function renderXabcdeContent() {
+    if (xabcdeSection === 'X') {
+      return (
+        <fieldset className="xabcde-panel">
+          <legend>X - Kritische Blutung</legend>
+          <div className="xabcde-subgrid">
+            {renderXabcdeSelect('blutung', 'Blutung')}
+            <label>
+              Lokalisation
+              <input value={xabcde.blutung_lokalisation || ''} onChange={(event) => updateXabcde('blutung_lokalisation', event.target.value)} />
+            </label>
+          </div>
+        </fieldset>
+      );
+    }
+
+    if (xabcdeSection === 'A') {
+      return (
+        <fieldset className="xabcde-panel">
+          <legend>A - Airway</legend>
+          <div className="xabcde-subgrid">
+            {renderXabcdeSelect('atemweg', 'Atemweg')}
+            {renderXabcdeSelect('hws', 'HWS')}
+          </div>
+        </fieldset>
+      );
+    }
+
+    if (xabcdeSection === 'B') {
+      return (
+        <fieldset className="xabcde-panel">
+          <legend>B - Breathing</legend>
+          <div className="xabcde-subgrid">
+            {renderXabcdeSelect('atmung', 'Atmung')}
+            {renderXabcdeSelect('atemgeraeusche', 'Atemgeräusche')}
+            {renderXabcdeSelect('sauerstoff', 'Sauerstoffgabe')}
+          </div>
+        </fieldset>
+      );
+    }
+
+    if (xabcdeSection === 'C') {
+      return (
+        <fieldset className="xabcde-panel">
+          <legend>C - Circulation</legend>
+          <div className="xabcde-subgrid">
+            {renderXabcdeSelect('haut', 'Haut')}
+            {renderXabcdeSelect('rekap', 'Rekapillarisierungszeit')}
+            {renderXabcdeSelect('pulsqualitaet', 'Pulsqualität')}
+          </div>
+        </fieldset>
+      );
+    }
+
+    if (xabcdeSection === 'D') {
+      const status = befastStatus();
+      return (
+        <fieldset className="xabcde-panel">
+          <legend>D - Disability</legend>
+          <div className="xabcde-subgrid">
+            {renderXabcdeSelect('avpu', 'AVPU')}
+            {renderXabcdeSelect('pupillen', 'Pupillen')}
+          </div>
+
+          <div className="inline-divider" />
+          <h3>BE-FAST Schlaganfall-Screening</h3>
+          <p className="field-hint">B Balance · E Eyes · F Face · A Arms · S Speech · T Time</p>
+          <div className="xabcde-subgrid">
+            {renderXabcdeSelect('befast_balance', 'B - Balance')}
+            {renderXabcdeSelect('befast_eyes', 'E - Eyes')}
+            {renderXabcdeSelect('befast_face', 'F - Face')}
+            {renderXabcdeSelect('befast_arms', 'A - Arms')}
+            {renderXabcdeSelect('befast_speech', 'S - Speech')}
+            <label>
+              T - Time / Symptombeginn
+              <input
+                value={xabcde.befast_time || ''}
+                onChange={(event) => updateXabcde('befast_time', event.target.value)}
+                placeholder="z. B. 14:20 Uhr oder zuletzt gesund um 12:00 Uhr"
+              />
+            </label>
+          </div>
+          {status && <div className={`befast-status befast-${status.level}`}>{status.text}</div>}
+        </fieldset>
+      );
+    }
+
+    return (
+      <fieldset className="xabcde-panel">
+        <legend>E - Exposure</legend>
+        <div className="xabcde-subgrid">
+          {renderXabcdeSelect('bodycheck', 'Bodycheck')}
+          <div className="xabcde-flags">
+            <span>Weitere Befunde</span>
+            <label className="checkbox-line">
+              <input type="checkbox" checked={Boolean(xabcde.unterkuehlung)} onChange={() => toggleXabcdeFlag('unterkuehlung')} />
+              Unterkühlung
+            </label>
+            <label className="checkbox-line">
+              <input type="checkbox" checked={Boolean(xabcde.verbrennung)} onChange={() => toggleXabcdeFlag('verbrennung')} />
+              Verbrennung
+            </label>
+          </div>
+        </div>
+        {xabcde.bodycheck === 'Auffällig' && (
+          <label className="wide-field">
+            Auffälligkeiten
+            <textarea value={xabcde.bodycheck_text || ''} onChange={(event) => updateXabcde('bodycheck_text', event.target.value)} rows={5} />
+          </label>
+        )}
+      </fieldset>
+    );
   }
 
   function updateSamplers(key, value) {
@@ -2380,205 +2570,39 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <span>strukturiert nach Priorität</span>
         </div>
 
-        <div className="assessment-grid">
-          <fieldset>
-            <legend>X · Blutung</legend>
-            <label>
-              Blutung
-              <select value={xabcde.blutung || ''} onChange={(event) => updateXabcde('blutung', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Keine starke Blutung">Keine starke Blutung</option>
-                <option value="Starke Blutung kontrolliert">Starke Blutung kontrolliert</option>
-                <option value="Starke Blutung unkontrolliert">Starke Blutung unkontrolliert</option>
-              </select>
-            </label>
-            <label>
-              Lokalisation
-              <input value={xabcde.blutung_lokalisation || ''} onChange={(event) => updateXabcde('blutung_lokalisation', event.target.value)} />
-            </label>
-          </fieldset>
+        <div className="xabcde-layout">
+          <div className="xabcde-nav" role="tablist" aria-label="xABCDE Unterpunkte">
+            {xabcdeSections.map((section) => {
+              const incomplete = !xabcdeSectionComplete(section.key);
+              return (
+                <button
+                  key={section.key}
+                  type="button"
+                  className={xabcdeSection === section.key ? 'active' : ''}
+                  onClick={() => setXabcdeSection(section.key)}
+                  title={section.title}
+                >
+                  {incomplete ? `${section.label} !` : section.label}
+                </button>
+              );
+            })}
+          </div>
 
-          <fieldset>
-            <legend>A · Atemweg</legend>
-            <label>
-              Atemweg
-              <select value={xabcde.atemweg || ''} onChange={(event) => updateXabcde('atemweg', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Frei">Frei</option>
-                <option value="Gefährdet">Gefährdet</option>
-                <option value="Verlegt">Verlegt</option>
-              </select>
-            </label>
-            <label>
-              HWS / Stabilisierung
-              <select value={xabcde.hws || ''} onChange={(event) => updateXabcde('hws', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Keine Immobilisation">Keine Immobilisation</option>
-                <option value="Stifneck">Stifneck</option>
-                <option value="Vakuummatratze">Vakuummatratze</option>
-              </select>
-            </label>
-          </fieldset>
+          <div className="xabcde-active-hint">
+            Aktive Sektion: {xabcdeSection} · offene Reiter sind mit ! markiert.
+          </div>
 
-          <fieldset>
-            <legend>B · Atmung</legend>
-            <label>
-              Atmung
-              <select value={xabcde.atmung || ''} onChange={(event) => updateXabcde('atmung', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Unauffällig">Unauffällig</option>
-                <option value="Dyspnoe">Dyspnoe</option>
-                <option value="Bradypnoe">Bradypnoe</option>
-                <option value="Tachypnoe">Tachypnoe</option>
-                <option value="Apnoe">Apnoe</option>
-              </select>
-            </label>
-            <label>
-              Atemgeräusche
-              <select value={xabcde.atemgeraeusche || ''} onChange={(event) => updateXabcde('atemgeraeusche', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Beidseits vorhanden">Beidseits vorhanden</option>
-                <option value="Links abgeschwächt">Links abgeschwächt</option>
-                <option value="Rechts abgeschwächt">Rechts abgeschwächt</option>
-                <option value="Keine">Keine</option>
-              </select>
-            </label>
-            <label>
-              Sauerstofftherapie
-              <select value={xabcde.sauerstoff || ''} onChange={(event) => updateXabcde('sauerstoff', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Keine">Keine</option>
-                <option value="2 l/min">2 l/min</option>
-                <option value="4 l/min">4 l/min</option>
-                <option value="6 l/min">6 l/min</option>
-                <option value="10 l/min">10 l/min</option>
-                <option value="15 l/min">15 l/min</option>
-              </select>
-            </label>
-          </fieldset>
+          {renderXabcdeContent()}
 
-          <fieldset>
-            <legend>C · Kreislauf</legend>
-            <label>
-              Hautzeichen
-              <select value={xabcde.haut || ''} onChange={(event) => updateXabcde('haut', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Rosig / warm">Rosig / warm</option>
-                <option value="Blass">Blass</option>
-                <option value="Kalt / schweißig">Kalt / schweißig</option>
-                <option value="Zyanotisch">Zyanotisch</option>
-              </select>
-            </label>
-            <label>
-              Rekapillarisierungszeit
-              <select value={xabcde.rekap || ''} onChange={(event) => updateXabcde('rekap', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="< 2 Sekunden">&lt; 2 Sekunden</option>
-                <option value="> 2 Sekunden">&gt; 2 Sekunden</option>
-              </select>
-            </label>
-            <label>
-              Pulsqualität
-              <select value={xabcde.pulsqualitaet || ''} onChange={(event) => updateXabcde('pulsqualitaet', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Kräftig">Kräftig</option>
-                <option value="Schwach">Schwach</option>
-                <option value="Fadenförmig">Fadenförmig</option>
-              </select>
-            </label>
-          </fieldset>
-
-          <fieldset>
-            <legend>D · Neurologie</legend>
-            <label>
-              AVPU
-              <select value={xabcde.avpu || ''} onChange={(event) => updateXabcde('avpu', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="A">A</option>
-                <option value="V">V</option>
-                <option value="P">P</option>
-                <option value="U">U</option>
-              </select>
-            </label>
-            <label>
-              Pupillen
-              <select value={xabcde.pupillen || ''} onChange={(event) => updateXabcde('pupillen', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Isokor">Isokor</option>
-                <option value="Anisokor">Anisokor</option>
-                <option value="Lichtstarr">Lichtstarr</option>
-              </select>
-            </label>
-            <label>
-              BE-FAST Balance
-              <select value={xabcde.befast_balance || ''} onChange={(event) => updateXabcde('befast_balance', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Unauffällig">Unauffällig</option>
-                <option value="Akute Gang-/Standunsicherheit">Akute Gang-/Standunsicherheit</option>
-                <option value="Akuter Schwindel / Ataxie">Akuter Schwindel / Ataxie</option>
-              </select>
-            </label>
-            <label>
-              BE-FAST Face
-              <select value={xabcde.befast_face || ''} onChange={(event) => updateXabcde('befast_face', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Symmetrisch">Symmetrisch</option>
-                <option value="Fazialisparese links">Fazialisparese links</option>
-                <option value="Fazialisparese rechts">Fazialisparese rechts</option>
-              </select>
-            </label>
-            <label>
-              BE-FAST Speech
-              <select value={xabcde.befast_speech || ''} onChange={(event) => updateXabcde('befast_speech', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Unauffällig">Unauffällig</option>
-                <option value="Dysarthrie">Dysarthrie</option>
-                <option value="Aphasie">Aphasie</option>
-                <option value="Sprachverständnis gestört">Sprachverständnis gestört</option>
-              </select>
-            </label>
-            <label>
-              BE-FAST Eyes
-              <select value={xabcde.befast_eyes || ''} onChange={(event) => updateXabcde('befast_eyes', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Unauffällig">Unauffällig</option>
-                <option value="Akute Sehstörung">Akute Sehstörung</option>
-                <option value="Doppelbilder">Doppelbilder</option>
-                <option value="Gesichtsfeldausfall">Gesichtsfeldausfall</option>
-              </select>
-            </label>
-            <label>
-              BE-FAST Arms
-              <select value={xabcde.befast_arms || ''} onChange={(event) => updateXabcde('befast_arms', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Kein Absinken">Kein Absinken</option>
-                <option value="Armabsinken links">Armabsinken links</option>
-                <option value="Armabsinken rechts">Armabsinken rechts</option>
-                <option value="Armabsinken beidseits">Armabsinken beidseits</option>
-              </select>
-            </label>
-            <label>
-              BE-FAST Time / Symptombeginn
-              <input value={xabcde.befast_time || ''} onChange={(event) => updateXabcde('befast_time', event.target.value)} />
-            </label>
-          </fieldset>
-
-          <fieldset>
-            <legend>E · Exposure</legend>
-            <label>
-              Bodycheck
-              <select value={xabcde.bodycheck || ''} onChange={(event) => updateXabcde('bodycheck', event.target.value)}>
-                <option value="">Keine Angabe</option>
-                <option value="Unauffällig">Unauffällig</option>
-                <option value="Auffällig">Auffällig</option>
-                <option value="Nicht vollständig möglich">Nicht vollständig möglich</option>
-              </select>
-            </label>
-            <label>
-              Auffälligkeiten
-              <textarea value={xabcde.bodycheck_text || ''} onChange={(event) => updateXabcde('bodycheck_text', event.target.value)} rows={4} />
-            </label>
-          </fieldset>
+          <aside className="xabcde-summary">
+            <h3>Live-Zusammenfassung</h3>
+            <p>{hasValue(xabcde.blutung) ? `X: ${xabcde.blutung}` : 'X noch offen'}</p>
+            <p>{hasValue(xabcde.atemweg) ? `A: ${xabcde.atemweg}` : 'A noch offen'}</p>
+            <p>{hasValue(xabcde.atmung) ? `B: ${xabcde.atmung}` : 'B noch offen'}</p>
+            <p>{hasValue(xabcde.haut) ? `C: ${xabcde.haut}` : 'C noch offen'}</p>
+            <p>{hasValue(xabcde.avpu) ? `D: AVPU ${xabcde.avpu}` : 'D noch offen'}</p>
+            <p>{hasValue(xabcde.bodycheck) ? `E: ${xabcde.bodycheck}` : 'E noch offen'}</p>
+          </aside>
         </div>
       </section>}
 

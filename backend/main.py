@@ -744,6 +744,8 @@ def generate_protocol_text(patient):
         ("BE-FAST Time", x.get("befast_time")),
         ("E Bodycheck", x.get("bodycheck")),
         ("Bodycheck Auffaelligkeiten", x.get("bodycheck_text")),
+        ("Unterkuehlung", "Ja" if x.get("unterkuehlung") else ""),
+        ("Verbrennung", "Ja" if x.get("verbrennung") else ""),
     ])
     text += add_lines("SAMPLERS", [
         ("Symptome", s.get("symptome")),
