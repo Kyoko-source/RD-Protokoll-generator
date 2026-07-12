@@ -1,5 +1,5 @@
 import secrets
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -7,7 +7,12 @@ from pydantic import BaseModel
 
 from backend.security import expires_at, is_expired, new_token, password_hash, verify_password
 from storage import (
+    anonymize_finished_case,
+    delete_finished_case,
+    encrypt_existing_patient_data,
+    encryption_status,
     get_finished_case,
+    get_app_setting,
     init_database,
     list_audit_events,
     list_finished_cases,
@@ -16,6 +21,7 @@ from storage import (
     save_case_draft_store,
     save_employee_store,
     save_finished_case,
+    set_app_setting,
     write_audit_event,
 )
 
@@ -57,6 +63,22 @@ class DraftRequest(BaseModel):
 
 class ProtocolRequest(BaseModel):
     patient: dict
+
+
+class EmployeeCreateRequest(BaseModel):
+    name: str
+    role: str = "employee"
+
+
+class EmployeeUpdateRequest(BaseModel):
+    name: str | None = None
+    role: str | None = None
+    active: bool | None = None
+    reset_password: bool = False
+
+
+class RetentionRequest(BaseModel):
+    retention_days: int = 3650
 
 
 def default_patient_case():
@@ -217,6 +239,16 @@ def public_employee(employee):
     }
 
 
+def admin_employee(employee):
+    public = public_employee(employee)
+    public.update({
+        "active": bool(employee.get("active", True)),
+        "created_at": employee.get("created_at", ""),
+        "password_changed_at": employee.get("password_changed_at", ""),
+    })
+    return public
+
+
 def find_employee(employee_id):
     store = load_employee_store()
     for employee in store.get("employees", []):
@@ -253,6 +285,7 @@ def require_admin(employee=Depends(current_employee)):
 @app.on_event("startup")
 def startup():
     init_database()
+    encrypt_existing_patient_data()
 
 
 @app.get("/api/health")
@@ -441,6 +474,8 @@ def protocol_preview(payload: ProtocolRequest, employee=Depends(current_employee
 def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
     protocol_text = generate_protocol_text(payload.patient)
     completed_at = datetime.now().isoformat(timespec="seconds")
+    retention_days = int(get_app_setting("retention_days", 3650) or 3650)
+    retention_until = (datetime.now() + timedelta(days=max(1, retention_days))).date().isoformat()
     case_id = secrets.token_hex(10)
     save_finished_case({
         "id": case_id,
@@ -450,6 +485,7 @@ def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
         "summary": build_case_summary(payload.patient),
         "patient": payload.patient,
         "protocol_text": protocol_text,
+        "retention_until": retention_until,
     })
 
     store = load_case_draft_store()
@@ -464,3 +500,123 @@ def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
 @app.get("/api/admin/audit")
 def audit_log(employee=Depends(require_admin)):
     return {"events": list_audit_events(limit=100)}
+
+
+@app.get("/api/admin/privacy")
+def admin_privacy(employee=Depends(require_admin)):
+    return {
+        "encryption": encryption_status(),
+        "retention_days": int(get_app_setting("retention_days", 3650) or 3650),
+        "session_minutes": SESSION_MINUTES,
+        "audit_events": len(list_audit_events(limit=500)),
+    }
+
+
+@app.put("/api/admin/privacy")
+def update_privacy(payload: RetentionRequest, employee=Depends(require_admin)):
+    days = max(1, min(int(payload.retention_days or 3650), 36500))
+    set_app_setting("retention_days", days)
+    audit("api_privacy_settings_updated", employee=employee, details={"retention_days": days})
+    return {"status": "saved", "retention_days": days}
+
+
+@app.get("/api/admin/employees")
+def admin_employees(employee=Depends(require_admin)):
+    store = load_employee_store()
+    return {"employees": [admin_employee(item) for item in store.get("employees", [])]}
+
+
+@app.post("/api/admin/employees")
+def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_admin)):
+    name = payload.name.strip()
+    role = payload.role if payload.role in ["employee", "admin"] else "employee"
+    if not name:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name fehlt.")
+
+    store = load_employee_store()
+    temp_password = secrets.token_urlsafe(9)
+    new_employee = {
+        "id": new_token()[:16],
+        "name": name,
+        "role": role,
+        "active": True,
+        "password_hash": "",
+        "temp_password_hash": password_hash(temp_password),
+        "must_change_password": True,
+        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "password_changed_at": "",
+    }
+    store.setdefault("employees", []).append(new_employee)
+    save_employee_store(store)
+    audit(
+        "api_employee_created",
+        employee=employee,
+        entity_type="employee",
+        entity_id=new_employee["id"],
+        details={"role": role},
+    )
+    return {"employee": admin_employee(new_employee), "temporary_password": temp_password}
+
+
+@app.put("/api/admin/employees/{employee_id}")
+def update_employee(employee_id: str, payload: EmployeeUpdateRequest, employee=Depends(require_admin)):
+    store = load_employee_store()
+    target = None
+    for item in store.get("employees", []):
+        if item.get("id") == employee_id:
+            target = item
+            break
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mitarbeiter nicht gefunden.")
+
+    if payload.name is not None and payload.name.strip():
+        target["name"] = payload.name.strip()
+    if payload.role in ["employee", "admin"]:
+        target["role"] = payload.role
+    if payload.active is not None:
+        if target.get("id") == employee.get("id") and payload.active is False:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Eigenes Admin-Profil kann nicht deaktiviert werden.")
+        target["active"] = bool(payload.active)
+
+    temp_password = ""
+    if payload.reset_password:
+        temp_password = secrets.token_urlsafe(9)
+        target["password_hash"] = ""
+        target["temp_password_hash"] = password_hash(temp_password)
+        target["must_change_password"] = True
+        target["password_changed_at"] = ""
+
+    save_employee_store(store)
+    audit(
+        "api_employee_updated",
+        employee=employee,
+        entity_type="employee",
+        entity_id=employee_id,
+        details={"reset_password": payload.reset_password},
+    )
+    response = {"employee": admin_employee(target)}
+    if temp_password:
+        response["temporary_password"] = temp_password
+    return response
+
+
+@app.post("/api/admin/cases/{case_id}/anonymize")
+def admin_anonymize_case(case_id: str, employee=Depends(require_admin)):
+    item = get_finished_case(case_id)
+    if not item or item.get("status") == "deleted":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Einsatz nicht gefunden.")
+    timestamp = datetime.now().isoformat(timespec="seconds")
+    anonymize_finished_case(case_id, timestamp)
+    audit("api_case_anonymized", employee=employee, entity_type="finished_case", entity_id=case_id)
+    return {"status": "anonymized", "case_id": case_id}
+
+
+@app.delete("/api/admin/cases/{case_id}")
+def admin_delete_case(case_id: str, employee=Depends(require_admin)):
+    item = get_finished_case(case_id)
+    if not item:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Einsatz nicht gefunden.")
+    timestamp = datetime.now().isoformat(timespec="seconds")
+    delete_finished_case(case_id, timestamp)
+    audit("api_case_deleted", employee=employee, entity_type="finished_case", entity_id=case_id)
+    return {"status": "deleted", "case_id": case_id}

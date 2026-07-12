@@ -1,9 +1,14 @@
+import base64
+import hashlib
 import json
 import os
 import sqlite3
 
+from cryptography.fernet import Fernet, InvalidToken
+
 
 DB_PATH = os.getenv("NANA_DB_PATH", "nana.db")
+ENCRYPTED_PREFIX = "nana-fernet:v1:"
 
 
 def _connect():
@@ -89,6 +94,72 @@ def init_database():
         connection.commit()
 
 
+def _derive_fernet_key(secret):
+    digest = hashlib.sha256(str(secret).encode("utf-8")).digest()
+    return base64.urlsafe_b64encode(digest)
+
+
+def _get_data_secret():
+    env_secret = os.getenv("NANA_DATA_KEY", "").strip()
+    if env_secret:
+        return env_secret
+
+    stored = get_app_setting("local_data_key")
+    if stored:
+        return stored
+
+    secret = base64.urlsafe_b64encode(os.urandom(32)).decode("ascii")
+    set_app_setting("local_data_key", secret)
+    return secret
+
+
+def _fernet():
+    return Fernet(_derive_fernet_key(_get_data_secret()))
+
+
+def _encrypt_text(value):
+    raw = "" if value is None else str(value)
+    if raw.startswith(ENCRYPTED_PREFIX):
+        return raw
+    token = _fernet().encrypt(raw.encode("utf-8")).decode("ascii")
+    return f"{ENCRYPTED_PREFIX}{token}"
+
+
+def _decrypt_text(value):
+    raw = "" if value is None else str(value)
+    if not raw.startswith(ENCRYPTED_PREFIX):
+        return raw
+    token = raw.removeprefix(ENCRYPTED_PREFIX)
+    try:
+        return _fernet().decrypt(token.encode("ascii")).decode("utf-8")
+    except (InvalidToken, ValueError):
+        return ""
+
+
+def _json_dumps_secure(value):
+    return _encrypt_text(json.dumps(value, ensure_ascii=False))
+
+
+def _json_loads_secure(value, default=None):
+    if default is None:
+        default = {}
+    decrypted = _decrypt_text(value)
+    try:
+        return json.loads(decrypted)
+    except (TypeError, json.JSONDecodeError):
+        return default
+
+
+def encryption_status():
+    env_secret = bool(os.getenv("NANA_DATA_KEY", "").strip())
+    return {
+        "enabled": True,
+        "provider": "Fernet AES-128-CBC/HMAC",
+        "key_source": "environment" if env_secret else "local_app_settings",
+        "production_hint": "NANA_DATA_KEY ausserhalb der Datenbank setzen" if not env_secret else "externer Schluessel aktiv",
+    }
+
+
 def _employee_from_row(row):
     return {
         "id": row["id"],
@@ -164,8 +235,8 @@ def load_case_draft_store():
     drafts = {}
     for row in rows:
         try:
-            drafts[row["employee_id"]] = json.loads(row["draft_json"])
-        except json.JSONDecodeError:
+            drafts[row["employee_id"]] = _json_loads_secure(row["draft_json"], {})
+        except Exception:
             continue
     return {"drafts": drafts}
 
@@ -194,7 +265,7 @@ def save_case_draft_store(store):
                 (
                     employee_id,
                     draft.get("updated_at", ""),
-                    json.dumps(draft, ensure_ascii=False),
+                    _json_dumps_secure(draft),
                 ),
             )
         connection.commit()
@@ -217,8 +288,8 @@ def save_finished_case(case_record):
                 case_record.get("employee_name", ""),
                 case_record["completed_at"],
                 case_record.get("summary", ""),
-                json.dumps(case_record.get("patient", {}), ensure_ascii=False),
-                case_record.get("protocol_text", ""),
+                _json_dumps_secure(case_record.get("patient", {})),
+                _encrypt_text(case_record.get("protocol_text", "")),
                 case_record.get("status", "active"),
                 case_record.get("retention_until", ""),
             ),
@@ -244,11 +315,6 @@ def list_finished_cases(employee_id=None, search="", include_deleted=False, limi
         clauses.append("employee_id = ?")
         params.append(employee_id)
 
-    if search:
-        clauses.append("(summary LIKE ? OR protocol_text LIKE ? OR employee_name LIKE ?)")
-        search_param = f"%{search}%"
-        params.extend([search_param, search_param, search_param])
-
     if clauses:
         query += " WHERE " + " AND ".join(clauses)
 
@@ -258,14 +324,14 @@ def list_finished_cases(employee_id=None, search="", include_deleted=False, limi
     with _connect() as connection:
         rows = connection.execute(query, params).fetchall()
 
-    return [
+    results = [
         {
             "id": row["id"],
             "employee_id": row["employee_id"],
             "employee_name": row["employee_name"],
             "completed_at": row["completed_at"],
             "summary": row["summary"],
-            "protocol_text": row["protocol_text"],
+            "protocol_text": _decrypt_text(row["protocol_text"]),
             "status": row["status"],
             "anonymized_at": row["anonymized_at"],
             "deleted_at": row["deleted_at"],
@@ -273,6 +339,15 @@ def list_finished_cases(employee_id=None, search="", include_deleted=False, limi
         }
         for row in rows
     ]
+    if search:
+        needle = search.lower()
+        results = [
+            item for item in results
+            if needle in item["summary"].lower()
+            or needle in item["protocol_text"].lower()
+            or needle in item["employee_name"].lower()
+        ]
+    return results
 
 
 def get_finished_case(case_id):
@@ -284,8 +359,8 @@ def get_finished_case(case_id):
         return None
 
     try:
-        patient = json.loads(row["patient_json"])
-    except json.JSONDecodeError:
+        patient = _json_loads_secure(row["patient_json"], {})
+    except Exception:
         patient = {}
 
     return {
@@ -295,7 +370,7 @@ def get_finished_case(case_id):
         "completed_at": row["completed_at"],
         "summary": row["summary"],
         "patient": patient,
-        "protocol_text": row["protocol_text"],
+        "protocol_text": _decrypt_text(row["protocol_text"]),
         "status": row["status"],
         "anonymized_at": row["anonymized_at"],
         "deleted_at": row["deleted_at"],
@@ -328,7 +403,7 @@ def anonymize_finished_case(case_id, timestamp):
                 anonymized_at = ?
             WHERE id = ? AND status != 'deleted'
             """,
-            (json.dumps(anonymized_patient, ensure_ascii=False), timestamp, case_id),
+            (_json_dumps_secure(anonymized_patient), timestamp, case_id),
         )
         connection.commit()
 
@@ -350,6 +425,44 @@ def delete_finished_case(case_id, timestamp):
             (timestamp, case_id),
         )
         connection.commit()
+
+
+def encrypt_existing_patient_data():
+    init_database()
+    changed = 0
+    with _connect() as connection:
+        draft_rows = connection.execute("SELECT employee_id, draft_json FROM case_drafts").fetchall()
+        for row in draft_rows:
+            if not str(row["draft_json"]).startswith(ENCRYPTED_PREFIX):
+                connection.execute(
+                    "UPDATE case_drafts SET draft_json = ? WHERE employee_id = ?",
+                    (_encrypt_text(row["draft_json"]), row["employee_id"]),
+                )
+                changed += 1
+
+        case_rows = connection.execute("SELECT id, patient_json, protocol_text FROM finished_cases").fetchall()
+        for row in case_rows:
+            updates = {}
+            if not str(row["patient_json"]).startswith(ENCRYPTED_PREFIX):
+                updates["patient_json"] = _encrypt_text(row["patient_json"])
+            if not str(row["protocol_text"]).startswith(ENCRYPTED_PREFIX):
+                updates["protocol_text"] = _encrypt_text(row["protocol_text"])
+            if updates:
+                connection.execute(
+                    """
+                    UPDATE finished_cases
+                    SET patient_json = ?, protocol_text = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        updates.get("patient_json", row["patient_json"]),
+                        updates.get("protocol_text", row["protocol_text"]),
+                        row["id"],
+                    ),
+                )
+                changed += 1
+        connection.commit()
+    return changed
 
 
 def get_app_setting(key, default=None):

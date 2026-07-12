@@ -8,13 +8,17 @@ import {
   HeartPulse,
   Lock,
   LogOut,
+  RotateCcw,
   ShieldCheck,
   Stethoscope,
+  Trash2,
+  UserPlus,
   Wrench
 } from 'lucide-react';
 import './styles.css';
 
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+const SESSION_TIMEOUT_MS = 20 * 60 * 1000;
 
 function api(path, options = {}, token = '') {
   const headers = {
@@ -217,6 +221,10 @@ function Dashboard({ session, onLogout }) {
     return <ProtocolView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} />;
   }
 
+  if (view === 'admin') {
+    return <AdminView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} />;
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -256,7 +264,10 @@ function Dashboard({ session, onLogout }) {
             <button
               className={`tile tile-${tile.id}`}
               key={tile.id}
-              onClick={() => tile.id === 'protocol' && setView('protocol')}
+              onClick={() => {
+                if (tile.id === 'protocol') setView('protocol');
+                if (tile.id === 'admin') setView('admin');
+              }}
             >
               <Icon size={32} />
               <span>{tile.label}</span>
@@ -285,6 +296,256 @@ function Dashboard({ session, onLogout }) {
               </article>
             ))
           )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function AdminView({ session, employee, onBack, onLogout }) {
+  const [employees, setEmployees] = useState([]);
+  const [auditEvents, setAuditEvents] = useState([]);
+  const [privacy, setPrivacy] = useState(null);
+  const [cases, setCases] = useState([]);
+  const [newName, setNewName] = useState('');
+  const [newRole, setNewRole] = useState('employee');
+  const [retentionDays, setRetentionDays] = useState(3650);
+  const [temporaryPassword, setTemporaryPassword] = useState('');
+  const [statusText, setStatusText] = useState('');
+  const [error, setError] = useState('');
+
+  async function loadAdminData() {
+    setError('');
+    try {
+      const [employeeData, auditData, privacyData, caseData] = await Promise.all([
+        api('/api/admin/employees', {}, session.token),
+        api('/api/admin/audit', {}, session.token),
+        api('/api/admin/privacy', {}, session.token),
+        api('/api/cases', {}, session.token)
+      ]);
+      setEmployees(employeeData.employees || []);
+      setAuditEvents(auditData.events || []);
+      setPrivacy(privacyData);
+      setRetentionDays(privacyData.retention_days || 3650);
+      setCases(caseData.cases || []);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  useEffect(() => {
+    loadAdminData();
+  }, [session.token]);
+
+  async function createEmployee(event) {
+    event.preventDefault();
+    setError('');
+    setStatusText('');
+    setTemporaryPassword('');
+    try {
+      const result = await api('/api/admin/employees', {
+        method: 'POST',
+        body: JSON.stringify({ name: newName, role: newRole })
+      }, session.token);
+      setTemporaryPassword(`${result.employee.name}: ${result.temporary_password}`);
+      setStatusText('Mitarbeiterprofil wurde angelegt.');
+      setNewName('');
+      await loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function updateEmployee(item, changes) {
+    setError('');
+    setStatusText('');
+    setTemporaryPassword('');
+    try {
+      const result = await api(`/api/admin/employees/${item.id}`, {
+        method: 'PUT',
+        body: JSON.stringify(changes)
+      }, session.token);
+      if (result.temporary_password) {
+        setTemporaryPassword(`${result.employee.name}: ${result.temporary_password}`);
+      }
+      setStatusText('Mitarbeiterprofil wurde aktualisiert.');
+      await loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function saveRetention() {
+    setError('');
+    setStatusText('');
+    try {
+      const result = await api('/api/admin/privacy', {
+        method: 'PUT',
+        body: JSON.stringify({ retention_days: Number(retentionDays) })
+      }, session.token);
+      setStatusText(`Aufbewahrung gesetzt: ${result.retention_days} Tage.`);
+      await loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function anonymizeCase(caseId) {
+    setError('');
+    setStatusText('');
+    try {
+      await api(`/api/admin/cases/${caseId}/anonymize`, { method: 'POST' }, session.token);
+      setStatusText('Einsatz wurde anonymisiert.');
+      await loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function deleteCase(caseId) {
+    setError('');
+    setStatusText('');
+    try {
+      await api(`/api/admin/cases/${caseId}`, { method: 'DELETE' }, session.token);
+      setStatusText('Einsatz wurde gelöscht.');
+      await loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <div>
+          <div className="app-name">NANA</div>
+          <div className="app-subtitle">Admin · Datenschutz & Benutzerverwaltung</div>
+        </div>
+        <div className="user-area">
+          <span>{employee?.name}</span>
+          <button className="icon-button" onClick={onLogout} aria-label="Abmelden">
+            <LogOut size={18} />
+          </button>
+        </div>
+      </header>
+
+      <section className="protocol-toolbar">
+        <button type="button" onClick={onBack}>Zurück zum Hauptmenü</button>
+        <button type="button" onClick={loadAdminData}>Aktualisieren</button>
+      </section>
+
+      {error && <div className="error-box">{error}</div>}
+      {statusText && <div className="success-box">{statusText}</div>}
+      {temporaryPassword && (
+        <div className="secret-box">
+          <strong>Einmalpasswort nur jetzt anzeigen:</strong>
+          <code>{temporaryPassword}</code>
+        </div>
+      )}
+
+      <section className="admin-grid">
+        <article className="work-panel">
+          <div className="section-head">
+            <h2>Mitarbeiter</h2>
+            <span>{employees.length} Profile</span>
+          </div>
+          <form className="inline-form" onSubmit={createEmployee}>
+            <input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Name" />
+            <select value={newRole} onChange={(event) => setNewRole(event.target.value)}>
+              <option value="employee">Mitarbeiter</option>
+              <option value="admin">Admin</option>
+            </select>
+            <button type="submit"><UserPlus size={17} /> Anlegen</button>
+          </form>
+          <div className="admin-list">
+            {employees.map((item) => (
+              <div className="admin-row" key={item.id}>
+                <div>
+                  <strong>{item.name}</strong>
+                  <span>{item.role === 'admin' ? 'Admin' : 'Mitarbeiter'} · {item.active ? 'aktiv' : 'gesperrt'}</span>
+                </div>
+                <select value={item.role} onChange={(event) => updateEmployee(item, { role: event.target.value })}>
+                  <option value="employee">Mitarbeiter</option>
+                  <option value="admin">Admin</option>
+                </select>
+                <button type="button" onClick={() => updateEmployee(item, { active: !item.active })}>
+                  {item.active ? 'Sperren' : 'Aktivieren'}
+                </button>
+                <button type="button" onClick={() => updateEmployee(item, { reset_password: true })}>
+                  <RotateCcw size={16} /> OTP
+                </button>
+              </div>
+            ))}
+          </div>
+        </article>
+
+        <article className="work-panel">
+          <div className="section-head">
+            <h2>Datenschutz</h2>
+            <span>{privacy?.encryption?.enabled ? 'Verschlüsselung aktiv' : 'Prüfen'}</span>
+          </div>
+          <div className="privacy-list">
+            <div>
+              <strong>Speicher-Schutz</strong>
+              <span>{privacy?.encryption?.provider || 'wird geladen'}</span>
+            </div>
+            <div>
+              <strong>Schlüsselquelle</strong>
+              <span>{privacy?.encryption?.key_source || '-'}</span>
+            </div>
+            <div>
+              <strong>Sitzungssperre</strong>
+              <span>{privacy?.session_minutes || 30} Minuten Backend · 20 Minuten Oberfläche</span>
+            </div>
+            <div>
+              <strong>Audit-Log</strong>
+              <span>{privacy?.audit_events || 0} letzte Ereignisse abrufbar</span>
+            </div>
+          </div>
+          <div className="inline-form">
+            <input value={retentionDays} onChange={(event) => setRetentionDays(event.target.value)} inputMode="numeric" />
+            <button type="button" onClick={saveRetention}>Aufbewahrung speichern</button>
+          </div>
+          <p className="muted">{privacy?.encryption?.production_hint}</p>
+        </article>
+      </section>
+
+      <section className="work-panel">
+        <div className="section-head">
+          <h2>Fall-Datenschutz</h2>
+          <span>{cases.length} Einsätze</span>
+        </div>
+        <div className="case-list">
+          {cases.length === 0 ? (
+            <p className="muted">Keine Fälle vorhanden.</p>
+          ) : cases.slice(0, 12).map((item) => (
+            <article className="case-row case-row-actions" key={item.id}>
+              <div>
+                <strong>{item.summary}</strong>
+                <span>{item.completed_at} · {item.employee_name || 'anonym'}</span>
+              </div>
+              <span className={`status-pill status-${item.status}`}>{item.status}</span>
+              <button type="button" onClick={() => anonymizeCase(item.id)}>Anonymisieren</button>
+              <button type="button" className="danger-button" onClick={() => deleteCase(item.id)}>
+                <Trash2 size={16} /> Löschen
+              </button>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="work-panel">
+        <div className="section-head">
+          <h2>Audit-Log</h2>
+          <span>letzte Ereignisse</span>
+        </div>
+        <div className="audit-list">
+          {auditEvents.slice(0, 10).map((event, index) => (
+            <div className="audit-row" key={`${event.timestamp}-${index}`}>
+              <strong>{event.action}</strong>
+              <span>{event.timestamp} · {event.employee_name || 'System'} · {event.entity_type || '-'}</span>
+            </div>
+          ))}
         </div>
       </section>
     </main>
@@ -954,7 +1215,7 @@ function App() {
   });
 
   function handleLogin(result) {
-    const nextSession = { token: result.token, employee: result.employee };
+    const nextSession = { token: result.token, employee: result.employee, lastActivity: Date.now() };
     localStorage.setItem('nana_session', JSON.stringify(nextSession));
     setSession(nextSession);
   }
@@ -963,6 +1224,34 @@ function App() {
     localStorage.removeItem('nana_session');
     setSession(null);
   }
+
+  useEffect(() => {
+    if (!session) return undefined;
+
+    function markActivity() {
+      const raw = localStorage.getItem('nana_session');
+      const current = raw ? JSON.parse(raw) : session;
+      const nextSession = { ...current, lastActivity: Date.now() };
+      localStorage.setItem('nana_session', JSON.stringify(nextSession));
+    }
+
+    function checkTimeout() {
+      const raw = localStorage.getItem('nana_session');
+      const current = raw ? JSON.parse(raw) : null;
+      if (!current?.lastActivity || Date.now() - current.lastActivity > SESSION_TIMEOUT_MS) {
+        api('/api/auth/logout', { method: 'POST' }, current?.token || '').catch(() => {});
+        handleLogout();
+      }
+    }
+
+    const events = ['click', 'keydown', 'pointermove', 'touchstart'];
+    events.forEach((eventName) => window.addEventListener(eventName, markActivity));
+    const interval = window.setInterval(checkTimeout, 30000);
+    return () => {
+      events.forEach((eventName) => window.removeEventListener(eventName, markActivity));
+      window.clearInterval(interval);
+    };
+  }, [session]);
 
   return session ? <Dashboard session={session} onLogout={handleLogout} /> : <Login onLogin={handleLogin} />;
 }

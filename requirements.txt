@@ -4,3 +4,4 @@ fpdf2
 python-dotenv
 fastapi
 uvicorn
+cryptography
