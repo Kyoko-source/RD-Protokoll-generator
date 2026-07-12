@@ -53,6 +53,20 @@ def init_database():
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS audit_log (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                employee_id TEXT NOT NULL DEFAULT '',
+                employee_name TEXT NOT NULL DEFAULT '',
+                action TEXT NOT NULL,
+                entity_type TEXT NOT NULL DEFAULT '',
+                entity_id TEXT NOT NULL DEFAULT '',
+                details_json TEXT NOT NULL DEFAULT '{}'
+            )
+            """
+        )
         connection.commit()
 
 
@@ -252,6 +266,67 @@ def get_finished_case(case_id):
         "patient": patient,
         "protocol_text": row["protocol_text"],
     }
+
+
+def write_audit_event(event):
+    init_database()
+    details = event.get("details", {})
+    if not isinstance(details, dict):
+        details = {"value": str(details)}
+
+    with _connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO audit_log (
+                timestamp, employee_id, employee_name, action,
+                entity_type, entity_id, details_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event["timestamp"],
+                event.get("employee_id", ""),
+                event.get("employee_name", ""),
+                event["action"],
+                event.get("entity_type", ""),
+                event.get("entity_id", ""),
+                json.dumps(details, ensure_ascii=False),
+            ),
+        )
+        connection.commit()
+
+
+def list_audit_events(limit=100):
+    init_database()
+    safe_limit = max(1, min(int(limit or 100), 500))
+    with _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT timestamp, employee_id, employee_name, action,
+                   entity_type, entity_id, details_json
+            FROM audit_log
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (safe_limit,),
+        ).fetchall()
+
+    events = []
+    for row in rows:
+        try:
+            details = json.loads(row["details_json"])
+        except json.JSONDecodeError:
+            details = {}
+        events.append({
+            "timestamp": row["timestamp"],
+            "employee_id": row["employee_id"],
+            "employee_name": row["employee_name"],
+            "action": row["action"],
+            "entity_type": row["entity_type"],
+            "entity_id": row["entity_id"],
+            "details": details,
+        })
+    return events
 
 
 def migrate_json_files(employee_file="employees.json", draft_file="case_drafts.json"):

@@ -15,9 +15,11 @@ import urllib.request
 from copy import deepcopy
 from device_guides import DEVICE_GUIDES
 from hospital_finder import CATEGORIES, TOWNS, build_dutch_protocol, suitable_hospitals
+from interfaces import build_fhir_bundle, build_nana_case_export, parse_dispatch_import
 from storage import (
     get_finished_case,
     init_database,
+    list_audit_events,
     list_finished_cases,
     load_case_draft_store as db_load_case_draft_store,
     load_employee_store as db_load_employee_store,
@@ -25,6 +27,7 @@ from storage import (
     save_case_draft_store as db_save_case_draft_store,
     save_employee_store as db_save_employee_store,
     save_finished_case,
+    write_audit_event,
 )
 
 
@@ -134,6 +137,7 @@ def default_patient_case():
         "amls": {"excluded": [], "custom_candidates": [], "arbeitsdiagnose": ""},
         "massnahmen": {"timeline": [], "medikation": []},
         "transport": {},
+        "einsatz": {},
     }
 
 
@@ -146,6 +150,7 @@ def reset_patient_case():
             "employee_authenticated",
             "employee_profile",
             "employee_password_change_required",
+            "last_activity_at",
         )
         if key in st.session_state
     }
@@ -435,11 +440,31 @@ def generate_protocol():
     amls = patient.get("amls", {})
     m = patient.get("massnahmen", {})
     transport = patient.get("transport", {})
+    einsatz = patient.get("einsatz", {})
 
     protocol += "RD-PROTOKOLL – DOKUMENTATIONSENTWURF\n"
     protocol += "=" * 50 + "\n"
     protocol += f"Erstellt am {datetime.now().strftime('%d.%m.%Y um %H:%M:%S')} Uhr\n"
     protocol += "Enthält ausschließlich dokumentierte Angaben; vor Verwendung vollständig prüfen.\n\n"
+
+    documented_dispatch = [
+        ("Einsatznummer", einsatz.get("einsatznummer")),
+        ("Leitstelle", einsatz.get("leitstelle")),
+        ("Alarmzeit", einsatz.get("alarmzeit")),
+        ("Stichwort", einsatz.get("stichwort")),
+        ("Einsatzort", einsatz.get("adresse")),
+        ("Ort", einsatz.get("ort")),
+        ("Koordinaten", einsatz.get("koordinaten")),
+        ("Fahrzeug", einsatz.get("fahrzeug")),
+        ("Bemerkung", einsatz.get("bemerkung")),
+    ]
+    documented_dispatch = [(label, value) for label, value in documented_dispatch if _is_valid_value(value)]
+    if documented_dispatch:
+        protocol += "LEITSTELLEN-/EINSATZDATEN\n"
+        protocol += "=" * 50 + "\n"
+        for label, value in documented_dispatch:
+            protocol += f"{label}: {value}\n"
+        protocol += "\n"
 
     if transport.get("hospital_name"):
         protocol += "TRANSPORTZIEL\n"
@@ -982,7 +1007,8 @@ st.markdown(
     .st-key-home_tile_protocol button,
     .st-key-home_tile_hospital button,
     .st-key-home_tile_icd10 button,
-    .st-key-home_tile_devices button {
+    .st-key-home_tile_devices button,
+    .st-key-home_tile_interfaces button {
         min-height: 178px !important;
         border-radius: 26px !important;
         align-items:center !important;
@@ -1000,7 +1026,8 @@ st.markdown(
     .st-key-home_tile_protocol button:hover,
     .st-key-home_tile_hospital button:hover,
     .st-key-home_tile_icd10 button:hover,
-    .st-key-home_tile_devices button:hover {
+    .st-key-home_tile_devices button:hover,
+    .st-key-home_tile_interfaces button:hover {
         transform: translateY(-5px) scale(1.012) !important;
         box-shadow: 0 30px 56px rgba(2,8,24,0.34) !important;
     }
@@ -1028,10 +1055,17 @@ st.markdown(
             linear-gradient(135deg, rgba(226,120,32,.96) 0%, rgba(221,164,64,.90) 100%) !important;
         border-color:rgba(255,218,151,.38) !important;
     }
+    .st-key-home_tile_interfaces button {
+        background:
+            radial-gradient(circle at 10% 18%, rgba(255,255,255,.18), transparent 20%),
+            linear-gradient(135deg, rgba(24,109,196,.96) 0%, rgba(13,203,182,.88) 100%) !important;
+        border-color:rgba(139,237,255,.38) !important;
+    }
     .st-key-home_tile_protocol button p,
     .st-key-home_tile_hospital button p,
     .st-key-home_tile_icd10 button p,
-    .st-key-home_tile_devices button p {
+    .st-key-home_tile_devices button p,
+    .st-key-home_tile_interfaces button p {
         color:#fff !important;
         width:100% !important;
         font-size:1.42rem !important;
@@ -1447,6 +1481,7 @@ patient["amls"].setdefault("custom_candidates", [])
 patient["amls"].setdefault("arbeitsdiagnose", "")
 patient.setdefault("massnahmen", {"timeline": [], "medikation": []})
 patient.setdefault("transport", {})
+patient.setdefault("einsatz", {})
 patient["massnahmen"].setdefault("timeline", [])
 patient["massnahmen"].setdefault("medikation", [])
 
@@ -1455,6 +1490,7 @@ patient["massnahmen"].setdefault("medikation", [])
 # --------------------------------------------------
 
 LOCAL_ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD", "").strip()
+SESSION_TIMEOUT_MINUTES = int(os.getenv("NANA_SESSION_TIMEOUT_MINUTES", "30"))
 SUPABASE_URL = "https://ottkgqhtmjvhhtnwphmc.supabase.co"
 SUPABASE_ANON_KEY = "sb_publishable_87egwyr4tTwLh3tnZTDjkQ_eJh2eRZw"
 SUPABASE_ADMIN_EMAIL = "admin@rd-protokoll-generator.local"
@@ -1479,6 +1515,7 @@ HOME_PAGE = "🏠 Startseite"
 PROTOCOL_START_PAGE = "❤️ Vitalwerte"
 ICD10_PAGE = "🔤 ICD10 Code"
 ARCHIVE_PAGE = "🗂️ Archiv"
+INTERFACE_PAGE = "🔌 Schnittstellen"
 ADMIN_SOP_FIELDS = {
     "Anaphylaxie (SOPKB0105)": [
         {"key": "ana_adult_age_threshold", "label": "Altersschwelle Erwachsene (Jahre)", "default": 12.0, "min": 0.0, "max": 21.0, "step": 1.0},
@@ -1636,6 +1673,42 @@ def _current_employee_id():
     return st.session_state.get("employee_profile", {}).get("id")
 
 
+def _audit(action, entity_type="", entity_id="", details=None, employee=None):
+    profile = employee or st.session_state.get("employee_profile", {})
+    write_audit_event({
+        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "employee_id": profile.get("id", ""),
+        "employee_name": profile.get("name", ""),
+        "action": action,
+        "entity_type": entity_type,
+        "entity_id": entity_id,
+        "details": details or {},
+    })
+
+
+def _enforce_session_timeout():
+    if not st.session_state.get("employee_authenticated"):
+        return
+
+    now = datetime.now()
+    last_activity = st.session_state.get("last_activity_at")
+    if last_activity:
+        try:
+            inactive_seconds = (now - datetime.fromisoformat(last_activity)).total_seconds()
+        except ValueError:
+            inactive_seconds = 0
+        if inactive_seconds > SESSION_TIMEOUT_MINUTES * 60:
+            save_current_case_draft()
+            _audit("session_timeout", details={"inactive_minutes": round(inactive_seconds / 60, 1)})
+            _logout_employee(log_action=False)
+            st.session_state["session_timeout_notice"] = (
+                f"Du wurdest nach {SESSION_TIMEOUT_MINUTES} Minuten Inaktivität automatisch abgemeldet."
+            )
+            st.rerun()
+
+    st.session_state["last_activity_at"] = now.isoformat(timespec="seconds")
+
+
 def _serializable_visited_pages():
     visited = st.session_state.get("visited_pages", set())
     if isinstance(visited, set):
@@ -1751,10 +1824,14 @@ def _authenticate_employee(employee):
     }
     st.session_state["employee_password_change_required"] = False
     st.session_state["case_draft_loaded"] = False
+    st.session_state["last_activity_at"] = datetime.now().isoformat(timespec="seconds")
     st.session_state.pop("employee_pending_id", None)
+    _audit("login_success", employee=employee, details={"role": employee.get("role", "employee")})
 
 
-def _logout_employee():
+def _logout_employee(log_action=True):
+    if log_action and st.session_state.get("employee_authenticated"):
+        _audit("logout")
     for key in [
         "employee_authenticated",
         "employee_profile",
@@ -1763,6 +1840,7 @@ def _logout_employee():
         "admin_unlocked",
         "case_draft_loaded",
         "case_draft_restored",
+        "last_activity_at",
     ]:
         st.session_state.pop(key, None)
 
@@ -1781,6 +1859,8 @@ def render_employee_login():
         """,
         unsafe_allow_html=True,
     )
+    if st.session_state.get("session_timeout_notice"):
+        st.warning(st.session_state.pop("session_timeout_notice"))
 
     if not all_employees:
         st.warning("Noch keine Mitarbeiter angelegt. Erstelle jetzt den ersten Admin-Zugang.")
@@ -1808,6 +1888,7 @@ def render_employee_login():
                     "created_at": datetime.now().isoformat(timespec="seconds"),
                 }
                 _save_employee_store({"employees": [employee]})
+                _audit("first_admin_created", entity_type="employee", entity_id=employee["id"], employee=employee)
                 _authenticate_employee(employee)
                 st.success("Admin-Zugang erstellt.")
                 st.rerun()
@@ -1835,6 +1916,12 @@ def render_employee_login():
                 pending_employee["must_change_password"] = False
                 pending_employee["password_changed_at"] = datetime.now().isoformat(timespec="seconds")
                 _save_employee_store(store)
+                _audit(
+                    "initial_password_set",
+                    entity_type="employee",
+                    entity_id=pending_employee.get("id", ""),
+                    employee=pending_employee,
+                )
                 _authenticate_employee(pending_employee)
                 st.success("Passwort gespeichert.")
                 st.rerun()
@@ -1856,15 +1943,35 @@ def render_employee_login():
             st.error("Mitarbeiter wurde nicht gefunden.")
         elif employee.get("must_change_password", False):
             if _verify_password(password, employee.get("temp_password_hash")):
+                _audit(
+                    "temporary_password_accepted",
+                    entity_type="employee",
+                    entity_id=employee.get("id", ""),
+                    employee=employee,
+                )
                 st.session_state["employee_pending_id"] = employee.get("id")
                 st.session_state["employee_password_change_required"] = True
                 st.rerun()
             else:
+                _audit(
+                    "login_failed",
+                    entity_type="employee",
+                    entity_id=employee.get("id", ""),
+                    employee=employee,
+                    details={"reason": "wrong_temporary_password"},
+                )
                 st.error("Einmalpasswort ist falsch.")
         elif _verify_password(password, employee.get("password_hash")):
             _authenticate_employee(employee)
             st.rerun()
         else:
+            _audit(
+                "login_failed",
+                entity_type="employee",
+                entity_id=employee.get("id", ""),
+                employee=employee,
+                details={"reason": "wrong_password"},
+            )
             st.error("Passwort ist falsch.")
 
     st.stop()
@@ -1892,7 +1999,7 @@ def render_employee_admin_panel():
             elif len(temp_password) < 6:
                 st.error("Das Einmalpasswort sollte mindestens 6 Zeichen haben.")
             else:
-                store.setdefault("employees", []).append({
+                new_employee = {
                     "id": secrets.token_hex(8),
                     "name": normalized_name,
                     "role": role,
@@ -1901,8 +2008,15 @@ def render_employee_admin_panel():
                     "temp_password_hash": _password_hash(temp_password),
                     "must_change_password": True,
                     "created_at": datetime.now().isoformat(timespec="seconds"),
-                })
+                }
+                store.setdefault("employees", []).append(new_employee)
                 _save_employee_store(store)
+                _audit(
+                    "employee_created",
+                    entity_type="employee",
+                    entity_id=new_employee["id"],
+                    details={"target_name": normalized_name, "target_role": role},
+                )
                 st.success(f"Mitarbeiter angelegt. Einmalpasswort: {temp_password}")
                 st.rerun()
 
@@ -1927,6 +2041,12 @@ def render_employee_admin_panel():
                     employee["must_change_password"] = True
                     employee["password_hash"] = ""
                     _save_employee_store(store)
+                    _audit(
+                        "employee_temporary_password_reset",
+                        entity_type="employee",
+                        entity_id=employee.get("id", ""),
+                        details={"target_name": employee.get("name", "")},
+                    )
                     st.success(f"Neues Einmalpasswort: {new_temp}")
                     st.rerun()
             with col_toggle:
@@ -1938,6 +2058,12 @@ def render_employee_admin_panel():
                     if st.button(toggle_label, key=f"toggle_employee_{employee['id']}", use_container_width=True):
                         employee["active"] = not employee.get("active", True)
                         _save_employee_store(store)
+                        _audit(
+                            "employee_access_toggled",
+                            entity_type="employee",
+                            entity_id=employee.get("id", ""),
+                            details={"target_name": employee.get("name", ""), "active": employee.get("active", True)},
+                        )
                         st.rerun()
 
 
@@ -2077,6 +2203,8 @@ if "employee_authenticated" not in st.session_state:
 
 if "employee_profile" not in st.session_state:
     st.session_state["employee_profile"] = {}
+
+_enforce_session_timeout()
 
 if not st.session_state.get("employee_authenticated", False):
     render_employee_login()
@@ -2867,6 +2995,7 @@ st.session_state['visited_pages'].add(st.session_state['seite'])
 topbar_left, topbar_home, topbar_archive, topbar_spacer, topbar_profile, topbar_admin, topbar_logout = st.columns([2, 2.2, 1.6, 1.6, 2.2, 1.4, 1.4])
 with topbar_left:
     if st.button("＋ Neuer Einsatz", key="new_case_btn", use_container_width=True, type="secondary"):
+        _audit("new_case_requested", entity_type="case_draft")
         st.session_state["confirm_new_case"] = True
 with topbar_home:
     if st.session_state.get("seite") != HOME_PAGE:
@@ -2876,6 +3005,7 @@ with topbar_home:
             st.rerun()
 with topbar_archive:
     if st.button("Archiv", key="archive_nav_btn", use_container_width=True, type="secondary"):
+        _audit("archive_opened", entity_type="archive")
         st.session_state["seite"] = ARCHIVE_PAGE
         save_current_case_draft()
         st.rerun()
@@ -2902,6 +3032,7 @@ if st.session_state.get("confirm_new_case"):
     confirm_col, cancel_col, _ = st.columns([2, 2, 8])
     with confirm_col:
         if st.button("Ja, Einsatz leeren", key="confirm_new_case_btn", use_container_width=True, type="primary"):
+            _audit("case_draft_cleared", entity_type="case_draft")
             reset_patient_case()
             st.rerun()
     with cancel_col:
@@ -2988,7 +3119,7 @@ if seite == HOME_PAGE:
             st.session_state["seite"] = "🏥 Zielklinik"
             st.rerun()
 
-    tile_icd10, tile_devices = st.columns(2, gap="large")
+    tile_icd10, tile_devices, tile_interfaces = st.columns(3, gap="large")
     with tile_icd10:
         if st.button("🔤 ICD10 Code\nCode dekodieren", key="home_tile_icd10", use_container_width=True):
             st.session_state["seite"] = ICD10_PAGE
@@ -2997,6 +3128,10 @@ if seite == HOME_PAGE:
         if st.button("🧰 Geräte\nKurzreferenzen", key="home_tile_devices", use_container_width=True):
             st.session_state["device_guide_return_page"] = HOME_PAGE
             st.session_state["seite"] = "🧰 Geräte-Guide"
+            st.rerun()
+    with tile_interfaces:
+        if st.button("🔌 Schnittstellen\nImport & Export", key="home_tile_interfaces", use_container_width=True):
+            st.session_state["seite"] = INTERFACE_PAGE
             st.rerun()
 
 elif seite == ARCHIVE_PAGE:
@@ -3030,6 +3165,10 @@ elif seite == ARCHIVE_PAGE:
                 if not selected_case:
                     st.warning("Dieser Einsatz konnte nicht geladen werden.")
                     continue
+                if profile.get("role") != "admin" and selected_case.get("employee_id") != profile.get("id"):
+                    _audit("archive_access_denied", entity_type="finished_case", entity_id=case["id"])
+                    st.warning("Dieser Einsatz ist für dein Profil nicht freigegeben.")
+                    continue
 
                 st.caption(f"Dokumentiert von {selected_case['employee_name']} · Fall-ID {selected_case['id']}")
                 st.text_area(
@@ -3038,13 +3177,156 @@ elif seite == ARCHIVE_PAGE:
                     height=420,
                     key=f"archive_protocol_{selected_case['id']}",
                 )
-                st.download_button(
+                downloaded = st.download_button(
                     "💾 Protokoll als TXT herunterladen",
                     selected_case["protocol_text"],
                     file_name=f"NANA_Einsatz_{selected_case['completed_at'].replace(':', '-').replace(' ', '_')}.txt",
                     mime="text/plain",
                     key=f"archive_download_{selected_case['id']}",
                 )
+                if downloaded:
+                    _audit("archive_protocol_downloaded", entity_type="finished_case", entity_id=selected_case["id"])
+
+elif seite == INTERFACE_PAGE:
+    interface_head, interface_back = st.columns([5, 1])
+    with interface_head:
+        st.header("🔌 Schnittstellen")
+        st.caption("Lokaler Import und Export für Leitstelle, Corpuls-Vorbereitung und spätere Klinik-/Systemanbindungen")
+    with interface_back:
+        if st.button("← Start", key="interface_back_home", use_container_width=True):
+            st.session_state["seite"] = HOME_PAGE
+            st.rerun()
+
+    st.warning(
+        "Datenschutzmodus: NANA überträgt hier keine Daten automatisch an externe Systeme. "
+        "Importe und Exporte laufen lokal im Browser/App-Kontext. Dateien nur in freigegebenen, berechtigten Systemen verwenden."
+    )
+
+    tabs = st.tabs(["Leitstellen-Import", "Export", "Corpuls-Vorbereitung"])
+
+    with tabs[0]:
+        st.subheader("Leitstellen-Einsatzdaten übernehmen")
+        st.caption("Unterstützt ein neutrales JSON-Format mit Einsatznummer, Stichwort, Alarmzeit, Adresse, Ort, Koordinaten, Fahrzeug und Leitstelle.")
+
+        uploaded_dispatch = st.file_uploader("JSON-Datei auswählen", type=["json"], key="dispatch_json_upload")
+        if uploaded_dispatch is not None:
+            try:
+                imported_dispatch = parse_dispatch_import(uploaded_dispatch.getvalue().decode("utf-8"))
+                if imported_dispatch:
+                    st.json(imported_dispatch)
+                    if st.button("Import in aktuellen Einsatz übernehmen", key="apply_dispatch_import", use_container_width=True, type="primary"):
+                        patient.setdefault("einsatz", {}).update(imported_dispatch)
+                        st.session_state["generated_protocol_text"] = ""
+                        _audit(
+                            "dispatch_json_imported",
+                            entity_type="case_draft",
+                            details={"fields": sorted(imported_dispatch.keys())},
+                        )
+                        save_current_case_draft()
+                        st.success("Einsatzdaten wurden übernommen.")
+                        st.rerun()
+                else:
+                    st.info("Die Datei wurde gelesen, enthält aber keine bekannten Einsatzdatenfelder.")
+            except (UnicodeDecodeError, json.JSONDecodeError, ValueError) as error:
+                st.error(f"Import nicht möglich: {error}")
+
+        st.divider()
+        st.subheader("Manuelle Einsatzdaten")
+        einsatz = patient.setdefault("einsatz", {})
+        manual_cols = st.columns(2)
+        with manual_cols[0]:
+            einsatz["einsatznummer"] = st.text_input("Einsatznummer", value=str(einsatz.get("einsatznummer", "")), key="dispatch_case_number")
+            einsatz["alarmzeit"] = st.text_input("Alarmzeit", value=str(einsatz.get("alarmzeit", "")), key="dispatch_alarm_time")
+            einsatz["stichwort"] = st.text_input("Stichwort", value=str(einsatz.get("stichwort", "")), key="dispatch_keyword")
+            einsatz["fahrzeug"] = st.text_input("Fahrzeug", value=str(einsatz.get("fahrzeug", "")), key="dispatch_vehicle")
+        with manual_cols[1]:
+            einsatz["leitstelle"] = st.text_input("Leitstelle", value=str(einsatz.get("leitstelle", "")), key="dispatch_center")
+            einsatz["adresse"] = st.text_input("Einsatzort / Adresse", value=str(einsatz.get("adresse", "")), key="dispatch_address")
+            einsatz["ort"] = st.text_input("Ort", value=str(einsatz.get("ort", "")), key="dispatch_town")
+            einsatz["koordinaten"] = st.text_input("Koordinaten", value=str(einsatz.get("koordinaten", "")), key="dispatch_coordinates")
+        einsatz["bemerkung"] = st.text_area("Leitstellen-Bemerkung", value=str(einsatz.get("bemerkung", "")), height=110, key="dispatch_note")
+        if st.button("Einsatzdaten speichern", key="save_dispatch_manual", use_container_width=True, type="primary"):
+            st.session_state["generated_protocol_text"] = ""
+            _audit("dispatch_manual_saved", entity_type="case_draft")
+            save_current_case_draft()
+            st.success("Einsatzdaten gespeichert.")
+
+    with tabs[1]:
+        st.subheader("Lokaler Export")
+        st.caption("Exportiert den aktuellen Einsatz als NANA-JSON und FHIR-orientiertes Bundle. Keine automatische Übertragung.")
+        profile = st.session_state.get("employee_profile", {})
+        protocol_text = st.session_state.get("generated_protocol_text") or generate_protocol()
+        export_metadata = {
+            "case_id": patient.get("einsatz", {}).get("einsatznummer", ""),
+            "created_by_employee_id": profile.get("id", ""),
+            "source": "NANA",
+        }
+        nana_export = build_nana_case_export(patient, protocol_text, export_metadata)
+        fhir_export = build_fhir_bundle(patient, protocol_text, export_metadata)
+        export_name = patient.get("einsatz", {}).get("einsatznummer") or datetime.now().strftime("%Y%m%d_%H%M%S")
+        export_name = re.sub(r"[^A-Za-z0-9_.-]+", "_", str(export_name)).strip("_") or "aktueller_einsatz"
+
+        export_cols = st.columns(2)
+        with export_cols[0]:
+            nana_downloaded = st.download_button(
+                "NANA-JSON herunterladen",
+                json.dumps(nana_export, ensure_ascii=False, indent=2),
+                file_name=f"NANA_Export_{export_name}.json",
+                mime="application/json",
+                key="download_nana_export",
+                use_container_width=True,
+            )
+            if nana_downloaded:
+                _audit("nana_json_export_downloaded", entity_type="case_draft", details={"case": str(export_name)})
+        with export_cols[1]:
+            fhir_downloaded = st.download_button(
+                "FHIR-Bundle herunterladen",
+                json.dumps(fhir_export, ensure_ascii=False, indent=2),
+                file_name=f"NANA_FHIR_{export_name}.json",
+                mime="application/fhir+json",
+                key="download_fhir_export",
+                use_container_width=True,
+            )
+            if fhir_downloaded:
+                _audit("fhir_export_downloaded", entity_type="case_draft", details={"case": str(export_name)})
+
+        with st.expander("Export-Vorschau", expanded=False):
+            st.json({
+                "dispatch": nana_export.get("dispatch", {}),
+                "fhirResources": len(fhir_export.get("entry", [])),
+                "privacy": nana_export.get("privacy", {}),
+            })
+
+    with tabs[2]:
+        st.subheader("Corpuls-Vorbereitung")
+        st.info(
+            "Eine echte Corpuls-Anbindung sollte erst mit offizieller Schnittstellendokumentation, Vertrag/Freigabe "
+            "und Datenschutzprüfung aktiviert werden. Bis dahin bereitet NANA nur die Datenstruktur vor."
+        )
+        vital = patient.get("vitalwerte", {})
+        corpuls_preview = {
+            "deviceVendor": "Corpuls",
+            "integrationStatus": "prepared_not_connected",
+            "measurements": {
+                "heartRate": vital.get("puls"),
+                "spo2": vital.get("spo2"),
+                "respiratoryRate": vital.get("af"),
+                "bloodPressure": {
+                    "systolic": vital.get("rr_sys"),
+                    "diastolic": vital.get("rr_dia"),
+                },
+                "temperature": vital.get("temperatur"),
+                "glucoseMgDl": vital.get("bz"),
+            },
+            "requiredBeforeActivation": [
+                "offizielle Hersteller-Schnittstellendokumentation",
+                "Transportverschluesselung und Authentifizierung",
+                "Auftragsverarbeitung oder Betreiberfreigabe",
+                "Testumgebung ohne echte Patientendaten",
+                "Audit- und Berechtigungskonzept",
+            ],
+        }
+        st.json(corpuls_preview)
 
 elif seite == ICD10_PAGE:
     icd_head, icd_back = st.columns([5, 1])
@@ -3328,14 +3610,33 @@ elif seite == "🛠️ Admin":
                 new_overrides.update(edited_values)
                 st.session_state["sop_admin_config"] = {"value_overrides": new_overrides}
                 _save_sop_admin_config(st.session_state["sop_admin_config"])
+                _audit("sop_settings_saved", entity_type="sop_config", details={"field_count": len(edited_values)})
                 st.success("Admin-Einstellungen gespeichert")
 
         with c2:
             if st.button("↺ Auf Defaults zurücksetzen", use_container_width=True):
                 st.session_state["sop_admin_config"] = deepcopy(DEFAULT_SOP_ADMIN_CONFIG)
                 _save_sop_admin_config(st.session_state["sop_admin_config"])
+                _audit("sop_settings_reset", entity_type="sop_config")
                 st.success("Standardwerte wiederhergestellt")
                 st.rerun()
+
+        st.divider()
+        st.subheader("Audit-Log")
+        st.caption("Letzte sicherheitsrelevante Aktionen. Passwörter und Protokollinhalte werden hier nicht gespeichert.")
+        audit_events = list_audit_events(limit=80)
+        if not audit_events:
+            st.info("Noch keine Audit-Ereignisse vorhanden.")
+        else:
+            for event in audit_events:
+                actor = event.get("employee_name") or "System/Unbekannt"
+                target = ""
+                if event.get("entity_type"):
+                    target = f" · {event.get('entity_type')}"
+                    if event.get("entity_id"):
+                        target += f" {event.get('entity_id')}"
+                with st.expander(f"{event.get('timestamp')} · {event.get('action')} · {actor}{target}", expanded=False):
+                    st.json(event.get("details", {}))
 
         st.subheader("Aktive Konfiguration")
         st.code(json.dumps(st.session_state.get("sop_admin_config", {}), indent=2, ensure_ascii=False), language="json")
@@ -5716,6 +6017,7 @@ elif seite == "📄 Protokoll":
             st.session_state["protocol_generated"] = True
             st.session_state["workflow_manual_completion"]["📄 Protokoll"] = True
             st.session_state["generated_protocol_text"] = protocol
+            _audit("protocol_generated", entity_type="case_draft")
 
             st.success("Protokoll erstellt.")
 
@@ -5726,24 +6028,28 @@ elif seite == "📄 Protokoll":
             height=600
         )
 
-        st.download_button(
+        protocol_downloaded = st.download_button(
             "💾 Protokoll als TXT herunterladen",
             st.session_state["generated_protocol_text"],
             file_name="RD_Protokoll.txt",
             mime="text/plain"
         )
+        if protocol_downloaded:
+            _audit("current_protocol_downloaded", entity_type="case_draft")
 
         if patient.get("transport", {}).get("hospital_country") == "NL":
             dutch_protocol = build_dutch_protocol(patient)
             st.subheader("🇳🇱 Nederlandse overdracht")
             st.caption("Strukturierte niederländische Zusatzfassung für das gewählte Zielkrankenhaus")
             st.text_area("Niederländisches Protokoll", dutch_protocol, height=520, key="dutch_protocol_preview")
-            st.download_button(
+            dutch_downloaded = st.download_button(
                 "💾 Niederländisches Protokoll herunterladen",
                 dutch_protocol,
                 file_name="RD_Protocol_NL.txt",
                 mime="text/plain",
             )
+            if dutch_downloaded:
+                _audit("current_protocol_nl_downloaded", entity_type="case_draft")
 
         escaped_protocol = json.dumps(st.session_state["generated_protocol_text"])
         components.html(
@@ -5829,8 +6135,9 @@ elif seite == "📄 Protokoll":
             if st.button("✓ Einsatz beenden", key="finish_case_btn", use_container_width=True, type="primary"):
                 profile = st.session_state.get("employee_profile", {})
                 protocol_text = st.session_state.get("generated_protocol_text") or generate_protocol()
+                finished_case_id = secrets.token_hex(10)
                 save_finished_case({
-                    "id": secrets.token_hex(10),
+                    "id": finished_case_id,
                     "employee_id": profile.get("id", ""),
                     "employee_name": profile.get("name", ""),
                     "completed_at": datetime.now().isoformat(timespec="seconds"),
@@ -5838,6 +6145,12 @@ elif seite == "📄 Protokoll":
                     "patient": patient,
                     "protocol_text": protocol_text,
                 })
+                _audit(
+                    "case_finished",
+                    entity_type="finished_case",
+                    entity_id=finished_case_id,
+                    details={"summary": build_case_summary(patient)},
+                )
                 st.success("Einsatz wurde im Archiv gespeichert.")
                 reset_patient_case()
                 st.rerun()
