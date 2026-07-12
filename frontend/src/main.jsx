@@ -24,6 +24,36 @@ import './styles.css';
 const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
 const SESSION_TIMEOUT_MS = 20 * 60 * 1000;
 
+function localDraftKey(employeeId) {
+  return `nana_local_draft_${employeeId || 'unknown'}`;
+}
+
+function loadLocalDraft(employeeId) {
+  try {
+    const raw = localStorage.getItem(localDraftKey(employeeId));
+    return raw ? JSON.parse(raw) : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalDraft(employeeId, patient) {
+  if (!employeeId || !patient) return null;
+  const draft = {
+    patient,
+    updatedAt: new Date().toISOString(),
+    source: 'browser'
+  };
+  localStorage.setItem(localDraftKey(employeeId), JSON.stringify(draft));
+  return draft;
+}
+
+function clearLocalDraft(employeeId) {
+  if (employeeId) {
+    localStorage.removeItem(localDraftKey(employeeId));
+  }
+}
+
 function api(path, options = {}, token = '') {
   const headers = {
     'Content-Type': 'application/json',
@@ -32,13 +62,20 @@ function api(path, options = {}, token = '') {
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  return fetch(`${API_BASE}${path}`, { ...options, headers }).then(async (response) => {
-    const data = await response.json().catch(() => ({}));
-    if (!response.ok) {
-      throw new Error(data.detail || 'Anfrage fehlgeschlagen');
-    }
-    return data;
-  });
+  return fetch(`${API_BASE}${path}`, { ...options, headers })
+    .then(async (response) => {
+      const data = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(data.detail || 'Anfrage fehlgeschlagen');
+      }
+      return data;
+    })
+    .catch((err) => {
+      if (err instanceof TypeError) {
+        throw new Error('Backend nicht erreichbar. Lokale Entwürfe bleiben im Browser erhalten.');
+      }
+      throw err;
+    });
 }
 
 async function fileRequest(path, options = {}, token = '') {
@@ -77,6 +114,17 @@ function printBlob(blob) {
     printWindow.addEventListener('load', () => printWindow.print(), { once: true });
   }
   window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+function SystemStatus({ online, backendOnline, lastSync }) {
+  const state = !online ? 'offline' : backendOnline ? 'online' : 'limited';
+  const label = !online ? 'Offline' : backendOnline ? 'Backend verbunden' : 'Backend nicht erreichbar';
+  return (
+    <div className={`system-status system-${state}`}>
+      <span>{label}</span>
+      <small>{lastSync ? `Letzter Sync: ${lastSync}` : 'Noch kein Sync in dieser Sitzung'}</small>
+    </div>
+  );
 }
 
 const tileIcons = {
@@ -235,7 +283,7 @@ function Login({ onLogin }) {
   );
 }
 
-function Dashboard({ session, onLogout }) {
+function Dashboard({ session, onLogout, connectivity, onSync }) {
   const [dashboard, setDashboard] = useState(null);
   const [cases, setCases] = useState([]);
   const [view, setView] = useState('home');
@@ -289,7 +337,7 @@ function Dashboard({ session, onLogout }) {
   }
 
   if (view === 'protocol') {
-    return <ProtocolView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} />;
+    return <ProtocolView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} onSync={onSync} />;
   }
 
   if (view === 'hospital') {
@@ -322,6 +370,7 @@ function Dashboard({ session, onLogout }) {
 
   return (
     <main className="app-shell">
+      <SystemStatus {...connectivity} />
       <header className="topbar">
         <div>
           <div className="app-name">NANA</div>
@@ -464,6 +513,7 @@ function InterfacesView({ session, employee, onBack, onOpenProtocol, onLogout })
 
   return (
     <main className="app-shell">
+      <SystemStatus {...connectivity} />
       <header className="topbar">
         <div>
           <div className="app-name">NANA</div>
@@ -1218,7 +1268,7 @@ const emptyPatient = {
   uebergabe: {}
 };
 
-function ProtocolView({ session, employee, onBack, onLogout }) {
+function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSync }) {
   const [patient, setPatient] = useState(emptyPatient);
   const [protocolSection, setProtocolSection] = useState('vitalwerte');
   const [statusText, setStatusText] = useState('');
@@ -1226,6 +1276,8 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
   const [generatedProtocol, setGeneratedProtocol] = useState('');
   const [qualityResult, setQualityResult] = useState(null);
   const [forceFinish, setForceFinish] = useState(false);
+  const [localDraft, setLocalDraft] = useState(() => loadLocalDraft(employee?.id));
+  const [draftReady, setDraftReady] = useState(false);
   const vitalwerte = patient.vitalwerte || {};
   const xabcde = patient.xabcde || {};
   const samplers = patient.samplers || {};
@@ -1236,9 +1288,47 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
 
   useEffect(() => {
     api('/api/draft', {}, session.token)
-      .then((data) => setPatient({ ...emptyPatient, ...(data.patient || {}) }))
-      .catch((err) => setError(err.message));
-  }, [session.token]);
+      .then((data) => {
+        setPatient({ ...emptyPatient, ...(data.patient || {}) });
+        setDraftReady(true);
+        const syncTime = data.updated_at || new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
+        onSync?.(syncTime);
+      })
+      .catch((err) => {
+        const fallback = loadLocalDraft(employee?.id);
+        if (fallback?.patient) {
+          setPatient({ ...emptyPatient, ...fallback.patient });
+          setLocalDraft(fallback);
+          setStatusText('Backend nicht erreichbar. Lokaler Entwurf wurde geladen.');
+        } else {
+          setError(err.message);
+        }
+        setDraftReady(true);
+      });
+  }, [session.token, employee?.id]);
+
+  useEffect(() => {
+    if (!draftReady) return;
+    const saved = saveLocalDraft(employee?.id, patient);
+    if (saved) {
+      setLocalDraft(saved);
+    }
+  }, [patient, draftReady, employee?.id]);
+
+  function restoreLocalDraft() {
+    const draft = loadLocalDraft(employee?.id);
+    if (draft?.patient) {
+      setPatient({ ...emptyPatient, ...draft.patient });
+      setLocalDraft(draft);
+      setStatusText(`Lokaler Entwurf wiederhergestellt: ${new Date(draft.updatedAt).toLocaleString('de-DE')}`);
+    }
+  }
+
+  function discardLocalDraft() {
+    clearLocalDraft(employee?.id);
+    setLocalDraft(null);
+    setStatusText('Lokaler Entwurf wurde verworfen.');
+  }
 
   function updateVital(key, value) {
     setPatient((current) => ({
@@ -1377,8 +1467,13 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
         body: JSON.stringify({ patient })
       }, session.token);
       setStatusText(`Entwurf gespeichert: ${result.updated_at}`);
+      onSync?.(result.updated_at);
+      const saved = saveLocalDraft(employee?.id, patient);
+      setLocalDraft(saved);
     } catch (err) {
-      setError(err.message);
+      const saved = saveLocalDraft(employee?.id, patient);
+      setLocalDraft(saved);
+      setError(`${err.message} Lokale Sicherung wurde aktualisiert.`);
     }
   }
 
@@ -1435,6 +1530,8 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
       setGeneratedProtocol(result.protocol_text || '');
       setQualityResult(result.quality || qualityResult);
       setPatient(emptyPatient);
+      clearLocalDraft(employee?.id);
+      setLocalDraft(null);
       setProtocolSection('protokoll');
       setForceFinish(false);
       const warningText = result.quality?.warning_count || result.quality?.critical_count ? ' mit QS-Warnungen' : '';
@@ -1507,6 +1604,16 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
 
       {error && <div className="error-box">{error}</div>}
       {statusText && <div className="success-box">{statusText}</div>}
+      {localDraft && (
+        <section className="offline-draft-box">
+          <div>
+            <strong>Lokale Sicherung vorhanden</strong>
+            <span>{new Date(localDraft.updatedAt).toLocaleString('de-DE')}</span>
+          </div>
+          <button type="button" onClick={restoreLocalDraft}>Lokalen Entwurf wiederherstellen</button>
+          <button type="button" onClick={discardLocalDraft}>Lokalen Entwurf verwerfen</button>
+        </section>
+      )}
 
       <section className="protocol-tabs">
         <button
@@ -1969,6 +2076,9 @@ function App() {
     const raw = localStorage.getItem('nana_session');
     return raw ? JSON.parse(raw) : null;
   });
+  const [online, setOnline] = useState(() => navigator.onLine);
+  const [backendOnline, setBackendOnline] = useState(true);
+  const [lastSync, setLastSync] = useState('');
 
   function handleLogin(result) {
     const nextSession = { token: result.token, employee: result.employee, lastActivity: Date.now() };
@@ -2009,7 +2119,42 @@ function App() {
     };
   }, [session]);
 
-  return session ? <Dashboard session={session} onLogout={handleLogout} /> : <Login onLogin={handleLogin} />;
+  useEffect(() => {
+    function updateOnline() {
+      setOnline(navigator.onLine);
+    }
+
+    async function checkBackend() {
+      try {
+        await api('/api/health');
+        setBackendOnline(true);
+      } catch {
+        setBackendOnline(false);
+      }
+    }
+
+    window.addEventListener('online', updateOnline);
+    window.addEventListener('offline', updateOnline);
+    checkBackend();
+    const interval = window.setInterval(checkBackend, 30000);
+    return () => {
+      window.removeEventListener('online', updateOnline);
+      window.removeEventListener('offline', updateOnline);
+      window.clearInterval(interval);
+    };
+  }, []);
+
+  const connectivity = { online, backendOnline, lastSync };
+
+  return session
+    ? <Dashboard session={session} onLogout={handleLogout} connectivity={connectivity} onSync={setLastSync} />
+    : <Login onLogin={handleLogin} />;
+}
+
+if ('serviceWorker' in navigator) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => {});
+  });
 }
 
 createRoot(document.getElementById('root')).render(<App />);

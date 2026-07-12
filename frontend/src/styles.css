@@ -265,6 +265,66 @@ form button,
   padding: 24px clamp(16px, 4vw, 56px) 48px;
 }
 
+.system-status {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  background: rgba(255, 255, 255, 0.055);
+  color: rgba(239, 248, 255, 0.82);
+  font-weight: 850;
+}
+
+.system-status small {
+  color: rgba(235, 244, 255, 0.58);
+}
+
+.system-online {
+  border-color: rgba(78, 211, 171, 0.30);
+}
+
+.system-limited,
+.system-offline {
+  border-color: rgba(255, 205, 86, 0.40);
+  background: rgba(255, 205, 86, 0.09);
+}
+
+.offline-draft-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(45, 124, 255, 0.12);
+  border: 1px solid rgba(45, 124, 255, 0.32);
+}
+
+.offline-draft-box div {
+  display: grid;
+  gap: 3px;
+}
+
+.offline-draft-box span {
+  color: rgba(235, 244, 255, 0.62);
+}
+
+.offline-draft-box button {
+  min-height: 40px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 850;
+  cursor: pointer;
+}
+
 .topbar {
   display: flex;
   justify-content: space-between;
@@ -955,6 +1015,8 @@ legend {
 
 @media (max-width: 880px) {
   .login-shell,
+  .system-status,
+  .offline-draft-box,
   .status-band,
   .tile-grid,
   .quality-box,
