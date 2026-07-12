@@ -2,3 +2,5 @@ streamlit
 openai
 fpdf2
 python-dotenv
+fastapi
+uvicorn

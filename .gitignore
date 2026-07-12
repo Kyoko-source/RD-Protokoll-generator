@@ -8,4 +8,8 @@ employees.json
 case_drafts.json
 nana.db
 nana.db-*
+frontend/node_modules/
+frontend/dist/
+backend/__pycache__/
+backend/.venv/
 .DS_Store

@@ -1,0 +1,16 @@
+{
+  "name": "NANA",
+  "short_name": "NANA",
+  "description": "Notfall-Aufzeichnungs- und Nachbearbeitungs-Assistent",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#06111f",
+  "theme_color": "#06111f",
+  "icons": [
+    {
+      "src": "/nana-icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml"
+    }
+  ]
+}
