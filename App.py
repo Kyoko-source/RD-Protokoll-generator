@@ -129,7 +129,7 @@ def reset_patient_case():
         "massnahmen": {"timeline": [], "medikation": []},
         "transport": {},
     }
-    st.session_state["seite"] = "❤️ Vitalwerte"
+    st.session_state["seite"] = "🏠 Startseite"
     st.session_state["xabcde_selected"] = "A"
     st.session_state["visited_pages"] = set()
     st.session_state["workflow_manual_completion"] = {}
@@ -950,6 +950,63 @@ st.markdown(
         line-height:1.2;
     }
     .rd-summary-empty .rd-summary-muted { color: rgba(234,243,255,0.62); font-size:0.88rem; }
+    .home-shell {
+        margin: 4px 0 18px;
+        padding: 10px 0 6px;
+    }
+    .home-title {
+        margin: 0 0 8px;
+        color:#fbfdff;
+        font-size:1.52rem;
+        font-weight:950;
+        letter-spacing:0;
+    }
+    .home-subtitle {
+        color:rgba(231,241,255,0.68);
+        font-size:0.96rem;
+        font-weight:650;
+        margin-bottom:18px;
+    }
+    .st-key-home_tile_protocol button,
+    .st-key-home_tile_hospital button,
+    .st-key-home_tile_icd10 button,
+    .st-key-home_tile_devices button {
+        min-height: 158px !important;
+        border-radius: 22px !important;
+        align-items:flex-start !important;
+        justify-content:flex-end !important;
+        padding: 22px !important;
+        font-size:1.28rem !important;
+        font-weight:950 !important;
+        text-align:left !important;
+        letter-spacing:0 !important;
+        box-shadow: 0 22px 42px rgba(2,8,24,0.26) !important;
+    }
+    .st-key-home_tile_protocol button {
+        background:linear-gradient(135deg, rgba(49,116,255,.94) 0%, rgba(83,211,255,.82) 100%) !important;
+        border-color:rgba(159,205,255,.42) !important;
+    }
+    .st-key-home_tile_hospital button {
+        background:linear-gradient(135deg, rgba(0,145,124,.94) 0%, rgba(89,214,158,.82) 100%) !important;
+        border-color:rgba(147,255,219,.36) !important;
+    }
+    .st-key-home_tile_icd10 button {
+        background:linear-gradient(135deg, rgba(141,74,222,.94) 0%, rgba(248,106,163,.84) 100%) !important;
+        border-color:rgba(244,180,255,.36) !important;
+    }
+    .st-key-home_tile_devices button {
+        background:linear-gradient(135deg, rgba(234,126,39,.95) 0%, rgba(255,190,87,.82) 100%) !important;
+        border-color:rgba(255,218,151,.38) !important;
+    }
+    .st-key-home_tile_protocol button p,
+    .st-key-home_tile_hospital button p,
+    .st-key-home_tile_icd10 button p,
+    .st-key-home_tile_devices button p {
+        color:#fff !important;
+        font-size:1.28rem !important;
+        line-height:1.15 !important;
+        white-space:pre-line !important;
+    }
     [data-testid="stButton"] > button {
         position: relative;
         overflow: hidden;
@@ -1361,6 +1418,9 @@ WORKFLOW_STEPS = [
     {"page": "🗣️ Übergabe", "label": "Übergabe", "short_label": "Übergabe"},
     {"page": "📄 Protokoll", "label": "Protokoll", "short_label": "Protokoll"},
 ]
+HOME_PAGE = "🏠 Startseite"
+PROTOCOL_START_PAGE = "❤️ Vitalwerte"
+ICD10_PAGE = "🔤 ICD10 Code"
 ADMIN_SOP_FIELDS = {
     "Anaphylaxie (SOPKB0105)": [
         {"key": "ana_adult_age_threshold", "label": "Altersschwelle Erwachsene (Jahre)", "default": 12.0, "min": 0.0, "max": 21.0, "step": 1.0},
@@ -1804,6 +1864,45 @@ def render_live_summary(title, lines):
             """,
             unsafe_allow_html=True,
         )
+
+
+def render_icd10_decoder(form_key="icd_lookup_form", show_section_title=True):
+    if show_section_title:
+        st.subheader("🏥 ICD-10-GM auf der ärztlichen Einweisung")
+
+    einweisung = patient["einweisung"]
+    with st.form(form_key, clear_on_submit=False):
+        icd_input_col, icd_button_col = st.columns([4, 1])
+        with icd_input_col:
+            icd_input = st.text_input(
+                "ICD-10-GM-Code",
+                value=einweisung.get("icd_code", ""),
+                placeholder="z. B. J45.0 oder I63.9",
+                help="Untercodes können mit Punkt eingegeben werden.",
+                key=f"{form_key}_input",
+            )
+        with icd_button_col:
+            st.markdown("<div style='height:1.7rem'></div>", unsafe_allow_html=True)
+            lookup_submitted = st.form_submit_button("Übersetzen", use_container_width=True, type="primary")
+
+    if lookup_submitted:
+        with st.spinner("ICD-10-GM-Code wird nachgeschlagen …"):
+            lookup_result = lookup_icd10_diagnosis(icd_input)
+        if lookup_result.get("ok"):
+            einweisung["icd_code"] = lookup_result["code"]
+            einweisung["diagnose"] = lookup_result["diagnosis"]
+            einweisung["source_url"] = lookup_result["source_url"]
+        else:
+            st.warning(lookup_result.get("error", "ICD-Code konnte nicht aufgelöst werden."))
+
+    if einweisung.get("icd_code") and einweisung.get("diagnose"):
+        st.success(f"**{einweisung['icd_code']}** — {einweisung['diagnose']}")
+        st.caption("Bezeichnung aus der ICD-Code-Suche von gesund.bund.de; bitte mit der Einweisung abgleichen.")
+        clear_icd_col, _ = st.columns([1, 4])
+        with clear_icd_col:
+            if st.button("ICD-Eintrag löschen", key=f"{form_key}_clear", use_container_width=True):
+                patient["einweisung"] = {}
+                st.rerun()
 
 
 def render_vital_alerts(vitalwerte):
@@ -2318,7 +2417,7 @@ def amls_candidate_conflicts(candidate_name, patient_data):
 
 # Centered navigation in main area
 if 'seite' not in st.session_state:
-    st.session_state['seite'] = "❤️ Vitalwerte"
+    st.session_state['seite'] = HOME_PAGE
 
 # Widget-Werte sichern, bevor ein Navigationsbutton die aktuelle Seite verlässt.
 # Das ist besonders bei Text- und Zahlenfeldern wichtig, deren letzter Wert erst
@@ -2338,17 +2437,22 @@ if 'visited_pages' not in st.session_state:
 
 st.session_state['visited_pages'].add(st.session_state['seite'])
 
-topbar_left, topbar_hospital, topbar_guide, topbar_right = st.columns([10, 2, 2, 2])
+topbar_left, topbar_home, topbar_hospital, topbar_guide, topbar_right = st.columns([8, 2, 2, 2, 2])
 with topbar_left:
     new_case_col, _ = st.columns([2.4, 9.6])
     with new_case_col:
         if st.button("＋ Neuer Einsatz", key="new_case_btn", use_container_width=True, type="secondary"):
             st.session_state["confirm_new_case"] = True
+with topbar_home:
+    st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
+    if st.button("Start", key="top_home_btn", use_container_width=True, type="secondary"):
+        st.session_state["seite"] = HOME_PAGE
+        st.rerun()
 with topbar_hospital:
     st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
     if st.button("🏥 Klinik", key="top_hospital_finder_btn", use_container_width=True, type="secondary"):
         st.session_state["hospital_finder_return_page"] = (
-            st.session_state["seite"] if workflow_step_index(st.session_state["seite"]) is not None else "❤️ Vitalwerte"
+            st.session_state["seite"] if workflow_step_index(st.session_state["seite"]) is not None else HOME_PAGE
         )
         st.session_state["seite"] = "🏥 Zielklinik"
         st.rerun()
@@ -2356,7 +2460,7 @@ with topbar_guide:
     st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
     if st.button("🧰 Geräte", key="top_device_guide_btn", use_container_width=True, type="secondary"):
         st.session_state["device_guide_return_page"] = (
-            st.session_state["seite"] if workflow_step_index(st.session_state["seite"]) is not None else "❤️ Vitalwerte"
+            st.session_state["seite"] if workflow_step_index(st.session_state["seite"]) is not None else HOME_PAGE
         )
         st.session_state["seite"] = "🧰 Geräte-Guide"
         st.rerun()
@@ -2438,17 +2542,71 @@ if current_workflow_index is not None:
 seite = st.session_state['seite']
 
 # --------------------------------------------------
-# VITALWERTE
+# STARTSEITE
 # --------------------------------------------------
 
-if seite == "🏥 Zielklinik":
+if seite == HOME_PAGE:
+    st.markdown(
+        """
+        <div class="home-shell">
+            <div class="home-title">Rettungsdienst-Protokoll</div>
+            <div class="home-subtitle">Zentrale Arbeitsoberfläche für Einsatzdokumentation, Zielklinik, ICD10 und Geräte.</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    tile_protocol, tile_hospital = st.columns(2, gap="large")
+    with tile_protocol:
+        if st.button("📄 Protokoll\nEinsatz dokumentieren", key="home_tile_protocol", use_container_width=True):
+            st.session_state["seite"] = PROTOCOL_START_PAGE
+            st.rerun()
+    with tile_hospital:
+        if st.button("🏥 Krankenhaus Finder\nGeeignete Zielklinik", key="home_tile_hospital", use_container_width=True):
+            st.session_state["hospital_finder_return_page"] = HOME_PAGE
+            st.session_state["seite"] = "🏥 Zielklinik"
+            st.rerun()
+
+    tile_icd10, tile_devices = st.columns(2, gap="large")
+    with tile_icd10:
+        if st.button("🔤 ICD10 Code\nCode dekodieren", key="home_tile_icd10", use_container_width=True):
+            st.session_state["seite"] = ICD10_PAGE
+            st.rerun()
+    with tile_devices:
+        if st.button("🧰 Geräte\nKurzreferenzen", key="home_tile_devices", use_container_width=True):
+            st.session_state["device_guide_return_page"] = HOME_PAGE
+            st.session_state["seite"] = "🧰 Geräte-Guide"
+            st.rerun()
+
+elif seite == ICD10_PAGE:
+    icd_head, icd_back = st.columns([5, 1])
+    with icd_head:
+        st.header("🔤 ICD10 Code")
+        st.caption("ICD-10-GM-Code dekodieren und bei Bedarf direkt im Einsatzprotokoll übernehmen")
+    with icd_back:
+        if st.button("← Start", key="icd10_back_home", use_container_width=True):
+            st.session_state["seite"] = HOME_PAGE
+            st.rerun()
+
+    st.warning(
+        "Die ICD10-Suche ist eine Dokumentationshilfe. Diagnose, Einweisung und lokale Vorgaben bitte immer fachlich prüfen."
+    )
+    render_icd10_decoder("icd10_page_lookup_form", show_section_title=False)
+
+    action_col, _ = st.columns([1.5, 4])
+    with action_col:
+        if st.button("Zum Protokoll", key="icd10_to_protocol", use_container_width=True, type="primary"):
+            st.session_state["seite"] = PROTOCOL_START_PAGE
+            st.rerun()
+
+elif seite == "🏥 Zielklinik":
     finder_head, finder_back = st.columns([5, 1])
     with finder_head:
         st.header("🏥 Zielklinik-Finder")
         st.caption("Geeignete Kliniken im Kreis Borken und im niederländischen Grenzgebiet vorsortieren")
     with finder_back:
         if st.button("← Zum Einsatz", key="hospital_finder_back", use_container_width=True):
-            st.session_state["seite"] = st.session_state.get("hospital_finder_return_page", "❤️ Vitalwerte")
+            st.session_state["seite"] = st.session_state.get("hospital_finder_return_page", HOME_PAGE)
             st.rerun()
 
     st.warning(
@@ -2542,7 +2700,7 @@ elif seite == "🧰 Geräte-Guide":
         st.caption("Aufgabenbezogene Kurzreferenzen für häufig eingesetzte Geräte")
     with guide_head_right:
         if st.button("← Zum Einsatz", key="device_guide_back", use_container_width=True):
-            st.session_state["seite"] = st.session_state.get("device_guide_return_page", "❤️ Vitalwerte")
+            st.session_state["seite"] = st.session_state.get("device_guide_return_page", HOME_PAGE)
             st.rerun()
 
     st.warning(
@@ -3390,39 +3548,7 @@ elif seite == "🔎 Verdacht":
     st.header("🔎 Verdacht & Handlungshilfe")
     st.warning("Hinweis: Dies sind unterstützende Verdachtshinweise und keine ärztliche Diagnose.")
 
-    st.subheader("🏥 ICD-10-GM auf der ärztlichen Einweisung")
-    einweisung = patient["einweisung"]
-    with st.form("icd_lookup_form", clear_on_submit=False):
-        icd_input_col, icd_button_col = st.columns([4, 1])
-        with icd_input_col:
-            icd_input = st.text_input(
-                "ICD-10-GM-Code",
-                value=einweisung.get("icd_code", ""),
-                placeholder="z. B. J45.0 oder I63.9",
-                help="Untercodes können mit Punkt eingegeben werden.",
-            )
-        with icd_button_col:
-            st.markdown("<div style='height:1.7rem'></div>", unsafe_allow_html=True)
-            lookup_submitted = st.form_submit_button("Übersetzen", use_container_width=True, type="primary")
-
-    if lookup_submitted:
-        with st.spinner("ICD-10-GM-Code wird nachgeschlagen …"):
-            lookup_result = lookup_icd10_diagnosis(icd_input)
-        if lookup_result.get("ok"):
-            einweisung["icd_code"] = lookup_result["code"]
-            einweisung["diagnose"] = lookup_result["diagnosis"]
-            einweisung["source_url"] = lookup_result["source_url"]
-        else:
-            st.warning(lookup_result.get("error", "ICD-Code konnte nicht aufgelöst werden."))
-
-    if einweisung.get("icd_code") and einweisung.get("diagnose"):
-        st.success(f"**{einweisung['icd_code']}** — {einweisung['diagnose']}")
-        st.caption("Bezeichnung aus der ICD-Code-Suche von gesund.bund.de; bitte mit der Einweisung abgleichen.")
-        clear_icd_col, _ = st.columns([1, 4])
-        with clear_icd_col:
-            if st.button("ICD-Eintrag löschen", key="clear_icd_entry", use_container_width=True):
-                patient["einweisung"] = {}
-                st.rerun()
+    render_icd10_decoder("icd_lookup_form")
 
     st.divider()
 
