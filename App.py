@@ -1283,6 +1283,69 @@ st.markdown(
             0%, 8%, 18%, 100% { opacity:.10; transform:scale(.96); filter:blur(1px); }
             4%, 14% { opacity:.72; transform:scale(1.04); filter:blur(0); }
         }
+        @keyframes nanaBeaconSweep {
+            0% { background-position: -220% center; }
+            100% { background-position: 220% center; }
+        }
+        @keyframes nanaNeonPulse {
+            0%, 100% {
+                filter: drop-shadow(-8px 0 18px rgba(69,169,255,.52)) drop-shadow(8px 0 18px rgba(255,65,95,.38));
+                transform: translateY(0);
+            }
+            50% {
+                filter: drop-shadow(-12px 0 26px rgba(77,190,255,.82)) drop-shadow(12px 0 26px rgba(255,58,85,.68));
+                transform: translateY(-1px);
+            }
+        }
+        .nana-logo {
+            position:relative;
+            display:inline-block;
+            font-size:clamp(3.2rem, 8vw, 6.8rem);
+            line-height:.86;
+            font-weight:950;
+            letter-spacing:.02em;
+            color:#f8fbff;
+            text-transform:uppercase;
+            text-shadow:
+                -3px 0 0 rgba(61,177,255,.92),
+                3px 0 0 rgba(255,57,85,.82),
+                0 0 18px rgba(102,204,255,.72),
+                0 0 42px rgba(255,42,82,.32);
+            animation:nanaNeonPulse 2.4s ease-in-out infinite;
+        }
+        .nana-logo::after {
+            content:attr(data-text);
+            position:absolute;
+            inset:0;
+            color:transparent;
+            background:linear-gradient(100deg, transparent 0%, transparent 34%, #38d5ff 43%, #ffffff 50%, #ff335d 58%, transparent 68%, transparent 100%);
+            background-size:220% 100%;
+            -webkit-background-clip:text;
+            background-clip:text;
+            mix-blend-mode:screen;
+            animation:nanaBeaconSweep 2.1s linear infinite;
+            pointer-events:none;
+        }
+        .nana-logo::before {
+            content:"";
+            position:absolute;
+            left:-5%;
+            right:-5%;
+            bottom:-12px;
+            height:5px;
+            border-radius:999px;
+            background:linear-gradient(90deg, #2bbcff 0%, #ffffff 50%, #ff315b 100%);
+            box-shadow:0 0 18px rgba(52,183,255,.7), 0 0 24px rgba(255,50,91,.48);
+            background-size:180% 100%;
+            animation:nanaBeaconSweep 1.8s linear infinite reverse;
+        }
+        .nana-subtitle {
+            margin-top:22px;
+            color:rgba(231,241,255,0.76);
+            font-size:1rem;
+            font-weight:750;
+            letter-spacing:.01em;
+        }
         .ambulance-beacon { animation:ambulanceBeacon 2.4s ease-in-out infinite; transform-origin:center; }
         .ambulance-beacon-glow {
             position:absolute; left:25%; top:15%; width:96px; height:42px; z-index:2;
@@ -1308,7 +1371,7 @@ st.markdown(
         position:relative;
         overflow:hidden;
         margin: 10px 0 22px;
-        padding: 30px;
+        padding: 36px 34px 34px;
         border-radius: 30px;
         border: 1px solid rgba(255,255,255,0.14);
         background:
@@ -1317,10 +1380,10 @@ st.markdown(
             linear-gradient(135deg, rgba(18,32,58,0.92) 0%, rgba(10,22,40,0.88) 100%);
         box-shadow: 0 28px 60px rgba(2,8,24,0.32);
     ">
-        <div style="font-size:2.85rem; line-height:1; font-weight:950; letter-spacing:0; color:#fbfdff; text-shadow:0 12px 32px rgba(2,8,24,0.32);">
+        <div class="nana-logo" data-text="NANA">
             NANA
         </div>
-        <div style="margin-top:10px; color:rgba(231,241,255,0.72); font-size:0.98rem; font-weight:700;">
+        <div class="nana-subtitle">
             Notfall-Aufzeichnungs- und Nachbearbeitungs-Assistent
         </div>
     </div>
