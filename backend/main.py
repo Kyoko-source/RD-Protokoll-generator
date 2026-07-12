@@ -1,4 +1,5 @@
 import secrets
+import json
 from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
@@ -8,6 +9,7 @@ from fpdf import FPDF
 from pydantic import BaseModel
 
 from backend.security import expires_at, is_expired, new_token, password_hash, verify_password
+from interfaces import build_fhir_bundle, build_nana_case_export, parse_corpuls_import, parse_dispatch_import
 from storage import (
     anonymize_finished_case,
     delete_finished_case,
@@ -70,6 +72,11 @@ class ProtocolRequest(BaseModel):
 class PrintAuditRequest(BaseModel):
     case_id: str | None = None
     source: str = "draft"
+
+
+class InterfaceImportRequest(BaseModel):
+    source: str = "dispatch"
+    payload: str
 
 
 class EmployeeCreateRequest(BaseModel):
@@ -296,6 +303,39 @@ def pdf_response(filename, pdf_bytes):
         media_type="application/pdf",
         headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
     )
+
+
+def json_attachment(filename, payload):
+    return Response(
+        content=json.dumps(payload, ensure_ascii=False, indent=2),
+        media_type="application/json",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
+
+
+def load_employee_patient_draft(employee):
+    store = load_case_draft_store()
+    draft = store.get("drafts", {}).get(employee["id"], {})
+    patient = default_patient_case()
+    if isinstance(draft.get("patient"), dict):
+        patient.update(draft["patient"])
+    return patient
+
+
+def save_employee_patient_draft(employee, patient):
+    store = load_case_draft_store()
+    store.setdefault("drafts", {})[employee["id"]] = {
+        "updated_at": datetime.now().isoformat(timespec="seconds"),
+        "patient": patient,
+        "seite": "Schnittstellen",
+        "visited_pages": ["Schnittstellen"],
+        "workflow_manual_completion": {},
+        "protocol_generated": False,
+        "generated_protocol_text": "",
+        "xabcde_selected": "A",
+    }
+    save_case_draft_store(store)
+    return store["drafts"][employee["id"]]["updated_at"]
 
 
 def audit(action, employee=None, entity_type="", entity_id="", details=None):
@@ -528,20 +568,9 @@ def get_draft(employee=Depends(current_employee)):
 
 @app.put("/api/draft")
 def save_draft(payload: DraftRequest, employee=Depends(current_employee)):
-    store = load_case_draft_store()
-    store.setdefault("drafts", {})[employee["id"]] = {
-        "updated_at": datetime.now().isoformat(timespec="seconds"),
-        "patient": payload.patient,
-        "seite": "❤️ Vitalwerte",
-        "visited_pages": ["❤️ Vitalwerte"],
-        "workflow_manual_completion": {},
-        "protocol_generated": False,
-        "generated_protocol_text": "",
-        "xabcde_selected": "A",
-    }
-    save_case_draft_store(store)
+    updated_at = save_employee_patient_draft(employee, payload.patient)
     audit("api_case_draft_saved", employee=employee, entity_type="case_draft")
-    return {"status": "saved", "updated_at": store["drafts"][employee["id"]]["updated_at"]}
+    return {"status": "saved", "updated_at": updated_at}
 
 
 @app.post("/api/protocol/preview")
@@ -651,6 +680,87 @@ def print_audit(payload: PrintAuditRequest, employee=Depends(current_employee)):
 @app.get("/api/admin/audit")
 def audit_log(employee=Depends(require_admin)):
     return {"events": list_audit_events(limit=100)}
+
+
+@app.post("/api/admin/interfaces/import")
+def admin_interface_import(payload: InterfaceImportRequest, employee=Depends(require_admin)):
+    source = payload.source.lower().strip()
+    patient = load_employee_patient_draft(employee)
+    if source == "dispatch":
+        imported = parse_dispatch_import(payload.payload)
+        patient["einsatz"] = {**(patient.get("einsatz") or {}), **imported}
+    elif source == "corpuls":
+        imported = parse_corpuls_import(payload.payload)
+        patient["vitalwerte"] = {**(patient.get("vitalwerte") or {}), **imported}
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unbekannte Schnittstelle.")
+
+    updated_at = save_employee_patient_draft(employee, patient)
+    audit(
+        "api_interface_imported",
+        employee=employee,
+        entity_type="case_draft",
+        details={"source": source, "fields": sorted(imported.keys())},
+    )
+    return {"status": "imported", "source": source, "imported": imported, "patient": patient, "updated_at": updated_at}
+
+
+@app.get("/api/admin/interfaces/export/draft/{export_format}")
+def admin_export_draft(export_format: str, employee=Depends(require_admin)):
+    patient = load_employee_patient_draft(employee)
+    protocol_text = generate_protocol_text(patient)
+    metadata = {
+        "case_id": "draft",
+        "employee": employee.get("name", ""),
+        "exported_by": employee.get("id", ""),
+        "source": "admin_draft",
+    }
+    if export_format == "nana":
+        payload = build_nana_case_export(patient, protocol_text, metadata)
+    elif export_format == "fhir":
+        payload = build_fhir_bundle(patient, protocol_text, metadata)
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exportformat nicht verfügbar.")
+
+    audit(
+        "api_interface_exported",
+        employee=employee,
+        entity_type="case_draft",
+        details={"format": export_format, "source": "draft"},
+    )
+    return json_attachment(f"nana-draft-{export_format}.json", payload)
+
+
+@app.get("/api/admin/interfaces/export/cases/{case_id}/{export_format}")
+def admin_export_case(case_id: str, export_format: str, employee=Depends(require_admin)):
+    item = get_finished_case(case_id)
+    if not item or item.get("status") == "deleted":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Einsatz nicht gefunden.")
+    if item.get("status") == "anonymized":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Anonymisierte Einsätze sind für Schnittstellenexport gesperrt.")
+
+    metadata = {
+        "case_id": case_id,
+        "employee": item.get("employee_name", ""),
+        "completed_at": item.get("completed_at", ""),
+        "exported_by": employee.get("id", ""),
+        "source": "finished_case",
+    }
+    if export_format == "nana":
+        payload = build_nana_case_export(item.get("patient", {}), item.get("protocol_text", ""), metadata)
+    elif export_format == "fhir":
+        payload = build_fhir_bundle(item.get("patient", {}), item.get("protocol_text", ""), metadata)
+    else:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Exportformat nicht verfügbar.")
+
+    audit(
+        "api_interface_exported",
+        employee=employee,
+        entity_type="finished_case",
+        entity_id=case_id,
+        details={"format": export_format, "source": "case"},
+    )
+    return json_attachment(f"nana-case-{case_id}-{export_format}.json", payload)
 
 
 @app.get("/api/admin/privacy")

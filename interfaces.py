@@ -1,6 +1,8 @@
 import base64
+import csv
 import json
 from datetime import datetime
+from io import StringIO
 
 
 def _clean(value):
@@ -184,7 +186,15 @@ def build_fhir_bundle(patient, protocol_text="", metadata=None):
 
 
 def parse_dispatch_import(raw_text):
-    data = json.loads(raw_text)
+    raw_text = str(raw_text or "").strip()
+    if not raw_text:
+        raise ValueError("Die Importdatei ist leer.")
+
+    try:
+        data = json.loads(raw_text)
+    except json.JSONDecodeError:
+        data = _parse_dispatch_csv(raw_text) or _parse_dispatch_text(raw_text)
+
     if not isinstance(data, dict):
         raise ValueError("Die Importdatei muss ein JSON-Objekt enthalten.")
 
@@ -209,4 +219,73 @@ def parse_dispatch_import(raw_text):
                 imported[target] = value
                 break
 
+    return imported
+
+
+def _parse_dispatch_csv(raw_text):
+    first_line = raw_text.splitlines()[0] if raw_text.splitlines() else ""
+    if "," not in first_line and ";" not in first_line:
+        return None
+    try:
+        rows = list(csv.DictReader(StringIO(raw_text), delimiter=";"))
+        if not rows or not rows[0]:
+            rows = list(csv.DictReader(StringIO(raw_text)))
+        if rows and rows[0]:
+            return rows[0]
+    except csv.Error:
+        return None
+    return None
+
+
+def _parse_dispatch_text(raw_text):
+    data = {}
+    labels = {
+        "einsatznummer": ["einsatznummer", "nummer", "einsatz"],
+        "stichwort": ["stichwort", "meldebild", "keyword"],
+        "alarmzeit": ["alarmzeit", "alarm"],
+        "adresse": ["adresse", "einsatzort", "anschrift"],
+        "ort": ["ort", "stadt"],
+        "koordinaten": ["koordinaten", "gps", "geo"],
+        "fahrzeug": ["fahrzeug", "mittel", "unit"],
+        "leitstelle": ["leitstelle", "lst"],
+        "bemerkung": ["bemerkung", "hinweis", "notiz"],
+    }
+    for line in raw_text.splitlines():
+        if ":" not in line:
+            continue
+        label, value = line.split(":", 1)
+        label = label.strip().lower()
+        value = value.strip()
+        if not value:
+            continue
+        for target, names in labels.items():
+            if label in names:
+                data[target] = value
+                break
+    return data if data else None
+
+
+def parse_corpuls_import(raw_text):
+    data = json.loads(raw_text)
+    if not isinstance(data, dict):
+        raise ValueError("Corpuls-Import erwartet ein JSON-Objekt.")
+
+    vital = data.get("vitalwerte") if isinstance(data.get("vitalwerte"), dict) else data
+    aliases = {
+        "puls": ["puls", "heartRate", "hr"],
+        "spo2": ["spo2", "oxygenSaturation", "spO2"],
+        "af": ["af", "respiratoryRate", "rr"],
+        "rr_sys": ["rr_sys", "systolic", "nibpSys"],
+        "rr_dia": ["rr_dia", "diastolic", "nibpDia"],
+        "temperatur": ["temperatur", "temperature", "temp"],
+        "bz": ["bz", "glucose"],
+        "gcs": ["gcs"],
+    }
+    imported = {}
+    for target, keys in aliases.items():
+        for key in keys:
+            value = vital.get(key)
+            if _clean(value) is not None:
+                imported[target] = value
+                break
     return imported

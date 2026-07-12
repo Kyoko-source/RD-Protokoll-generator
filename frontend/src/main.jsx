@@ -290,6 +290,18 @@ function Dashboard({ session, onLogout }) {
     return <ProtocolView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} />;
   }
 
+  if (view === 'interfaces') {
+    return (
+      <InterfacesView
+        session={session}
+        employee={employee}
+        onBack={() => setView('home')}
+        onOpenProtocol={() => setView('protocol')}
+        onLogout={logout}
+      />
+    );
+  }
+
   if (view === 'admin') {
     return <AdminView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} />;
   }
@@ -336,6 +348,7 @@ function Dashboard({ session, onLogout }) {
               key={tile.id}
               onClick={() => {
                 if (tile.id === 'protocol') setView('protocol');
+                if (tile.id === 'interfaces') setView('interfaces');
                 if (tile.id === 'admin') setView('admin');
               }}
             >
@@ -372,6 +385,179 @@ function Dashboard({ session, onLogout }) {
               </article>
             ))
           )}
+        </div>
+      </section>
+    </main>
+  );
+}
+
+function InterfacesView({ session, employee, onBack, onOpenProtocol, onLogout }) {
+  const [cases, setCases] = useState([]);
+  const [source, setSource] = useState('dispatch');
+  const [payload, setPayload] = useState('');
+  const [importResult, setImportResult] = useState(null);
+  const [statusText, setStatusText] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api('/api/cases', {}, session.token)
+      .then((data) => setCases(data.cases || []))
+      .catch((err) => setError(err.message));
+  }, [session.token]);
+
+  async function importPayload() {
+    setError('');
+    setStatusText('');
+    setImportResult(null);
+    try {
+      const result = await api('/api/admin/interfaces/import', {
+        method: 'POST',
+        body: JSON.stringify({ source, payload })
+      }, session.token);
+      setImportResult(result);
+      setStatusText(`Import übernommen: ${Object.keys(result.imported || {}).length} Felder.`);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function exportDraft(format) {
+    setError('');
+    setStatusText('');
+    try {
+      const file = await fileRequest(`/api/admin/interfaces/export/draft/${format}`, {}, session.token);
+      downloadBlob(file.blob, file.filename);
+      setStatusText(`Entwurf als ${format.toUpperCase()} exportiert.`);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function exportCase(caseId, format) {
+    setError('');
+    setStatusText('');
+    try {
+      const file = await fileRequest(`/api/admin/interfaces/export/cases/${caseId}/${format}`, {}, session.token);
+      downloadBlob(file.blob, file.filename);
+      setStatusText(`Einsatz als ${format.toUpperCase()} exportiert.`);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <div>
+          <div className="app-name">NANA</div>
+          <div className="app-subtitle">Schnittstellen · Import und Export</div>
+        </div>
+        <div className="user-area">
+          <span>{employee?.name}</span>
+          <button className="icon-button" onClick={onLogout} aria-label="Abmelden">
+            <LogOut size={18} />
+          </button>
+        </div>
+      </header>
+
+      <section className="protocol-toolbar">
+        <button type="button" onClick={onBack}>Zurück zum Hauptmenü</button>
+        <button type="button" onClick={onOpenProtocol}>Zum Protokoll</button>
+      </section>
+
+      {error && <div className="error-box">{error}</div>}
+      {statusText && <div className="success-box">{statusText}</div>}
+
+      <section className="interface-grid">
+        <article className="work-panel">
+          <div className="section-head">
+            <h2>Import</h2>
+            <span>Admin-only</span>
+          </div>
+          <div className="interface-import">
+            <label>
+              Quelle
+              <select value={source} onChange={(event) => setSource(event.target.value)}>
+                <option value="dispatch">Leitstelle JSON/CSV/Text</option>
+                <option value="corpuls">Corpuls/Monitor JSON</option>
+              </select>
+            </label>
+            <label>
+              Importdaten
+              <textarea
+                value={payload}
+                onChange={(event) => setPayload(event.target.value)}
+                placeholder={'einsatznummer: 12345\nstichwort: Brustschmerz\nadresse: Musterstrasse 1\nort: Borken'}
+                rows={12}
+              />
+            </label>
+            <button type="button" onClick={importPayload}>Import ins Protokoll übernehmen</button>
+          </div>
+          {importResult && (
+            <div className="import-result">
+              {Object.entries(importResult.imported || {}).map(([key, value]) => (
+                <div key={key}>
+                  <strong>{key}</strong>
+                  <span>{String(value)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article className="work-panel">
+          <div className="section-head">
+            <h2>Entwurf exportieren</h2>
+            <span>NANA / FHIR</span>
+          </div>
+          <div className="export-actions">
+            <button type="button" onClick={() => exportDraft('nana')}>
+              <Download size={16} /> NANA JSON
+            </button>
+            <button type="button" onClick={() => exportDraft('fhir')}>
+              <Download size={16} /> FHIR Bundle
+            </button>
+          </div>
+          <div className="privacy-list">
+            <div>
+              <strong>Leitstellen-Import</strong>
+              <span>JSON, CSV oder Text mit Feldnamen wird in Einsatzdaten übernommen.</span>
+            </div>
+            <div>
+              <strong>Corpuls-Vorbereitung</strong>
+              <span>JSON-Vitaldaten werden in den Vitalwerte-Abschnitt übernommen.</span>
+            </div>
+            <div>
+              <strong>Audit</strong>
+              <span>Jeder Import und Export wird im Audit-Log gespeichert.</span>
+            </div>
+          </div>
+        </article>
+      </section>
+
+      <section className="work-panel">
+        <div className="section-head">
+          <h2>Archiv exportieren</h2>
+          <span>{cases.length} Einsätze</span>
+        </div>
+        <div className="case-list">
+          {cases.length === 0 ? (
+            <p className="muted">Keine exportierbaren Einsätze vorhanden.</p>
+          ) : cases.slice(0, 12).map((item) => (
+            <article className="case-row interface-case-row" key={item.id}>
+              <div>
+                <strong>{item.summary}</strong>
+                <span>{item.completed_at} · {item.employee_name || 'anonym'}</span>
+              </div>
+              <span className={`status-pill status-${item.status}`}>{item.status}</span>
+              <button type="button" onClick={() => exportCase(item.id, 'nana')}>
+                <Download size={16} /> NANA
+              </button>
+              <button type="button" onClick={() => exportCase(item.id, 'fhir')}>
+                <Download size={16} /> FHIR
+              </button>
+            </article>
+          ))}
         </div>
       </section>
     </main>
