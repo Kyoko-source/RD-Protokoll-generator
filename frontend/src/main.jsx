@@ -21,7 +21,15 @@ import {
 } from 'lucide-react';
 import './styles.css';
 
-const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8000';
+function resolveApiBase() {
+  const configured = import.meta.env.VITE_API_BASE;
+  if (configured !== undefined) return configured;
+  if (window.location.port === '8000') return '';
+  const host = window.location.hostname || '127.0.0.1';
+  return `${window.location.protocol}//${host}:8000`;
+}
+
+const API_BASE = resolveApiBase();
 const SESSION_TIMEOUT_MS = 20 * 60 * 1000;
 
 function localDraftKey(employeeId) {
@@ -54,6 +62,97 @@ function clearLocalDraft(employeeId) {
   }
 }
 
+function hasValue(value) {
+  return ![undefined, null, '', 'Keine Angabe'].includes(value) && !(Array.isArray(value) && value.length === 0);
+}
+
+function addProtocolBlock(title, rows) {
+  const documented = rows.filter(([, value]) => hasValue(value));
+  if (documented.length === 0) return '';
+  const lines = [`${title}`, '=================================================='];
+  documented.forEach(([label, value]) => lines.push(`${label}: ${value}`));
+  return `${lines.join('\n')}\n\n`;
+}
+
+function renderListBlock(title, items, formatter) {
+  const lines = (Array.isArray(items) ? items : []).map(formatter).filter(hasValue);
+  if (lines.length === 0) return '';
+  return `${title}\n==================================================\n${lines.map((line) => `- ${line}`).join('\n')}\n\n`;
+}
+
+function generateLocalProtocolText(patient) {
+  const vital = patient.vitalwerte || {};
+  const x = patient.xabcde || {};
+  const s = patient.samplers || {};
+  const o = patient.opqrst || {};
+  const amls = patient.amls || {};
+  const measures = patient.massnahmen || {};
+  const handover = patient.uebergabe || {};
+  let text = 'NANA RETTUNGSDIENST-PROTOKOLL\n';
+  text += '==================================================\n';
+  text += `Lokal erzeugt am ${new Date().toLocaleString('de-DE')}\n`;
+  text += 'Dokumentationsentwurf: vor Weitergabe fachlich pruefen.\n\n';
+  text += addProtocolBlock('VITALWERTE & DEMOGRAPHIE', [
+    ['Alter', vital.alter],
+    ['Geschlecht', vital.geschlecht],
+    ['RR', hasValue(vital.rr_sys) || hasValue(vital.rr_dia) ? `${vital.rr_sys || ''}/${vital.rr_dia || ''} mmHg` : ''],
+    ['Puls', vital.puls],
+    ['SpO2', vital.spo2],
+    ['Atemfrequenz', vital.af],
+    ['BZ', vital.bz],
+    ['Temperatur', vital.temperatur],
+    ['GCS', vital.gcs],
+    ['Kurzbericht', vital.kurzbericht],
+  ]);
+  text += addProtocolBlock('xABCDE', [
+    ['X Blutung', x.blutung],
+    ['A Atemweg', x.atemweg],
+    ['B Atmung', x.atmung],
+    ['C Hautzeichen', x.haut],
+    ['D AVPU', x.avpu],
+    ['E Bodycheck', x.bodycheck],
+    ['Auffaelligkeiten', x.bodycheck_text],
+  ]);
+  text += addProtocolBlock('SAMPLERS', [
+    ['Symptome', s.symptome],
+    ['Allergien', s.allergien],
+    ['Medikamente', s.medikamente],
+    ['Vorgeschichte', s.vorgeschichte],
+    ['Letzte Aufnahme', s.letzte_aufnahme],
+    ['Ereignis', s.ereignis],
+    ['Risikofaktoren', s.risikofaktoren],
+    ['Sonstiges', s.sonstiges],
+  ]);
+  text += addProtocolBlock('OPQRST', [
+    ['Onset', o.onset],
+    ['Provocation/Palliation', o.provocation],
+    ['Quality', o.quality],
+    ['Region/Radiation', o.region],
+    ['Severity/NRS', o.severity],
+    ['Time/Verlauf', o.time],
+  ]);
+  text += addProtocolBlock('AMLS / VERDACHTSDIAGNOSTIK', [
+    ['Leitsymptom', amls.leitsymptom],
+    ['Arbeitsdiagnose', amls.arbeitsdiagnose],
+    ['Notizen/Begruendung', amls.notizen],
+  ]);
+  text += renderListBlock('Differenzialdiagnosen / Kandidaten', amls.custom_candidates, (item) => {
+    const candidate = typeof item === 'string' ? { diagnose: item } : item || {};
+    return [candidate.diagnose || candidate.name, candidate.hinweis || candidate.rationale].filter(hasValue).join(': ');
+  });
+  text += renderListBlock('AMLS-Ausschluesse / zurueckgestellt', amls.excluded, (item) => {
+    const excluded = typeof item === 'string' ? { diagnose: item } : item || {};
+    return [excluded.diagnose || excluded.name, excluded.begruendung || excluded.rationale].filter(hasValue).join(': ');
+  });
+  text += renderListBlock('MASSNAHMEN', measures.timeline, (item) => `${item.zeit || ''} - ${item.massnahme || ''}`.trim());
+  text += renderListBlock('MEDIKATION', measures.medikation, (item) => `${item.zeit || ''} - ${item.medikament || ''} ${item.dosis || ''} ${item.weg || ''}`.trim());
+  text += addProtocolBlock('UEBERGABE', [
+    ['Ziel', handover.ziel],
+    ['Text', handover.text],
+  ]);
+  return text.trim();
+}
+
 function api(path, options = {}, token = '') {
   const headers = {
     'Content-Type': 'application/json',
@@ -66,6 +165,9 @@ function api(path, options = {}, token = '') {
     .then(async (response) => {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (response.status === 404 && data.detail === 'Not Found') {
+          throw new Error(`API-Endpunkt nicht gefunden: ${API_BASE || window.location.origin}${path}. Bitte NANA neu starten, damit Backend und App dieselbe Version nutzen.`);
+        }
         throw new Error(data.detail || 'Anfrage fehlgeschlagen');
       }
       return data;
@@ -86,6 +188,9 @@ async function fileRequest(path, options = {}, token = '') {
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
+    if (response.status === 404 && data.detail === 'Not Found') {
+      throw new Error(`API-Endpunkt nicht gefunden: ${API_BASE || window.location.origin}${path}. Bitte NANA neu starten.`);
+    }
     throw new Error(data.detail || 'Datei konnte nicht erstellt werden');
   }
   const disposition = response.headers.get('Content-Disposition') || '';
@@ -1278,6 +1383,10 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const [forceFinish, setForceFinish] = useState(false);
   const [localDraft, setLocalDraft] = useState(() => loadLocalDraft(employee?.id));
   const [draftReady, setDraftReady] = useState(false);
+  const [suspicionResult, setSuspicionResult] = useState(null);
+  const [amlsSuggestions, setAmlsSuggestions] = useState([]);
+  const [calculator, setCalculator] = useState({ sop: 'Anaphylaxie (SOPKB0105)', age: '30', weight: '70', pregnant: 'Nein', bz: '55', rr_sys: '160', nrs: '7' });
+  const [calculatorResult, setCalculatorResult] = useState(null);
   const vitalwerte = patient.vitalwerte || {};
   const xabcde = patient.xabcde || {};
   const samplers = patient.samplers || {};
@@ -1529,6 +1638,91 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     });
   }
 
+  async function runSuspicionAssessment() {
+    setError('');
+    setStatusText('');
+    try {
+      const result = await api('/api/protocol/suspicion', {
+        method: 'POST',
+        body: JSON.stringify({ patient })
+      }, session.token);
+      setSuspicionResult(result);
+      setStatusText('Verdacht wurde aus den dokumentierten Daten aktualisiert.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function loadAmlsSuggestions() {
+    setError('');
+    setStatusText('');
+    try {
+      const result = await api('/api/protocol/amls-candidates', {
+        method: 'POST',
+        body: JSON.stringify({ patient })
+      }, session.token);
+      setAmlsSuggestions(result.candidates || []);
+      setStatusText('AMLS-Kandidaten wurden aus den Befunden abgeleitet.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function applyAmlsSuggestion(item) {
+    const name = item?.name || '';
+    if (!name) return;
+    setPatient((current) => {
+      const currentAmls = current.amls || {};
+      const candidates = Array.isArray(currentAmls.custom_candidates) ? currentAmls.custom_candidates : [];
+      const exists = candidates.some((entry) => (typeof entry === 'string' ? entry : entry?.diagnose || entry?.name) === name);
+      return {
+        ...current,
+        amls: {
+          ...currentAmls,
+          custom_candidates: exists ? candidates : [...candidates, { diagnose: name, hinweis: item.rationale || item.category || '' }]
+        }
+      };
+    });
+    setStatusText(`${name} wurde in den AMLS-Trichter übernommen.`);
+  }
+
+  async function calculateMedication() {
+    setError('');
+    setStatusText('');
+    try {
+      const result = await api('/api/protocol/medication-calculator', {
+        method: 'POST',
+        body: JSON.stringify({
+          sop: calculator.sop,
+          age: Number(calculator.age || vitalwerte.alter || 30),
+          weight: Number(calculator.weight || 70),
+          pregnant: calculator.pregnant,
+          inputs: {
+            bz: Number(calculator.bz || 55),
+            rr_sys: Number(calculator.rr_sys || vitalwerte.rr_sys || 160),
+            nrs: Number(calculator.nrs || opqrst.severity || 7)
+          }
+        })
+      }, session.token);
+      setCalculatorResult(result);
+      setStatusText('SOP-Rechner wurde aktualisiert.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function addCalculatedMedication(text) {
+    setPatient((current) => ({
+      ...current,
+      massnahmen: {
+        ...(current.massnahmen || {}),
+        timeline: ((current.massnahmen || {}).timeline || []),
+        medikation: [...(((current.massnahmen || {}).medikation) || []), { zeit: '', medikament: text, dosis: '', weg: 'laut SOP-Rechner' }]
+      }
+    }));
+    setStatusText('Medikation wurde in das Protokoll übernommen.');
+  }
+
   async function saveDraft() {
     setError('');
     setStatusText('');
@@ -1560,7 +1754,15 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       setProtocolSection('protokoll');
       setStatusText('Protokoll wurde erzeugt.');
     } catch (err) {
-      setError(err.message);
+      const fallback = generateLocalProtocolText(patient);
+      if (fallback) {
+        setGeneratedProtocol(fallback);
+        setProtocolSection('protokoll');
+        setStatusText('Protokoll wurde lokal erzeugt. Backend bitte neu starten, damit PDF/Archiv wieder die aktuelle API nutzen.');
+        setError(err.message);
+      } else {
+        setError(err.message);
+      }
     }
   }
 
@@ -1717,10 +1919,24 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         </button>
         <button
           type="button"
+          className={protocolSection === 'verdacht' ? 'active' : ''}
+          onClick={() => setProtocolSection('verdacht')}
+        >
+          Verdacht
+        </button>
+        <button
+          type="button"
           className={protocolSection === 'amls' ? 'active' : ''}
           onClick={() => setProtocolSection('amls')}
         >
           AMLS
+        </button>
+        <button
+          type="button"
+          className={protocolSection === 'rechner' ? 'active' : ''}
+          onClick={() => setProtocolSection('rechner')}
+        >
+          Rechner
         </button>
         <button
           type="button"
@@ -2033,6 +2249,41 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         </div>
       </section>}
 
+      {protocolSection === 'verdacht' && <section className="work-panel">
+        <div className="section-head">
+          <h2>Verdacht & Handlungshilfe</h2>
+          <span>aus Vitalwerten, xABCDE, SAMPLERS und OPQRST</span>
+        </div>
+        <div className="protocol-toolbar compact-toolbar">
+          <button type="button" onClick={runSuspicionAssessment}>Verdacht aktualisieren</button>
+          <button type="button" onClick={() => setProtocolSection('amls')}>Weiter zu AMLS</button>
+        </div>
+        {suspicionResult ? (
+          <div className="support-grid">
+            <article>
+              <h3>Mögliche Verdachtsdiagnosen</h3>
+              {(suspicionResult.suspicions || []).map((item, index) => (
+                <div className="support-row" key={`suspicion-${index}`}>
+                  <strong>{index + 1}</strong>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </article>
+            <article>
+              <h3>Empfohlene nächste Schritte</h3>
+              {(suspicionResult.recommendations || []).map((item, index) => (
+                <div className="support-row" key={`recommendation-${index}`}>
+                  <strong>{index + 1}</strong>
+                  <span>{item}</span>
+                </div>
+              ))}
+            </article>
+          </div>
+        ) : (
+          <p className="muted">Noch keine Auswertung gestartet.</p>
+        )}
+      </section>}
+
       {protocolSection === 'amls' && <section className="work-panel">
         <div className="section-head">
           <h2>AMLS-Trichter</h2>
@@ -2077,8 +2328,21 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
         <div className="list-head">
           <h3>Differenzialdiagnosen</h3>
-          <button type="button" onClick={addAmlsCandidate}>Kandidat hinzufügen</button>
+          <div className="list-actions">
+            <button type="button" onClick={loadAmlsSuggestions}>Vorschläge ableiten</button>
+            <button type="button" onClick={addAmlsCandidate}>Kandidat hinzufügen</button>
+          </div>
         </div>
+        {amlsSuggestions.length > 0 && (
+          <div className="candidate-grid">
+            {amlsSuggestions.map((item) => (
+              <button type="button" key={`${item.category}-${item.name}`} onClick={() => applyAmlsSuggestion(item)}>
+                <strong>{item.name}</strong>
+                <span>{item.category} · {item.rationale}</span>
+              </button>
+            ))}
+          </div>
+        )}
         <div className="dynamic-list">
           {amlsCandidates.map((item, index) => {
             const candidate = typeof item === 'string' ? { diagnose: item, hinweis: '' } : item || {};
@@ -2131,6 +2395,91 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <button type="button" onClick={resetAmlsFunnel}><RotateCcw size={16} /> AMLS zurücksetzen</button>
           <button type="button" onClick={generateProtocol}>Protokoll mit AMLS generieren</button>
         </div>
+      </section>}
+
+      {protocolSection === 'rechner' && <section className="work-panel">
+        <div className="section-head">
+          <h2>Medikamentenrechner</h2>
+          <span>SOP-Unterstützung aus dem Streamlit-Prototyp</span>
+        </div>
+        <div className="form-grid">
+          <label>
+            SOP
+            <select value={calculator.sop} onChange={(event) => setCalculator({ ...calculator, sop: event.target.value })}>
+              {[
+                'Anaphylaxie (SOPKB0105)',
+                'Asthma/COPD Bronchialobstruktion (SOPKB0207)',
+                'Hypoglykämie',
+                'Krampfanfall',
+                'Schlaganfall',
+                'Kardiales Lungenödem',
+                'Starke Schmerzen',
+                'Hypertensiver Notfall',
+                'Nichttraumatischer Brustschmerz: ACS',
+                'Abdominelle Schmerzen / Koliken',
+                'Lungenarterienembolie'
+              ].map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>
+            Alter
+            <input value={calculator.age} onChange={(event) => setCalculator({ ...calculator, age: event.target.value })} inputMode="numeric" />
+          </label>
+          <label>
+            Gewicht kg
+            <input value={calculator.weight} onChange={(event) => setCalculator({ ...calculator, weight: event.target.value })} inputMode="decimal" />
+          </label>
+          <label>
+            Schwangerschaft
+            <select value={calculator.pregnant} onChange={(event) => setCalculator({ ...calculator, pregnant: event.target.value })}>
+              <option value="Nein">Nein</option>
+              <option value="Ja">Ja</option>
+              <option value="Unbekannt">Unbekannt</option>
+            </select>
+          </label>
+          <label>
+            BZ mg/dl
+            <input value={calculator.bz} onChange={(event) => setCalculator({ ...calculator, bz: event.target.value })} inputMode="numeric" />
+          </label>
+          <label>
+            RR syst.
+            <input value={calculator.rr_sys} onChange={(event) => setCalculator({ ...calculator, rr_sys: event.target.value })} inputMode="numeric" />
+          </label>
+          <label>
+            NRS
+            <input value={calculator.nrs} onChange={(event) => setCalculator({ ...calculator, nrs: event.target.value })} inputMode="numeric" />
+          </label>
+        </div>
+        <div className="protocol-toolbar compact-toolbar">
+          <button type="button" onClick={calculateMedication}>SOP berechnen</button>
+        </div>
+        {calculatorResult && (
+          <div className="support-grid">
+            <article>
+              <h3>Berechnete Medikation</h3>
+              {(calculatorResult.medications || []).length === 0 && <p className="muted">Keine konkrete Medikation in diesem Entscheidungszweig.</p>}
+              {(calculatorResult.medications || []).map((item, index) => (
+                <div className="support-row support-row-action" key={`calc-med-${index}`}>
+                  <strong>{index + 1}</strong>
+                  <span>{item}</span>
+                  <button type="button" onClick={() => addCalculatedMedication(item)}>Übernehmen</button>
+                </div>
+              ))}
+            </article>
+            <article>
+              <h3>Handlungshilfe</h3>
+              {(calculatorResult.actions || []).map((item, index) => (
+                <div className="support-row" key={`calc-action-${index}`}>
+                  <strong>{index + 1}</strong>
+                  <span>{item}</span>
+                </div>
+              ))}
+              {(calculatorResult.notes || []).map((item, index) => (
+                <div className="support-note" key={`calc-note-${index}`}>{item}</div>
+              ))}
+            </article>
+          </div>
+        )}
       </section>}
 
       {protocolSection === 'massnahmen' && <section className="work-panel">

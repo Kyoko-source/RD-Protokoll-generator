@@ -1,10 +1,12 @@
 import secrets
 import json
+from pathlib import Path
 from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import Response
+from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.staticfiles import StaticFiles
 from fpdf import FPDF
 from pydantic import BaseModel
 
@@ -34,6 +36,8 @@ from storage import (
 
 SESSION_MINUTES = 30
 PASSWORD_CHANGE_MINUTES = 10
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 
 sessions = {}
 password_change_tokens = {}
@@ -70,6 +74,14 @@ class DraftRequest(BaseModel):
 class ProtocolRequest(BaseModel):
     patient: dict
     force_finish: bool = False
+
+
+class MedicationCalcRequest(BaseModel):
+    sop: str = "Anaphylaxie (SOPKB0105)"
+    age: float = 30
+    weight: float = 70
+    pregnant: str = "Nein"
+    inputs: dict = {}
 
 
 class PrintAuditRequest(BaseModel):
@@ -199,6 +211,234 @@ def as_number(value):
         return float(str(value).replace(",", "."))
     except (TypeError, ValueError):
         return None
+
+
+def truthy(value):
+    return str(value or "").strip().lower() in {"ja", "true", "1", "yes", "on"}
+
+
+def build_suspicion_assessment(patient):
+    vital = patient.get("vitalwerte", {}) or {}
+    xabcde = patient.get("xabcde", {}) or {}
+    samplers = patient.get("samplers", {}) or {}
+    opqrst = patient.get("opqrst", {}) or {}
+
+    text = " ".join([
+        str(samplers.get("symptome") or ""),
+        str(samplers.get("ereignis") or ""),
+        str(opqrst.get("region") or ""),
+        str(opqrst.get("quality") or ""),
+        str(vital.get("kurzbericht") or ""),
+    ]).lower()
+    suspicions = []
+    recommendations = []
+
+    def add(suspicion, *steps):
+        if suspicion not in suspicions:
+            suspicions.append(suspicion)
+        for step in steps:
+            if step and step not in recommendations:
+                recommendations.append(step)
+
+    spo2 = as_number(vital.get("spo2"))
+    gcs = as_number(vital.get("gcs"))
+    bz = as_number(vital.get("bz"))
+    nrs = as_number(opqrst.get("severity") or opqrst.get("nrs"))
+
+    if any(term in text for term in ["atemnot", "dyspnoe", "luftnot"]) or xabcde.get("atmung") in ["Dyspnoe", "Tachypnoe", "Apnoe"] or (spo2 is not None and spo2 < 90):
+        add(
+            "Respiratorische Insuffizienz / akute Dyspnoe",
+            "Atemweg sichern und Atemarbeit engmaschig ueberwachen",
+            "Sauerstofftherapie titriert fortfuehren",
+            "Fruehe Zielklinikmeldung bei persistierender Hypoxie",
+        )
+    if any(term in text for term in ["brust", "thorax", "retrosternal", "druck"]):
+        add(
+            "Akutes Koronarsyndrom (ACS) als Differenzialdiagnose",
+            "12-Kanal-EKG und Verlaufskontrolle",
+            "Schmerz- und Kreislaufmonitoring",
+            "Zeitkritischen Transport erwaegen",
+        )
+    if xabcde.get("avpu") in ["P", "U", "Pain", "Unresponsive"] or (gcs is not None and gcs <= 8):
+        add(
+            "Schwere neurologische Beeintraechtigung",
+            "Atemwegsschutz priorisieren",
+            "Neurologischen Verlauf wiederholt dokumentieren",
+            "Zielklinik mit neurologischer Versorgung bevorzugen",
+        )
+    if any(term in text for term in ["sturz", "unfall", "trauma", "kollision"]) or xabcde.get("bodycheck") == "auffällig":
+        add(
+            "Traumatische Genese / relevante Verletzung moeglich",
+            "Vollstaendigen Bodycheck und Blutungskontrolle sichern",
+            "Immobilisationsbedarf pruefen",
+            "Traumazentrum-Indikation evaluieren",
+        )
+    if bz is not None and bz < 70:
+        add("Hypoglykaemie", "Sofortige Glukosegabe gemaess SOP", "Blutzucker nach Intervention kontrollieren")
+    elif bz is not None and bz > 250:
+        add("Hyperglykaeme Stoffwechsellage", "Hydratationsstatus und Vigilanz eng ueberwachen", "Zeitnahe klinische Abklaerung veranlassen")
+    if nrs is not None and nrs >= 7:
+        add("Akutes Schmerzsyndrom", "Analgesiekonzept dokumentieren und Wirkung nachkontrollieren", "Schmerzverlauf seriell erfassen")
+
+    if not suspicions:
+        suspicions.append("Aktuell keine klare Verdachtsdiagnose aus den verfuegbaren Angaben ableitbar")
+        recommendations.append("Datensatz vervollstaendigen und Verlauf engmaschig re-evaluieren")
+    return suspicions, recommendations
+
+
+def build_amls_candidates(patient):
+    vital = patient.get("vitalwerte", {}) or {}
+    xabcde = patient.get("xabcde", {}) or {}
+    samplers = patient.get("samplers", {}) or {}
+    opqrst = patient.get("opqrst", {}) or {}
+    amls = patient.get("amls", {}) or {}
+    text = " ".join([
+        str(samplers.get("symptome") or ""),
+        str(samplers.get("ereignis") or ""),
+        str(opqrst.get("region") or ""),
+        str(opqrst.get("quality") or ""),
+        str(vital.get("kurzbericht") or ""),
+    ]).lower()
+    candidates = []
+
+    def add(name, category, rationale):
+        if name and not any(item["name"] == name for item in candidates):
+            candidates.append({"name": name, "category": category, "rationale": rationale})
+
+    af = as_number(vital.get("af"))
+    spo2 = as_number(vital.get("spo2"))
+    pulse = as_number(vital.get("puls"))
+    rr_sys = as_number(vital.get("rr_sys"))
+    temp = as_number(vital.get("temperatur"))
+    gcs = as_number(vital.get("gcs"))
+    bz = as_number(vital.get("bz"))
+
+    if af is not None and af > 20:
+        add("Lungenarterienembolie", "Kardiopulmonal", f"Tachypnoe mit AF {af:g}/min")
+        add("Sepsis / schwere Infektion", "Infektioes", f"Tachypnoe mit AF {af:g}/min")
+        add("Schock", "Kreislauf", f"Tachypnoe mit AF {af:g}/min als Kompensationszeichen")
+    if spo2 is not None and spo2 < 95:
+        add("Respiratorische Insuffizienz", "Respiratorisch", f"SpO2 {spo2:g} %")
+        add("Pneumonie", "Infektioes", f"SpO2 {spo2:g} %")
+        add("Kardiales Lungenoedem", "Kardiopulmonal", f"SpO2 {spo2:g} %")
+    if pulse is not None and pulse > 100:
+        add("Tachyarrhythmie", "Kardial", f"Puls {pulse:g}/min")
+        add("Schmerz-/Stressreaktion", "Sonstige", f"Puls {pulse:g}/min")
+    if rr_sys is not None and rr_sys < 90:
+        add("Schock", "Kreislauf", f"Hypotonie mit RR syst. {rr_sys:g} mmHg")
+        add("Blutung / Volumenmangel", "Kreislauf", f"Hypotonie mit RR syst. {rr_sys:g} mmHg")
+    if temp is not None and temp >= 38:
+        add("Sepsis / schwere Infektion", "Infektioes", f"Fieber mit {temp:g} Grad C")
+    if gcs is not None and gcs < 15:
+        add("Intrakranielle Ursache", "Neurologisch", f"GCS {gcs:g}")
+        add("Intoxikation", "Toxikologisch", f"GCS {gcs:g}")
+    if bz is not None and bz < 70:
+        add("Hypoglykaemie", "Metabolisch", f"BZ {bz:g} mg/dL")
+    if any(term in text for term in ["brust", "thorax", "retrosternal"]):
+        add("Akutes Koronarsyndrom", "Kardial", "Thoraxbeschwerden dokumentiert")
+        add("Aortensyndrom / Aortendissektion", "Vaskulaer", "Zeitkritische Ursache bei Thoraxschmerz")
+        add("Pneumothorax", "Respiratorisch", "Thoraxschmerz kann pleuropulmonal bedingt sein")
+    if any(term in text for term in ["atemnot", "dyspnoe", "luftnot"]):
+        add("Asthma/COPD-Exazerbation", "Respiratorisch", "Dyspnoe dokumentiert")
+    if any(term in text for term in ["bauch", "abdomen", "kolik", "flanke"]):
+        add("Akutes Abdomen", "Abdominell", "Abdominelle Beschwerden dokumentiert")
+        add("Atypisches akutes Koronarsyndrom", "Kardial", "Oberbauchbeschwerden koennen kardial bedingt sein")
+
+    if len(candidates) < 4:
+        for name, category in [
+            ("Kardiale Ursache / Rhythmusstoerung", "Kardial"),
+            ("Respiratorische Ursache", "Respiratorisch"),
+            ("Neurologische Ursache", "Neurologisch"),
+            ("Metabolische Entgleisung", "Metabolisch"),
+            ("Infektion / Sepsis", "Infektioes"),
+            ("Intoxikation", "Toxikologisch"),
+        ]:
+            add(name, category, "Breiter AMLS-Sicherheitscheck bei unspezifischer Datenlage")
+
+    for item in amls.get("custom_candidates", []):
+        name = item.get("diagnose") if isinstance(item, dict) else item
+        if valid(name):
+            add(str(name), "Eigene Ergaenzung", "Manuell zum Trichter hinzugefuegt")
+    return candidates
+
+
+def calculate_medication(payload):
+    sop = payload.sop
+    age = float(payload.age or 0)
+    weight = max(1.0, float(payload.weight or 1))
+    inputs = payload.inputs or {}
+    meds = []
+    actions = ["Basismaßnahmen nach xABCDE, Monitoring und Verlaufskontrolle"]
+    notes = []
+
+    if sop.startswith("Anaphylaxie"):
+        if age >= 12:
+            adrenalin = 0.5
+            clemastin = 2.0
+            pred = 250
+            salbutamol = "2,5 mg"
+        elif age >= 6:
+            adrenalin = 0.3
+            clemastin = round(0.03 * weight, 2)
+            pred = round(2.0 * weight, 1)
+            salbutamol = "1,25 mg"
+        else:
+            adrenalin = 0.15
+            clemastin = round(0.03 * weight, 2)
+            pred = round(2.0 * weight, 1)
+            salbutamol = "keine SOP-Angabe <4 Jahre"
+        meds = [f"Adrenalin i.m. {adrenalin} mg pur", f"Clemastin i.v. {clemastin} mg", f"Prednisolon i.v. {pred} mg", f"Vollelektrolyt {int(20 * weight)} ml", f"Salbutamol vernebelt {salbutamol}"]
+        actions.append("Bei fehlender Stabilisierung Adrenalin i.m. alle 5 Minuten wiederholen")
+        notes.append("Adrenalin-Verneblung bei Stridor/Dysphonie/Uvulaschwellung: 4 mg pur vernebelt")
+    elif sop.startswith("Asthma"):
+        if age < 4:
+            meds.append("Adrenalin 4 mg pur vernebelt")
+        elif age <= 6:
+            meds.append("Salbutamol 1,25 mg vernebelt")
+        else:
+            meds.extend(["Salbutamol 2,5 mg vernebelt", "Ipratropiumbromid 500 mcg vernebelt"])
+        meds.append("Prednisolon 100 mg i.v." if age > 12 else f"Prednisolon {round(2 * weight, 1)} mg i.v.")
+        actions.extend(["Oberkoerper hoch, beruhigen, Sauerstoff titrieren", "Nach 5 Minuten Wirkung re-evaluieren"])
+    elif sop == "Hypoglykaemie" or sop == "Hypoglykämie":
+        bz = float(inputs.get("bz", 55) or 55)
+        if bz < 60:
+            meds.append("Glucose bis zu 16 g i.v. bei Bewusstseinsstoerung, sonst oral")
+        else:
+            notes.append("Aktueller BZ liegt nicht unter dem Standard-Schwellenwert 60 mg/dl")
+        actions.append("BZ nach Intervention kontrollieren")
+    elif sop == "Krampfanfall":
+        iv_dose = round(0.05 * weight, 2)
+        meds.append(f"Midazolam {iv_dose} mg i.v. langsam titrieren bei i.v.-Zugang")
+        meds.append("Alternativ nasal: 2,5 mg bis 10 kg, 5 mg bis 20 kg, 10 mg ab 20 kg")
+        actions.append("Bei anhaltendem Anfall Notarztruf und Kliniktransport priorisieren")
+    elif sop == "Schlaganfall":
+        rr = float(inputs.get("rr_sys", 170) or 170)
+        if rr < 120:
+            meds.append("Vollelektrolyt 500 ml i.v.")
+        elif rr > 220:
+            meds.append("Urapidil 5-15 mg langsam i.v., titrierend")
+        else:
+            notes.append("Keine primaere RR-Senkung im Standardfenster 120-220 mmHg")
+        actions.extend(["Last-Seen-Well sichern", "Stroke-Unit-Voranmeldung priorisieren"])
+    elif sop == "Kardiales Lungenoedem" or sop == "Kardiales Lungenödem":
+        rr = float(inputs.get("rr_sys", 160) or 160)
+        if rr > 120:
+            meds.append("Glyceroltrinitrat 0,4-0,8 mg s.l.")
+        meds.append("Furosemid 20 mg i.v. langsam, ggf. einmalige Repetition")
+        actions.append("CPAP/NIV fruehzeitig erwaegen")
+    elif sop == "Starke Schmerzen":
+        nrs = float(inputs.get("nrs", 7) or 7)
+        if nrs >= 3:
+            meds.append(f"Paracetamol {int(round(15 * min(weight, 50), 0))} mg i.v. falls geeignet")
+        if nrs >= 6 and weight > 30:
+            meds.append(f"Esketamin {round(0.125 * weight, 2)} mg i.v. oder Fentanyl nach SOP")
+        actions.append("Schmerzverlauf dokumentieren und Wirkung nachkontrollieren")
+    else:
+        notes.append("Dieser SOP-Pfad ist als Kurzreferenz angelegt; Detailrechner wird schrittweise erweitert.")
+
+    if payload.pregnant == "Ja":
+        notes.append("Schwangerschaft: fruehe aerztliche Ruecksprache einplanen.")
+    return {"sop": sop, "medications": meds, "actions": actions, "notes": notes}
 
 
 def quality_item(rule_id, status_value, message, severity="warning"):
@@ -936,6 +1176,22 @@ def protocol_preview(payload: ProtocolRequest, employee=Depends(current_employee
     return {"protocol_text": protocol_text, "summary": build_case_summary(payload.patient)}
 
 
+@app.post("/api/protocol/suspicion")
+def protocol_suspicion(payload: ProtocolRequest, employee=Depends(current_employee)):
+    suspicions, recommendations = build_suspicion_assessment(payload.patient)
+    return {"suspicions": suspicions, "recommendations": recommendations}
+
+
+@app.post("/api/protocol/amls-candidates")
+def protocol_amls_candidates(payload: ProtocolRequest, employee=Depends(current_employee)):
+    return {"candidates": build_amls_candidates(payload.patient)}
+
+
+@app.post("/api/protocol/medication-calculator")
+def protocol_medication_calculator(payload: MedicationCalcRequest, employee=Depends(current_employee)):
+    return calculate_medication(payload)
+
+
 @app.post("/api/protocol/quality")
 def protocol_quality(payload: ProtocolRequest, employee=Depends(current_employee)):
     result = assess_protocol_quality(payload.patient)
@@ -1262,3 +1518,28 @@ def admin_delete_case(case_id: str, employee=Depends(require_admin)):
     delete_finished_case(case_id, timestamp)
     audit("api_case_deleted", employee=employee, entity_type="finished_case", entity_id=case_id)
     return {"status": "deleted", "case_id": case_id}
+
+
+if (FRONTEND_DIST / "assets").exists():
+    app.mount("/assets", StaticFiles(directory=FRONTEND_DIST / "assets"), name="frontend-assets")
+
+
+@app.get("/")
+@app.get("/{full_path:path}")
+def serve_frontend(full_path: str = ""):
+    if full_path.startswith("api/"):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API-Endpunkt nicht gefunden.")
+    if not FRONTEND_DIST.exists():
+        return HTMLResponse(
+            "<h1>NANA Backend laeuft</h1>"
+            "<p>Das Frontend wurde noch nicht gebaut. Bitte im Ordner frontend <code>npm run build</code> ausfuehren "
+            "oder die App ueber <code>http://127.0.0.1:5173</code> starten.</p>",
+            status_code=200,
+        )
+    requested = (FRONTEND_DIST / full_path).resolve()
+    if requested.is_file() and FRONTEND_DIST.resolve() in requested.parents:
+        return FileResponse(requested)
+    index_file = FRONTEND_DIST / "index.html"
+    if index_file.exists():
+        return FileResponse(index_file)
+    return HTMLResponse("<h1>NANA Frontend nicht gefunden</h1>", status_code=404)

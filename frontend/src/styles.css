@@ -378,6 +378,10 @@ form button,
   margin-bottom: 18px;
 }
 
+.compact-toolbar {
+  margin-top: 0;
+}
+
 .protocol-toolbar button {
   min-height: 46px;
   display: inline-flex;
@@ -935,6 +939,12 @@ legend {
   margin: 18px 0 10px;
 }
 
+.list-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
 .list-head h3 {
   margin: 0;
 }
@@ -954,6 +964,95 @@ legend {
 .dynamic-list {
   display: grid;
   gap: 10px;
+}
+
+.support-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  margin-top: 14px;
+}
+
+.support-grid article {
+  display: grid;
+  align-content: start;
+  gap: 10px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(4, 12, 24, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.support-grid h3 {
+  margin: 0 0 4px;
+}
+
+.support-row {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.support-row strong {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(94, 168, 255, 0.18);
+  color: #f7fbff;
+}
+
+.support-row-action {
+  grid-template-columns: 34px minmax(0, 1fr) auto;
+}
+
+.support-row-action button {
+  min-height: 36px;
+  padding: 0 10px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.09);
+  color: #fff;
+  font-weight: 820;
+  cursor: pointer;
+}
+
+.support-note {
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #ffe8b6;
+  background: rgba(244, 180, 66, 0.10);
+  border: 1px solid rgba(244, 180, 66, 0.20);
+}
+
+.candidate-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0 0 14px;
+}
+
+.candidate-grid button {
+  display: grid;
+  gap: 6px;
+  text-align: left;
+  min-height: 82px;
+  padding: 12px;
+  border-radius: 12px;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(8, 127, 91, 0.72), rgba(34, 160, 107, 0.55));
+  border: 1px solid rgba(99, 230, 190, 0.28);
+  cursor: pointer;
+}
+
+.candidate-grid span {
+  color: #d8fff2;
+  font-size: 0.86rem;
 }
 
 .dynamic-row {
@@ -1064,6 +1163,8 @@ legend {
   .form-grid,
   .assessment-grid,
   .amls-summary,
+  .support-grid,
+  .candidate-grid,
   .admin-grid,
   .finder-controls,
   .hospital-grid,
@@ -1105,5 +1206,9 @@ legend {
   .protocol-tabs {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .support-row-action {
+    grid-template-columns: 34px minmax(0, 1fr);
   }
 }

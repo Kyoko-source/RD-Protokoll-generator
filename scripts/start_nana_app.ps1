@@ -8,6 +8,21 @@ if (Test-Path $nodePath) {
     $env:Path = "$nodePath;$env:Path"
 }
 
+function Stop-NanaPort {
+    param([int]$Port)
+
+    $connections = Get-NetTCPConnection -LocalPort $Port -State Listen -ErrorAction SilentlyContinue
+    foreach ($connection in $connections) {
+        $processId = $connection.OwningProcess
+        if ($processId -and $processId -ne $PID) {
+            Stop-Process -Id $processId -Force -ErrorAction SilentlyContinue
+        }
+    }
+}
+
+Stop-NanaPort -Port 8000
+Stop-NanaPort -Port 5173
+
 Start-Process -FilePath "python" `
     -ArgumentList "-m", "uvicorn", "backend.main:app", "--host", "127.0.0.1", "--port", "8000" `
     -WorkingDirectory $repoRoot `
