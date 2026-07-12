@@ -1289,11 +1289,11 @@ st.markdown(
         }
         @keyframes nanaNeonPulse {
             0%, 100% {
-                filter: drop-shadow(-8px 0 18px rgba(69,169,255,.52)) drop-shadow(8px 0 18px rgba(255,65,95,.38));
+                filter: drop-shadow(-5px 0 12px rgba(66,159,255,.34)) drop-shadow(5px 0 12px rgba(255,60,92,.24));
                 transform: translateY(0);
             }
             50% {
-                filter: drop-shadow(-12px 0 26px rgba(77,190,255,.82)) drop-shadow(12px 0 26px rgba(255,58,85,.68));
+                filter: drop-shadow(-8px 0 17px rgba(75,177,255,.48)) drop-shadow(8px 0 17px rgba(255,64,96,.36));
                 transform: translateY(-1px);
             }
         }
@@ -1304,13 +1304,13 @@ st.markdown(
             line-height:.86;
             font-weight:950;
             letter-spacing:.02em;
-            color:#f8fbff;
+            color:#dcecff;
             text-transform:uppercase;
             text-shadow:
-                -3px 0 0 rgba(61,177,255,.92),
-                3px 0 0 rgba(255,57,85,.82),
-                0 0 18px rgba(102,204,255,.72),
-                0 0 42px rgba(255,42,82,.32);
+                -2px 0 0 rgba(64,165,255,.66),
+                2px 0 0 rgba(255,66,96,.52),
+                0 0 10px rgba(102,204,255,.38),
+                0 0 24px rgba(255,42,82,.18);
             animation:nanaNeonPulse 2.4s ease-in-out infinite;
         }
         .nana-logo::after {
@@ -1318,11 +1318,11 @@ st.markdown(
             position:absolute;
             inset:0;
             color:transparent;
-            background:linear-gradient(100deg, transparent 0%, transparent 34%, #38d5ff 43%, #ffffff 50%, #ff335d 58%, transparent 68%, transparent 100%);
+            background:linear-gradient(100deg, transparent 0%, transparent 36%, rgba(60,180,255,.78) 44%, rgba(215,237,255,.58) 50%, rgba(255,58,91,.72) 57%, transparent 66%, transparent 100%);
             background-size:220% 100%;
             -webkit-background-clip:text;
             background-clip:text;
-            mix-blend-mode:screen;
+            mix-blend-mode:soft-light;
             animation:nanaBeaconSweep 2.1s linear infinite;
             pointer-events:none;
         }
@@ -1332,10 +1332,10 @@ st.markdown(
             left:-5%;
             right:-5%;
             bottom:-12px;
-            height:5px;
+            height:3px;
             border-radius:999px;
-            background:linear-gradient(90deg, #2bbcff 0%, #ffffff 50%, #ff315b 100%);
-            box-shadow:0 0 18px rgba(52,183,255,.7), 0 0 24px rgba(255,50,91,.48);
+            background:linear-gradient(90deg, rgba(43,188,255,.72) 0%, rgba(215,237,255,.58) 50%, rgba(255,49,91,.68) 100%);
+            box-shadow:0 0 10px rgba(52,183,255,.42), 0 0 14px rgba(255,50,91,.28);
             background-size:180% 100%;
             animation:nanaBeaconSweep 1.8s linear infinite reverse;
         }
