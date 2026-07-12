@@ -310,6 +310,7 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
   const [error, setError] = useState('');
   const vitalwerte = patient.vitalwerte || {};
   const xabcde = patient.xabcde || {};
+  const samplers = patient.samplers || {};
 
   useEffect(() => {
     api('/api/draft', {}, session.token)
@@ -332,6 +333,16 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
       ...current,
       xabcde: {
         ...(current.xabcde || {}),
+        [key]: value
+      }
+    }));
+  }
+
+  function updateSamplers(key, value) {
+    setPatient((current) => ({
+      ...current,
+      samplers: {
+        ...(current.samplers || {}),
         [key]: value
       }
     }));
@@ -388,6 +399,13 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
           onClick={() => setProtocolSection('xabcde')}
         >
           xABCDE
+        </button>
+        <button
+          type="button"
+          className={protocolSection === 'samplers' ? 'active' : ''}
+          onClick={() => setProtocolSection('samplers')}
+        >
+          SAMPLERS
         </button>
       </section>
 
@@ -568,6 +586,79 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
             <label>
               Auffälligkeiten
               <textarea value={xabcde.bodycheck_text || ''} onChange={(event) => updateXabcde('bodycheck_text', event.target.value)} rows={4} />
+            </label>
+          </fieldset>
+        </div>
+      </section>}
+
+      {protocolSection === 'samplers' && <section className="work-panel">
+        <div className="section-head">
+          <h2>SAMPLERS Anamnese</h2>
+          <span>strukturierte Patientenbefragung</span>
+        </div>
+
+        <div className="assessment-grid">
+          <fieldset>
+            <legend>S · Symptome</legend>
+            <label>
+              Leitsymptome
+              <textarea value={samplers.symptome || ''} onChange={(event) => updateSamplers('symptome', event.target.value)} rows={4} />
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>A · Allergien</legend>
+            <label>
+              Allergien / Unverträglichkeiten
+              <textarea value={samplers.allergien || ''} onChange={(event) => updateSamplers('allergien', event.target.value)} rows={4} />
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>M · Medikamente</legend>
+            <label>
+              Dauermedikation / Bedarfsmedikation
+              <textarea value={samplers.medikamente || ''} onChange={(event) => updateSamplers('medikamente', event.target.value)} rows={4} />
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>P · Patientenvorgeschichte</legend>
+            <label>
+              Vorerkrankungen / relevante Vorgeschichte
+              <textarea value={samplers.vorgeschichte || ''} onChange={(event) => updateSamplers('vorgeschichte', event.target.value)} rows={4} />
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>L · Letzte orale Aufnahme</legend>
+            <label>
+              Essen / Trinken / Zeitpunkt
+              <input value={samplers.letzte_aufnahme || ''} onChange={(event) => updateSamplers('letzte_aufnahme', event.target.value)} />
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>E · Ereignis</legend>
+            <label>
+              Ereignis / Auslöser / Verlauf
+              <textarea value={samplers.ereignis || ''} onChange={(event) => updateSamplers('ereignis', event.target.value)} rows={4} />
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>R · Risikofaktoren</legend>
+            <label>
+              Risikofaktoren
+              <textarea value={samplers.risikofaktoren || ''} onChange={(event) => updateSamplers('risikofaktoren', event.target.value)} rows={4} />
+            </label>
+          </fieldset>
+
+          <fieldset>
+            <legend>S · Sonstiges</legend>
+            <label>
+              Schwangerschaft / Sonstiges
+              <textarea value={samplers.sonstiges || ''} onChange={(event) => updateSamplers('sonstiges', event.target.value)} rows={4} />
             </label>
           </fieldset>
         </div>
