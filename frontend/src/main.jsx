@@ -106,6 +106,26 @@ function formatBloodPressure(vital) {
   return formatObservation('', effectiveVitalStatus(vital, 'rr_status'));
 }
 
+function documentedVitalStatusValues(patient) {
+  const vital = patient?.vitalwerte || {};
+  return [
+    effectiveVitalStatus(vital, 'rr_status'),
+    effectiveVitalStatus(vital, 'puls_status'),
+    effectiveVitalStatus(vital, 'spo2_status'),
+    effectiveVitalStatus(vital, 'af_status'),
+    effectiveVitalStatus(vital, 'bz_status'),
+    effectiveVitalStatus(vital, 'temperatur_status'),
+    effectiveVitalStatus(vital, 'gcs_status')
+  ].filter(hasValue).map((item) => String(item));
+}
+
+function protocolContainsVitalStatuses(protocolText, patient) {
+  const values = documentedVitalStatusValues(patient);
+  if (values.length === 0) return true;
+  const text = String(protocolText || '');
+  return values.every((value) => text.includes(value));
+}
+
 function renderListBlock(title, items, formatter) {
   const lines = (Array.isArray(items) ? items : []).map(formatter).filter(hasValue);
   if (lines.length === 0) return '';
@@ -1895,18 +1915,20 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   async function generateProtocol() {
     setError('');
     setStatusText('');
+    const localProtocol = generateLocalProtocolText(patient);
     try {
       const result = await api('/api/protocol/preview', {
         method: 'POST',
         body: JSON.stringify({ patient })
       }, session.token);
-      setGeneratedProtocol(result.protocol_text || '');
+      const protocolText = result.protocol_text || '';
+      const nextProtocol = protocolContainsVitalStatuses(protocolText, patient) ? protocolText : localProtocol;
+      setGeneratedProtocol(nextProtocol);
       setProtocolSection('protokoll');
-      setStatusText('Protokoll wurde erzeugt.');
+      setStatusText(nextProtocol === protocolText ? 'Protokoll wurde erzeugt.' : 'Protokoll wurde aus den aktuellen Formularwerten erzeugt.');
     } catch (err) {
-      const fallback = generateLocalProtocolText(patient);
-      if (fallback) {
-        setGeneratedProtocol(fallback);
+      if (localProtocol) {
+        setGeneratedProtocol(localProtocol);
         setProtocolSection('protokoll');
         setStatusText('Protokoll wurde lokal erzeugt. Backend bitte neu starten, damit PDF/Archiv wieder die aktuelle API nutzen.');
         setError(err.message);
