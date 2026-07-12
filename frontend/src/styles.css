@@ -1114,6 +1114,94 @@ form button,
   line-height: 1.4;
 }
 
+.opqrst-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.34fr);
+  gap: 14px;
+}
+
+.opqrst-pain-toggle,
+.opqrst-nav,
+.opqrst-active-hint {
+  grid-column: 1 / -1;
+}
+
+.opqrst-nav {
+  display: grid;
+  grid-template-columns: repeat(6, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.opqrst-nav button {
+  min-height: 48px;
+  border-radius: 12px;
+  color: rgba(239, 248, 255, 0.78);
+  background: rgba(255, 255, 255, 0.065);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.opqrst-nav button.active {
+  color: #fff;
+  border-color: rgba(18, 198, 178, 0.62);
+  background: linear-gradient(135deg, #2d7cff 0%, #12c6b2 100%);
+  box-shadow: 0 12px 28px rgba(18, 198, 178, 0.16);
+}
+
+.opqrst-active-hint {
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(45, 124, 255, 0.10);
+  border: 1px solid rgba(45, 124, 255, 0.22);
+  color: rgba(235, 244, 255, 0.76);
+  font-weight: 820;
+}
+
+.opqrst-panel {
+  min-height: 320px;
+}
+
+.opqrst-panel label + label {
+  margin-top: 12px;
+}
+
+.range-value {
+  display: inline-flex;
+  width: fit-content;
+  margin-top: 8px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  color: #07131f;
+  background: #63e6be;
+  font-size: 0.92rem;
+}
+
+.opqrst-summary {
+  align-self: start;
+  display: grid;
+  gap: 9px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(4, 12, 24, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.opqrst-summary h3,
+.opqrst-summary p {
+  margin: 0;
+}
+
+.opqrst-summary h3 {
+  font-size: 1rem;
+}
+
+.opqrst-summary p {
+  color: rgba(235, 244, 255, 0.70);
+  font-weight: 740;
+  line-height: 1.4;
+}
+
 .amls-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1482,6 +1570,7 @@ legend {
   .samplers-layout,
   .samplers-subgrid,
   .samplers-check-grid,
+  .opqrst-layout,
   .amls-summary,
   .support-grid,
   .candidate-grid,
@@ -1511,6 +1600,10 @@ legend {
   }
 
   .xabcde-nav {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .opqrst-nav {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 

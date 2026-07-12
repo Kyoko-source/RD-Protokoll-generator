@@ -763,12 +763,19 @@ def generate_protocol_text(patient):
         ("Sonstiges", s.get("sonstiges")),
     ])
     text += add_lines("OPQRST", [
+        ("Schmerz vorhanden", o.get("schmerz_vorhanden")),
         ("Onset / Beginn", o.get("onset")),
+        ("Onset Zusatz", o.get("onset_text")),
         ("Provocation / Palliation", o.get("provocation")),
+        ("Provocation Zusatz", o.get("provocation_text")),
         ("Quality", o.get("quality")),
+        ("Quality Zusatz", o.get("quality_text")),
         ("Region / Radiation", o.get("region")),
-        ("Severity / NRS", o.get("severity")),
-        ("Time / Verlauf", o.get("time")),
+        ("Ausstrahlung", o.get("radiation")),
+        ("NRS", o.get("nrs") or o.get("severity")),
+        ("Severity Beschreibung", o.get("severity_desc")),
+        ("Time / Verlauf", o.get("zeitverlauf") or o.get("time")),
+        ("Dauer", o.get("dauer")),
     ])
     text += add_lines("AMLS / VERDACHTSDIAGNOSTIK", [
         ("Leitsymptom", amls.get("leitsymptom")),

@@ -98,6 +98,15 @@ const xabcdeSections = [
   { key: 'E', label: 'E', title: 'Exposure' }
 ];
 
+const opqrstSections = [
+  { key: 'O', label: 'O', title: 'Onset' },
+  { key: 'P', label: 'P', title: 'Provocation/Palliation' },
+  { key: 'Q', label: 'Q', title: 'Quality' },
+  { key: 'R', label: 'R', title: 'Region/Radiation' },
+  { key: 'S', label: 'S', title: 'Severity' },
+  { key: 'T', label: 'T', title: 'Time' }
+];
+
 const xabcdeOptions = {
   blutung: ['Keine Angabe', 'Keine starke Blutung', 'Starke Blutung kontrolliert', 'Starke Blutung unkontrolliert'],
   atemweg: ['Keine Angabe', 'Frei', 'Gefährdet', 'Verlegt'],
@@ -116,6 +125,14 @@ const xabcdeOptions = {
   befast_speech: ['Keine Angabe', 'Unauffällig', 'Dysarthrie', 'Aphasie', 'Sprachverständnis gestört'],
   befast_eyes: ['Keine Angabe', 'Unauffällig', 'Akute Sehstörung', 'Doppelbilder', 'Gesichtsfeldausfall'],
   befast_arms: ['Keine Angabe', 'Kein Absinken', 'Armabsinken links', 'Armabsinken rechts', 'Armabsinken beidseits']
+};
+
+const opqrstOptions = {
+  onset: ['', 'Plötzlich', 'Allmählich', 'Progressiv verschlimmernd', 'Wiederkehrend'],
+  provocation: ['', 'Bewegung verschlimmert', 'Ruhe lindert', 'Tiefe Atmung verschlimmert', 'Druck lindert', 'Wärme lindert', 'Kälte lindert', 'Nichts lindert'],
+  quality: ['', 'Stechend/Messerscharf', 'Dumpf', 'Drückend', 'Reißend', 'Brennend', 'Ziehend', 'Klopfend', 'Rauschhaft'],
+  severity_desc: ['', 'Kein Schmerz (0)', 'Minimal (1-3)', 'Mäßig (4-6)', 'Schwer (7-8)', 'Sehr schwer (9-10)'],
+  zeitverlauf: ['', 'Konstant', 'Intermittierend', 'Sich verschlimmernd', 'Sich verbessernd', 'Gleichbleibend']
 };
 
 const befastNormalValues = new Set(['Unauffällig', 'Symmetrisch', 'Kein Absinken', 'Keine Angabe', '']);
@@ -275,12 +292,19 @@ function generateLocalProtocolText(patient) {
     ['Sonstiges', s.sonstiges],
   ]);
   text += addProtocolBlock('OPQRST', [
+    ['Schmerz vorhanden', o.schmerz_vorhanden],
     ['Onset', o.onset],
+    ['Onset Zusatz', o.onset_text],
     ['Provocation/Palliation', o.provocation],
+    ['Provocation Zusatz', o.provocation_text],
     ['Quality', o.quality],
+    ['Quality Zusatz', o.quality_text],
     ['Region/Radiation', o.region],
-    ['Severity/NRS', o.severity],
-    ['Time/Verlauf', o.time],
+    ['Ausstrahlung', o.radiation],
+    ['NRS', o.nrs || o.severity],
+    ['Severity Beschreibung', o.severity_desc],
+    ['Zeitverlauf', o.zeitverlauf || o.time],
+    ['Dauer', o.dauer],
   ]);
   text += addProtocolBlock('AMLS / VERDACHTSDIAGNOSTIK', [
     ['Leitsymptom', amls.leitsymptom],
@@ -1529,6 +1553,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const [protocolSection, setProtocolSection] = useState('vitalwerte');
   const [xabcdeSection, setXabcdeSection] = useState('A');
   const [samplersSection, setSamplersSection] = useState('S1');
+  const [opqrstSection, setOpqrstSection] = useState('O');
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
   const [generatedProtocol, setGeneratedProtocol] = useState('');
@@ -2015,6 +2040,130 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     }));
   }
 
+  function renderOpqrstSelect(key, label) {
+    const options = opqrstOptions[key];
+    return (
+      <label>
+        {label}
+        <select value={opqrst[key] || options[0]} onChange={(event) => updateOpqrst(key, event.target.value)}>
+          {options.map((item) => <option key={item || 'empty'} value={item}>{item || 'Keine Angabe'}</option>)}
+        </select>
+      </label>
+    );
+  }
+
+  function opqrstSectionComplete(sectionKey) {
+    if (opqrst.schmerz_vorhanden !== 'Ja') return true;
+    if (sectionKey === 'O') return hasValue(opqrst.onset) || hasValue(opqrst.onset_text);
+    if (sectionKey === 'P') return hasValue(opqrst.provocation) || hasValue(opqrst.provocation_text);
+    if (sectionKey === 'Q') return hasValue(opqrst.quality) || hasValue(opqrst.quality_text);
+    if (sectionKey === 'R') return hasValue(opqrst.region) || hasValue(opqrst.radiation);
+    if (sectionKey === 'S') return hasValue(opqrst.nrs) || hasValue(opqrst.severity_desc);
+    if (sectionKey === 'T') return hasValue(opqrst.zeitverlauf) || hasValue(opqrst.dauer);
+    return false;
+  }
+
+  function renderOpqrstContent() {
+    if (opqrst.schmerz_vorhanden !== 'Ja') {
+      return (
+        <fieldset className="opqrst-panel">
+          <legend>Kein Schmerzassessment aktiv</legend>
+          <p className="field-hint">Wenn Schmerzen vorhanden sind, öffnet sich hier die strukturierte OPQRST-Erfassung.</p>
+        </fieldset>
+      );
+    }
+
+    if (opqrstSection === 'O') {
+      return (
+        <fieldset className="opqrst-panel">
+          <legend>O - Onset</legend>
+          {renderOpqrstSelect('onset', 'Beginn')}
+          <label>
+            Zusätzliche Information zu Beginn
+            <input value={opqrst.onset_text || ''} onChange={(event) => updateOpqrst('onset_text', event.target.value)} />
+          </label>
+        </fieldset>
+      );
+    }
+
+    if (opqrstSection === 'P') {
+      return (
+        <fieldset className="opqrst-panel">
+          <legend>P - Provocation/Palliation</legend>
+          {renderOpqrstSelect('provocation', 'Was verschlimmert oder lindert den Schmerz?')}
+          <label>
+            Genauere Beschreibung
+            <input value={opqrst.provocation_text || ''} onChange={(event) => updateOpqrst('provocation_text', event.target.value)} />
+          </label>
+        </fieldset>
+      );
+    }
+
+    if (opqrstSection === 'Q') {
+      return (
+        <fieldset className="opqrst-panel">
+          <legend>Q - Quality</legend>
+          {renderOpqrstSelect('quality', 'Wie beschreibt der Patient den Schmerz?')}
+          <label>
+            Patienteneigene Beschreibung
+            <input value={opqrst.quality_text || ''} onChange={(event) => updateOpqrst('quality_text', event.target.value)} />
+          </label>
+        </fieldset>
+      );
+    }
+
+    if (opqrstSection === 'R') {
+      return (
+        <fieldset className="opqrst-panel">
+          <legend>R - Region/Radiation</legend>
+          <label>
+            Wo tut es weh?
+            <input value={opqrst.region || ''} onChange={(event) => updateOpqrst('region', event.target.value)} />
+          </label>
+          <label>
+            Ausstrahlung
+            <input value={opqrst.radiation || ''} onChange={(event) => updateOpqrst('radiation', event.target.value)} />
+          </label>
+        </fieldset>
+      );
+    }
+
+    if (opqrstSection === 'S') {
+      return (
+        <fieldset className="opqrst-panel">
+          <legend>S - Severity</legend>
+          <label>
+            Numerische Rating-Skala (NRS) 0-10
+            <input
+              type="range"
+              min="0"
+              max="10"
+              value={opqrst.nrs ?? 0}
+              onChange={(event) => updateOpqrst('nrs', event.target.value)}
+            />
+            <strong className="range-value">{opqrst.nrs ?? 0}/10</strong>
+          </label>
+          {renderOpqrstSelect('severity_desc', 'Auswirkung auf Aktivitäten')}
+        </fieldset>
+      );
+    }
+
+    return (
+      <fieldset className="opqrst-panel">
+        <legend>T - Time</legend>
+        {renderOpqrstSelect('zeitverlauf', 'Zeitlicher Verlauf')}
+        <label>
+          Wie lange besteht der Schmerz bereits?
+          <input
+            value={opqrst.dauer || ''}
+            onChange={(event) => updateOpqrst('dauer', event.target.value)}
+            placeholder="z.B. 2 Stunden, seit heute Morgen, ..."
+          />
+        </label>
+      </fieldset>
+    );
+  }
+
   function updateAmls(key, value) {
     setPatient((current) => ({
       ...current,
@@ -2266,7 +2415,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           inputs: {
             bz: Number(calculator.bz || 55),
             rr_sys: Number(calculator.rr_sys || vitalwerte.rr_sys || 160),
-            nrs: Number(calculator.nrs || opqrst.severity || 7)
+            nrs: Number(calculator.nrs || opqrst.nrs || opqrst.severity || 7)
           }
         })
       }, session.token);
@@ -2645,31 +2794,53 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <h2>OPQRST</h2>
           <span>Schmerz und Leitsymptom</span>
         </div>
-        <div className="assessment-grid">
-          <fieldset>
-            <legend>O · Onset</legend>
-            <label>Beginn<input value={opqrst.onset || ''} onChange={(event) => updateOpqrst('onset', event.target.value)} /></label>
+        <div className="opqrst-layout">
+          <fieldset className="opqrst-pain-toggle">
+            <legend>Schmerzassessment</legend>
+            <label>
+              Schmerzen vorhanden?
+              <select value={opqrst.schmerz_vorhanden || 'Nein'} onChange={(event) => updateOpqrst('schmerz_vorhanden', event.target.value)}>
+                <option value="Nein">Nein</option>
+                <option value="Ja">Ja</option>
+              </select>
+            </label>
           </fieldset>
-          <fieldset>
-            <legend>P · Provocation/Palliation</legend>
-            <label>Besser / schlechter<textarea value={opqrst.provocation || ''} onChange={(event) => updateOpqrst('provocation', event.target.value)} rows={4} /></label>
-          </fieldset>
-          <fieldset>
-            <legend>Q · Quality</legend>
-            <label>Qualität<input value={opqrst.quality || ''} onChange={(event) => updateOpqrst('quality', event.target.value)} /></label>
-          </fieldset>
-          <fieldset>
-            <legend>R · Region/Radiation</legend>
-            <label>Ort / Ausstrahlung<textarea value={opqrst.region || ''} onChange={(event) => updateOpqrst('region', event.target.value)} rows={4} /></label>
-          </fieldset>
-          <fieldset>
-            <legend>S · Severity</legend>
-            <label>NRS / Stärke<input value={opqrst.severity || ''} onChange={(event) => updateOpqrst('severity', event.target.value)} inputMode="numeric" /></label>
-          </fieldset>
-          <fieldset>
-            <legend>T · Time</legend>
-            <label>Verlauf<textarea value={opqrst.time || ''} onChange={(event) => updateOpqrst('time', event.target.value)} rows={4} /></label>
-          </fieldset>
+
+          {opqrst.schmerz_vorhanden === 'Ja' && (
+            <>
+              <div className="opqrst-nav" role="tablist" aria-label="OPQRST Unterpunkte">
+                {opqrstSections.map((section) => {
+                  const incomplete = !opqrstSectionComplete(section.key);
+                  return (
+                    <button
+                      key={section.key}
+                      type="button"
+                      className={opqrstSection === section.key ? 'active' : ''}
+                      onClick={() => setOpqrstSection(section.key)}
+                      title={section.title}
+                    >
+                      {incomplete ? `${section.label} !` : section.label}
+                    </button>
+                  );
+                })}
+              </div>
+              <div className="opqrst-active-hint">
+                Aktive OPQRST-Sektion: {opqrstSection} · offene Reiter sind mit ! markiert.
+              </div>
+            </>
+          )}
+
+          {renderOpqrstContent()}
+
+          <aside className="opqrst-summary">
+            <h3>Live-Zusammenfassung</h3>
+            <p>{`Schmerz: ${opqrst.schmerz_vorhanden || 'Nein'}`}</p>
+            <p>{hasValue(opqrst.onset) ? `Onset: ${opqrst.onset}` : 'Onset noch offen'}</p>
+            <p>{hasValue(opqrst.provocation) ? `Provocation: ${opqrst.provocation}` : 'Provocation noch offen'}</p>
+            <p>{hasValue(opqrst.quality) ? `Quality: ${opqrst.quality}` : 'Quality noch offen'}</p>
+            <p>{hasValue(opqrst.region) ? `Region: ${opqrst.region}` : 'Region noch offen'}</p>
+            <p>{hasValue(opqrst.nrs) ? `NRS: ${opqrst.nrs}/10` : 'NRS noch offen'}</p>
+          </aside>
         </div>
       </section>}
 
