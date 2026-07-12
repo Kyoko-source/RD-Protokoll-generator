@@ -15,6 +15,14 @@ import urllib.request
 from copy import deepcopy
 from device_guides import DEVICE_GUIDES
 from hospital_finder import CATEGORIES, TOWNS, build_dutch_protocol, suitable_hospitals
+from storage import (
+    init_database,
+    load_case_draft_store as db_load_case_draft_store,
+    load_employee_store as db_load_employee_store,
+    migrate_json_files,
+    save_case_draft_store as db_save_case_draft_store,
+    save_employee_store as db_save_employee_store,
+)
 
 
 def add_line(text, value):
@@ -1450,6 +1458,8 @@ SUPABASE_ADMIN_EMAIL = "admin@rd-protokoll-generator.local"
 SOP_ADMIN_CONFIG_FILE = "sop_admin_config.json"
 EMPLOYEE_STORE_FILE = "employees.json"
 CASE_DRAFT_STORE_FILE = "case_drafts.json"
+init_database()
+migrate_json_files(EMPLOYEE_STORE_FILE, CASE_DRAFT_STORE_FILE)
 WORKFLOW_STEPS = [
     {"page": "❤️ Vitalwerte", "label": "Patient", "short_label": "Patient"},
     {"page": "🩺 xABCDE", "label": "Untersuchung", "short_label": "Untersuch."},
@@ -1603,39 +1613,19 @@ def _verify_password(password, stored_hash):
 
 
 def _load_employee_store():
-    if not os.path.exists(EMPLOYEE_STORE_FILE):
-        return {"employees": []}
-    try:
-        with open(EMPLOYEE_STORE_FILE, "r", encoding="utf-8") as file_obj:
-            data = json.load(file_obj)
-        if isinstance(data, dict) and isinstance(data.get("employees"), list):
-            return data
-    except Exception:
-        pass
-    return {"employees": []}
+    return db_load_employee_store()
 
 
 def _save_employee_store(store):
-    with open(EMPLOYEE_STORE_FILE, "w", encoding="utf-8") as file_obj:
-        json.dump(store, file_obj, ensure_ascii=False, indent=2)
+    db_save_employee_store(store)
 
 
 def _load_case_draft_store():
-    if not os.path.exists(CASE_DRAFT_STORE_FILE):
-        return {"drafts": {}}
-    try:
-        with open(CASE_DRAFT_STORE_FILE, "r", encoding="utf-8") as file_obj:
-            data = json.load(file_obj)
-        if isinstance(data, dict) and isinstance(data.get("drafts"), dict):
-            return data
-    except Exception:
-        pass
-    return {"drafts": {}}
+    return db_load_case_draft_store()
 
 
 def _save_case_draft_store(store):
-    with open(CASE_DRAFT_STORE_FILE, "w", encoding="utf-8") as file_obj:
-        json.dump(store, file_obj, ensure_ascii=False, indent=2)
+    db_save_case_draft_store(store)
 
 
 def _current_employee_id():

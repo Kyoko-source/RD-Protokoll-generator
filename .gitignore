@@ -6,4 +6,6 @@ __pycache__/
 sop_admin_config.json
 employees.json
 case_drafts.json
+nana.db
+nana.db-*
 .DS_Store
