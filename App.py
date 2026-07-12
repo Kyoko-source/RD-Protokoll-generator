@@ -762,7 +762,7 @@ def generate_protocol():
 # --------------------------------------------------
 
 st.set_page_config(
-    page_title="Blaulicht Bericht",
+    page_title="NANA",
     page_icon="🚑",
     layout="wide"
 )
@@ -1317,8 +1317,11 @@ st.markdown(
             linear-gradient(135deg, rgba(18,32,58,0.92) 0%, rgba(10,22,40,0.88) 100%);
         box-shadow: 0 28px 60px rgba(2,8,24,0.32);
     ">
-        <div style="font-size:2.65rem; line-height:1; font-weight:950; letter-spacing:0; color:#fbfdff; text-shadow:0 12px 32px rgba(2,8,24,0.32);">
-            Blaulicht Bericht
+        <div style="font-size:2.85rem; line-height:1; font-weight:950; letter-spacing:0; color:#fbfdff; text-shadow:0 12px 32px rgba(2,8,24,0.32);">
+            NANA
+        </div>
+        <div style="margin-top:10px; color:rgba(231,241,255,0.72); font-size:0.98rem; font-weight:700;">
+            Notfall-Aufzeichnungs- und Nachbearbeitungs-Assistent
         </div>
     </div>
     """,
