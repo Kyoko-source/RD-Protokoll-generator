@@ -1,3 +1,4 @@
+import secrets
 from datetime import datetime
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
@@ -14,6 +15,7 @@ from storage import (
     load_employee_store,
     save_case_draft_store,
     save_employee_store,
+    save_finished_case,
     write_audit_event,
 )
 
@@ -53,6 +55,10 @@ class DraftRequest(BaseModel):
     patient: dict
 
 
+class ProtocolRequest(BaseModel):
+    patient: dict
+
+
 def default_patient_case():
     return {
         "vitalwerte": {},
@@ -64,7 +70,129 @@ def default_patient_case():
         "massnahmen": {"timeline": [], "medikation": []},
         "transport": {},
         "einsatz": {},
+        "uebergabe": {},
     }
+
+
+def valid(value):
+    return value not in [None, "", [], {}, "Keine Angabe"]
+
+
+def add_lines(title, rows):
+    documented = [(label, value) for label, value in rows if valid(value)]
+    if not documented:
+        return ""
+    text = f"{title}\n" + ("=" * 50) + "\n"
+    for label, value in documented:
+        text += f"{label}: {value}\n"
+    return text + "\n"
+
+
+def build_case_summary(patient):
+    vital = patient.get("vitalwerte", {})
+    amls = patient.get("amls", {})
+    samplers = patient.get("samplers", {})
+    parts = []
+    if valid(vital.get("alter")):
+        parts.append(f"{vital.get('alter')} J.")
+    if valid(vital.get("geschlecht")):
+        parts.append(str(vital.get("geschlecht")))
+    if valid(amls.get("arbeitsdiagnose")):
+        parts.append(str(amls.get("arbeitsdiagnose")))
+    if valid(vital.get("kurzbericht")):
+        parts.append(str(vital.get("kurzbericht"))[:80])
+    elif valid(samplers.get("symptome")):
+        parts.append(str(samplers.get("symptome"))[:80])
+    return " · ".join(parts) if parts else "Einsatz ohne Kurzangaben"
+
+
+def generate_protocol_text(patient):
+    vital = patient.get("vitalwerte", {})
+    x = patient.get("xabcde", {})
+    s = patient.get("samplers", {})
+    o = patient.get("opqrst", {})
+    measures = patient.get("massnahmen", {})
+    handover = patient.get("uebergabe", {})
+    amls = patient.get("amls", {})
+
+    text = "NANA RETTUNGSDIENST-PROTOKOLL\n"
+    text += "=" * 50 + "\n"
+    text += f"Erstellt am {datetime.now().strftime('%d.%m.%Y um %H:%M:%S')} Uhr\n"
+    text += "Dokumentationsentwurf: vor Weitergabe fachlich pruefen.\n\n"
+
+    text += add_lines("VITALWERTE & DEMOGRAPHIE", [
+        ("Alter", vital.get("alter")),
+        ("Geschlecht", vital.get("geschlecht")),
+        ("RR", f"{vital.get('rr_sys', '')}/{vital.get('rr_dia', '')} mmHg" if valid(vital.get("rr_sys")) or valid(vital.get("rr_dia")) else ""),
+        ("Puls", vital.get("puls")),
+        ("SpO2", vital.get("spo2")),
+        ("Atemfrequenz", vital.get("af")),
+        ("BZ", vital.get("bz")),
+        ("Temperatur", vital.get("temperatur")),
+        ("GCS", vital.get("gcs")),
+        ("Kurzbericht", vital.get("kurzbericht")),
+    ])
+    text += add_lines("xABCDE", [
+        ("X Blutung", x.get("blutung")),
+        ("Blutung Lokalisation", x.get("blutung_lokalisation")),
+        ("A Atemweg", x.get("atemweg")),
+        ("HWS", x.get("hws")),
+        ("B Atmung", x.get("atmung")),
+        ("Atemgeraeusche", x.get("atemgeraeusche")),
+        ("Sauerstoff", x.get("sauerstoff")),
+        ("C Hautzeichen", x.get("haut")),
+        ("Rekap", x.get("rekap")),
+        ("Pulsqualitaet", x.get("pulsqualitaet")),
+        ("D AVPU", x.get("avpu")),
+        ("Pupillen", x.get("pupillen")),
+        ("E Bodycheck", x.get("bodycheck")),
+        ("Bodycheck Auffaelligkeiten", x.get("bodycheck_text")),
+    ])
+    text += add_lines("SAMPLERS", [
+        ("Symptome", s.get("symptome")),
+        ("Allergien", s.get("allergien")),
+        ("Medikamente", s.get("medikamente")),
+        ("Vorgeschichte", s.get("vorgeschichte")),
+        ("Letzte orale Aufnahme", s.get("letzte_aufnahme")),
+        ("Ereignis", s.get("ereignis")),
+        ("Risikofaktoren", s.get("risikofaktoren")),
+        ("Sonstiges", s.get("sonstiges")),
+    ])
+    text += add_lines("OPQRST", [
+        ("Onset / Beginn", o.get("onset")),
+        ("Provocation / Palliation", o.get("provocation")),
+        ("Quality", o.get("quality")),
+        ("Region / Radiation", o.get("region")),
+        ("Severity / NRS", o.get("severity")),
+        ("Time / Verlauf", o.get("time")),
+    ])
+    text += add_lines("VERDACHT & UEBERGABE", [
+        ("Arbeitsdiagnose", amls.get("arbeitsdiagnose")),
+        ("Uebergabe Ziel", handover.get("ziel")),
+        ("Uebergabe Text", handover.get("text")),
+    ])
+
+    timeline = measures.get("timeline", [])
+    if isinstance(timeline, list) and timeline:
+        text += "MASSNAHMEN\n" + ("=" * 50) + "\n"
+        for item in timeline:
+            if isinstance(item, dict):
+                text += f"{item.get('zeit', '')} - {item.get('massnahme', '')}\n"
+            elif valid(item):
+                text += f"{item}\n"
+        text += "\n"
+
+    medication = measures.get("medikation", [])
+    if isinstance(medication, list) and medication:
+        text += "MEDIKATION\n" + ("=" * 50) + "\n"
+        for item in medication:
+            if isinstance(item, dict):
+                text += f"{item.get('zeit', '')} - {item.get('medikament', '')} {item.get('dosis', '')} {item.get('weg', '')}\n"
+            elif valid(item):
+                text += f"{item}\n"
+        text += "\n"
+
+    return text.strip()
 
 
 def audit(action, employee=None, entity_type="", entity_id="", details=None):
@@ -300,6 +428,37 @@ def save_draft(payload: DraftRequest, employee=Depends(current_employee)):
     save_case_draft_store(store)
     audit("api_case_draft_saved", employee=employee, entity_type="case_draft")
     return {"status": "saved", "updated_at": store["drafts"][employee["id"]]["updated_at"]}
+
+
+@app.post("/api/protocol/preview")
+def protocol_preview(payload: ProtocolRequest, employee=Depends(current_employee)):
+    protocol_text = generate_protocol_text(payload.patient)
+    audit("api_protocol_generated", employee=employee, entity_type="case_draft")
+    return {"protocol_text": protocol_text, "summary": build_case_summary(payload.patient)}
+
+
+@app.post("/api/cases/finish")
+def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
+    protocol_text = generate_protocol_text(payload.patient)
+    completed_at = datetime.now().isoformat(timespec="seconds")
+    case_id = secrets.token_hex(10)
+    save_finished_case({
+        "id": case_id,
+        "employee_id": employee.get("id", ""),
+        "employee_name": employee.get("name", ""),
+        "completed_at": completed_at,
+        "summary": build_case_summary(payload.patient),
+        "patient": payload.patient,
+        "protocol_text": protocol_text,
+    })
+
+    store = load_case_draft_store()
+    if employee.get("id") in store.get("drafts", {}):
+        store["drafts"].pop(employee.get("id"), None)
+        save_case_draft_store(store)
+
+    audit("api_case_finished", employee=employee, entity_type="finished_case", entity_id=case_id)
+    return {"status": "finished", "case_id": case_id, "protocol_text": protocol_text}
 
 
 @app.get("/api/admin/audit")

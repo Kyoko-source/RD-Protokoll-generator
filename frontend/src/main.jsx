@@ -300,7 +300,8 @@ const emptyPatient = {
   amls: { excluded: [], custom_candidates: [], arbeitsdiagnose: '' },
   massnahmen: { timeline: [], medikation: [] },
   transport: {},
-  einsatz: {}
+  einsatz: {},
+  uebergabe: {}
 };
 
 function ProtocolView({ session, employee, onBack, onLogout }) {
@@ -308,9 +309,14 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
   const [protocolSection, setProtocolSection] = useState('vitalwerte');
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
+  const [generatedProtocol, setGeneratedProtocol] = useState('');
   const vitalwerte = patient.vitalwerte || {};
   const xabcde = patient.xabcde || {};
   const samplers = patient.samplers || {};
+  const opqrst = patient.opqrst || {};
+  const massnahmen = patient.massnahmen || { timeline: [], medikation: [] };
+  const amls = patient.amls || {};
+  const uebergabe = patient.uebergabe || {};
 
   useEffect(() => {
     api('/api/draft', {}, session.token)
@@ -348,6 +354,104 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
     }));
   }
 
+  function updateOpqrst(key, value) {
+    setPatient((current) => ({
+      ...current,
+      opqrst: {
+        ...(current.opqrst || {}),
+        [key]: value
+      }
+    }));
+  }
+
+  function updateAmls(key, value) {
+    setPatient((current) => ({
+      ...current,
+      amls: {
+        ...(current.amls || {}),
+        [key]: value
+      }
+    }));
+  }
+
+  function updateUebergabe(key, value) {
+    setPatient((current) => ({
+      ...current,
+      uebergabe: {
+        ...(current.uebergabe || {}),
+        [key]: value
+      }
+    }));
+  }
+
+  function addMeasure() {
+    setPatient((current) => ({
+      ...current,
+      massnahmen: {
+        ...(current.massnahmen || {}),
+        timeline: [...((current.massnahmen || {}).timeline || []), { zeit: '', massnahme: '' }],
+        medikation: ((current.massnahmen || {}).medikation || [])
+      }
+    }));
+  }
+
+  function updateMeasure(index, key, value) {
+    setPatient((current) => {
+      const timeline = [...(((current.massnahmen || {}).timeline) || [])];
+      timeline[index] = { ...(timeline[index] || {}), [key]: value };
+      return {
+        ...current,
+        massnahmen: {
+          ...(current.massnahmen || {}),
+          timeline,
+          medikation: ((current.massnahmen || {}).medikation || [])
+        }
+      };
+    });
+  }
+
+  function removeMeasure(index) {
+    setPatient((current) => {
+      const timeline = [...(((current.massnahmen || {}).timeline) || [])];
+      timeline.splice(index, 1);
+      return { ...current, massnahmen: { ...(current.massnahmen || {}), timeline } };
+    });
+  }
+
+  function addMedication() {
+    setPatient((current) => ({
+      ...current,
+      massnahmen: {
+        ...(current.massnahmen || {}),
+        timeline: ((current.massnahmen || {}).timeline || []),
+        medikation: [...((current.massnahmen || {}).medikation || []), { zeit: '', medikament: '', dosis: '', weg: '' }]
+      }
+    }));
+  }
+
+  function updateMedication(index, key, value) {
+    setPatient((current) => {
+      const medikation = [...(((current.massnahmen || {}).medikation) || [])];
+      medikation[index] = { ...(medikation[index] || {}), [key]: value };
+      return {
+        ...current,
+        massnahmen: {
+          ...(current.massnahmen || {}),
+          timeline: ((current.massnahmen || {}).timeline || []),
+          medikation
+        }
+      };
+    });
+  }
+
+  function removeMedication(index) {
+    setPatient((current) => {
+      const medikation = [...(((current.massnahmen || {}).medikation) || [])];
+      medikation.splice(index, 1);
+      return { ...current, massnahmen: { ...(current.massnahmen || {}), medikation } };
+    });
+  }
+
   async function saveDraft() {
     setError('');
     setStatusText('');
@@ -357,6 +461,39 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
         body: JSON.stringify({ patient })
       }, session.token);
       setStatusText(`Entwurf gespeichert: ${result.updated_at}`);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function generateProtocol() {
+    setError('');
+    setStatusText('');
+    try {
+      const result = await api('/api/protocol/preview', {
+        method: 'POST',
+        body: JSON.stringify({ patient })
+      }, session.token);
+      setGeneratedProtocol(result.protocol_text || '');
+      setProtocolSection('protokoll');
+      setStatusText('Protokoll wurde erzeugt.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function finishCase() {
+    setError('');
+    setStatusText('');
+    try {
+      const result = await api('/api/cases/finish', {
+        method: 'POST',
+        body: JSON.stringify({ patient })
+      }, session.token);
+      setGeneratedProtocol(result.protocol_text || '');
+      setPatient(emptyPatient);
+      setProtocolSection('protokoll');
+      setStatusText(`Einsatz beendet und archiviert: ${result.case_id}`);
     } catch (err) {
       setError(err.message);
     }
@@ -379,7 +516,9 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
 
       <section className="protocol-toolbar">
         <button type="button" onClick={onBack}>Zurück zum Hauptmenü</button>
+        <button type="button" onClick={generateProtocol}>Protokoll generieren</button>
         <button type="button" onClick={saveDraft}>Entwurf speichern</button>
+        <button type="button" onClick={finishCase}>Einsatz beenden</button>
       </section>
 
       {error && <div className="error-box">{error}</div>}
@@ -406,6 +545,34 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
           onClick={() => setProtocolSection('samplers')}
         >
           SAMPLERS
+        </button>
+        <button
+          type="button"
+          className={protocolSection === 'opqrst' ? 'active' : ''}
+          onClick={() => setProtocolSection('opqrst')}
+        >
+          OPQRST
+        </button>
+        <button
+          type="button"
+          className={protocolSection === 'massnahmen' ? 'active' : ''}
+          onClick={() => setProtocolSection('massnahmen')}
+        >
+          Maßnahmen
+        </button>
+        <button
+          type="button"
+          className={protocolSection === 'abschluss' ? 'active' : ''}
+          onClick={() => setProtocolSection('abschluss')}
+        >
+          Abschluss
+        </button>
+        <button
+          type="button"
+          className={protocolSection === 'protokoll' ? 'active' : ''}
+          onClick={() => setProtocolSection('protokoll')}
+        >
+          Protokoll
         </button>
       </section>
 
@@ -662,6 +829,119 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
             </label>
           </fieldset>
         </div>
+      </section>}
+
+      {protocolSection === 'opqrst' && <section className="work-panel">
+        <div className="section-head">
+          <h2>OPQRST</h2>
+          <span>Schmerz und Leitsymptom</span>
+        </div>
+        <div className="assessment-grid">
+          <fieldset>
+            <legend>O · Onset</legend>
+            <label>Beginn<input value={opqrst.onset || ''} onChange={(event) => updateOpqrst('onset', event.target.value)} /></label>
+          </fieldset>
+          <fieldset>
+            <legend>P · Provocation/Palliation</legend>
+            <label>Besser / schlechter<textarea value={opqrst.provocation || ''} onChange={(event) => updateOpqrst('provocation', event.target.value)} rows={4} /></label>
+          </fieldset>
+          <fieldset>
+            <legend>Q · Quality</legend>
+            <label>Qualität<input value={opqrst.quality || ''} onChange={(event) => updateOpqrst('quality', event.target.value)} /></label>
+          </fieldset>
+          <fieldset>
+            <legend>R · Region/Radiation</legend>
+            <label>Ort / Ausstrahlung<textarea value={opqrst.region || ''} onChange={(event) => updateOpqrst('region', event.target.value)} rows={4} /></label>
+          </fieldset>
+          <fieldset>
+            <legend>S · Severity</legend>
+            <label>NRS / Stärke<input value={opqrst.severity || ''} onChange={(event) => updateOpqrst('severity', event.target.value)} inputMode="numeric" /></label>
+          </fieldset>
+          <fieldset>
+            <legend>T · Time</legend>
+            <label>Verlauf<textarea value={opqrst.time || ''} onChange={(event) => updateOpqrst('time', event.target.value)} rows={4} /></label>
+          </fieldset>
+        </div>
+      </section>}
+
+      {protocolSection === 'massnahmen' && <section className="work-panel">
+        <div className="section-head">
+          <h2>Maßnahmen & Medikation</h2>
+          <span>chronologisch dokumentieren</span>
+        </div>
+
+        <div className="list-head">
+          <h3>Maßnahmen</h3>
+          <button type="button" onClick={addMeasure}>Maßnahme hinzufügen</button>
+        </div>
+        <div className="dynamic-list">
+          {(massnahmen.timeline || []).map((item, index) => (
+            <div className="dynamic-row" key={`measure-${index}`}>
+              <input placeholder="Zeit" value={item.zeit || ''} onChange={(event) => updateMeasure(index, 'zeit', event.target.value)} />
+              <input placeholder="Maßnahme" value={item.massnahme || ''} onChange={(event) => updateMeasure(index, 'massnahme', event.target.value)} />
+              <button type="button" onClick={() => removeMeasure(index)}>Entfernen</button>
+            </div>
+          ))}
+          {(massnahmen.timeline || []).length === 0 && <p className="muted">Noch keine Maßnahmen dokumentiert.</p>}
+        </div>
+
+        <div className="list-head">
+          <h3>Medikation</h3>
+          <button type="button" onClick={addMedication}>Medikation hinzufügen</button>
+        </div>
+        <div className="dynamic-list">
+          {(massnahmen.medikation || []).map((item, index) => (
+            <div className="dynamic-row medication-row" key={`medication-${index}`}>
+              <input placeholder="Zeit" value={item.zeit || ''} onChange={(event) => updateMedication(index, 'zeit', event.target.value)} />
+              <input placeholder="Medikament" value={item.medikament || ''} onChange={(event) => updateMedication(index, 'medikament', event.target.value)} />
+              <input placeholder="Dosis" value={item.dosis || ''} onChange={(event) => updateMedication(index, 'dosis', event.target.value)} />
+              <input placeholder="Weg" value={item.weg || ''} onChange={(event) => updateMedication(index, 'weg', event.target.value)} />
+              <button type="button" onClick={() => removeMedication(index)}>Entfernen</button>
+            </div>
+          ))}
+          {(massnahmen.medikation || []).length === 0 && <p className="muted">Noch keine Medikation dokumentiert.</p>}
+        </div>
+      </section>}
+
+      {protocolSection === 'abschluss' && <section className="work-panel">
+        <div className="section-head">
+          <h2>Verdacht & Übergabe</h2>
+          <span>Arbeitsdiagnose und Zielübergabe</span>
+        </div>
+        <div className="assessment-grid">
+          <fieldset>
+            <legend>Verdacht</legend>
+            <label>
+              Arbeitsdiagnose
+              <input value={amls.arbeitsdiagnose || ''} onChange={(event) => updateAmls('arbeitsdiagnose', event.target.value)} />
+            </label>
+          </fieldset>
+          <fieldset>
+            <legend>Übergabe</legend>
+            <label>
+              Ziel / Empfänger
+              <input value={uebergabe.ziel || ''} onChange={(event) => updateUebergabe('ziel', event.target.value)} />
+            </label>
+            <label>
+              Übergabetext
+              <textarea value={uebergabe.text || ''} onChange={(event) => updateUebergabe('text', event.target.value)} rows={6} />
+            </label>
+          </fieldset>
+        </div>
+      </section>}
+
+      {protocolSection === 'protokoll' && <section className="work-panel">
+        <div className="section-head">
+          <h2>Protokoll</h2>
+          <span>Vorschau und Abschluss</span>
+        </div>
+        <textarea
+          className="protocol-preview"
+          value={generatedProtocol}
+          onChange={(event) => setGeneratedProtocol(event.target.value)}
+          placeholder="Noch keine Vorschau erzeugt."
+          rows={18}
+        />
       </section>}
     </main>
   );

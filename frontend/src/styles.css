@@ -206,6 +206,7 @@ form button,
 .protocol-toolbar {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 12px;
   margin-bottom: 18px;
 }
@@ -222,12 +223,13 @@ form button,
 }
 
 .protocol-toolbar button:last-child {
-  background: linear-gradient(135deg, #2d7cff 0%, #12c6b2 100%);
+  background: linear-gradient(135deg, #e43d5d 0%, #f08a30 100%);
   border-color: transparent;
 }
 
 .protocol-tabs {
   display: inline-flex;
+  flex-wrap: wrap;
   gap: 8px;
   padding: 6px;
   margin-bottom: 16px;
@@ -361,6 +363,52 @@ legend {
   font-weight: 950;
 }
 
+.list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 18px 0 10px;
+}
+
+.list-head h3 {
+  margin: 0;
+}
+
+.list-head button,
+.dynamic-row button {
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 820;
+  cursor: pointer;
+}
+
+.dynamic-list {
+  display: grid;
+  gap: 10px;
+}
+
+.dynamic-row {
+  display: grid;
+  grid-template-columns: 120px minmax(0, 1fr) 110px;
+  gap: 10px;
+  align-items: center;
+}
+
+.medication-row {
+  grid-template-columns: 100px minmax(0, 1fr) 120px 100px 110px;
+}
+
+.protocol-preview {
+  min-height: 520px;
+  font-family: "Cascadia Mono", "Consolas", monospace;
+  line-height: 1.45;
+}
+
 .case-row {
   display: flex;
   justify-content: space-between;
@@ -399,7 +447,9 @@ legend {
   .status-band,
   .tile-grid,
   .form-grid,
-  .assessment-grid {
+  .assessment-grid,
+  .dynamic-row,
+  .medication-row {
     grid-template-columns: 1fr;
   }
 
@@ -414,7 +464,8 @@ legend {
 
   .topbar,
   .case-row,
-  .protocol-toolbar {
+  .protocol-toolbar,
+  .list-head {
     align-items: stretch;
     flex-direction: column;
   }
