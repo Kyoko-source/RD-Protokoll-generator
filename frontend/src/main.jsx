@@ -4,10 +4,12 @@ import {
   Activity,
   Building2,
   Cable,
+  Download,
   FileText,
   HeartPulse,
   Lock,
   LogOut,
+  Printer,
   RotateCcw,
   ShieldCheck,
   Stethoscope,
@@ -35,6 +37,44 @@ function api(path, options = {}, token = '') {
     }
     return data;
   });
+}
+
+async function fileRequest(path, options = {}, token = '') {
+  const headers = { ...(options.headers ?? {}) };
+  if (token) {
+    headers.Authorization = `Bearer ${token}`;
+  }
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({}));
+    throw new Error(data.detail || 'Datei konnte nicht erstellt werden');
+  }
+  const disposition = response.headers.get('Content-Disposition') || '';
+  const filenameMatch = disposition.match(/filename="([^"]+)"/);
+  return {
+    blob: await response.blob(),
+    filename: filenameMatch?.[1] || 'nana-protokoll.pdf'
+  };
+}
+
+function downloadBlob(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
+
+function printBlob(blob) {
+  const url = URL.createObjectURL(blob);
+  const printWindow = window.open(url, '_blank', 'noopener,noreferrer');
+  if (printWindow) {
+    printWindow.addEventListener('load', () => printWindow.print(), { once: true });
+  }
+  window.setTimeout(() => URL.revokeObjectURL(url), 60000);
 }
 
 const tileIcons = {
@@ -198,6 +238,7 @@ function Dashboard({ session, onLogout }) {
   const [cases, setCases] = useState([]);
   const [view, setView] = useState('home');
   const [error, setError] = useState('');
+  const [statusText, setStatusText] = useState('');
 
   useEffect(() => {
     api('/api/dashboard', {}, session.token)
@@ -215,6 +256,34 @@ function Dashboard({ session, onLogout }) {
   async function logout() {
     await api('/api/auth/logout', { method: 'POST' }, session.token).catch(() => {});
     onLogout();
+  }
+
+  async function downloadCasePdf(caseId) {
+    setError('');
+    setStatusText('');
+    try {
+      const file = await fileRequest(`/api/cases/${caseId}/pdf`, {}, session.token);
+      downloadBlob(file.blob, file.filename);
+      setStatusText('PDF wurde erstellt.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function printCasePdf(caseId) {
+    setError('');
+    setStatusText('');
+    try {
+      const file = await fileRequest(`/api/cases/${caseId}/pdf`, {}, session.token);
+      await api('/api/protocol/print-audit', {
+        method: 'POST',
+        body: JSON.stringify({ case_id: caseId, source: 'archive' })
+      }, session.token).catch(() => {});
+      printBlob(file.blob);
+      setStatusText('Druckfenster wurde geöffnet.');
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
   if (view === 'protocol') {
@@ -241,6 +310,7 @@ function Dashboard({ session, onLogout }) {
       </header>
 
       {error && <div className="error-box">{error}</div>}
+      {statusText && <div className="success-box">{statusText}</div>}
 
       <section className="status-band">
         <div>
@@ -287,12 +357,18 @@ function Dashboard({ session, onLogout }) {
             <p className="muted">Noch keine abgeschlossenen Einsätze sichtbar.</p>
           ) : (
             activeCases.slice(0, 6).map((item) => (
-              <article className="case-row" key={item.id}>
+              <article className="case-row archive-row" key={item.id}>
                 <div>
                   <strong>{item.summary}</strong>
                   <span>{item.completed_at}</span>
                 </div>
                 <span className={`status-pill status-${item.status}`}>{item.status}</span>
+                <button type="button" onClick={() => downloadCasePdf(item.id)}>
+                  <Download size={16} /> PDF
+                </button>
+                <button type="button" onClick={() => printCasePdf(item.id)}>
+                  <Printer size={16} /> Drucken
+                </button>
               </article>
             ))
           )}
@@ -313,6 +389,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
+  const exportEvents = auditEvents.filter((event) => event.action.includes('pdf') || event.action.includes('print'));
 
   async function loadAdminData() {
     setError('');
@@ -548,6 +625,23 @@ function AdminView({ session, employee, onBack, onLogout }) {
           ))}
         </div>
       </section>
+
+      <section className="work-panel">
+        <div className="section-head">
+          <h2>Exporthistorie</h2>
+          <span>{exportEvents.length} Ereignisse</span>
+        </div>
+        <div className="audit-list">
+          {exportEvents.length === 0 ? (
+            <p className="muted">Noch keine PDF- oder Druckereignisse im Audit-Log.</p>
+          ) : exportEvents.slice(0, 12).map((event, index) => (
+            <div className="audit-row" key={`export-${event.timestamp}-${index}`}>
+              <strong>{event.action}</strong>
+              <span>{event.timestamp} · {event.employee_name || 'System'} · {event.entity_id || event.entity_type || '-'}</span>
+            </div>
+          ))}
+        </div>
+      </section>
     </main>
   );
 }
@@ -760,6 +854,42 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
     }
   }
 
+  async function exportDraftPdf() {
+    setError('');
+    setStatusText('');
+    try {
+      const file = await fileRequest('/api/protocol/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient })
+      }, session.token);
+      downloadBlob(file.blob, file.filename);
+      setStatusText('PDF wurde erstellt.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function printDraftPdf() {
+    setError('');
+    setStatusText('');
+    try {
+      const file = await fileRequest('/api/protocol/pdf', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patient })
+      }, session.token);
+      await api('/api/protocol/print-audit', {
+        method: 'POST',
+        body: JSON.stringify({ source: 'draft' })
+      }, session.token).catch(() => {});
+      printBlob(file.blob);
+      setStatusText('Druckfenster wurde geöffnet.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -778,6 +908,8 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
       <section className="protocol-toolbar">
         <button type="button" onClick={onBack}>Zurück zum Hauptmenü</button>
         <button type="button" onClick={generateProtocol}>Protokoll generieren</button>
+        <button type="button" onClick={exportDraftPdf}><Download size={16} /> PDF</button>
+        <button type="button" onClick={printDraftPdf}><Printer size={16} /> Drucken</button>
         <button type="button" onClick={saveDraft}>Entwurf speichern</button>
         <button type="button" onClick={finishCase}>Einsatz beenden</button>
       </section>

@@ -3,6 +3,8 @@ from datetime import datetime, timedelta
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import Response
+from fpdf import FPDF
 from pydantic import BaseModel
 
 from backend.security import expires_at, is_expired, new_token, password_hash, verify_password
@@ -63,6 +65,11 @@ class DraftRequest(BaseModel):
 
 class ProtocolRequest(BaseModel):
     patient: dict
+
+
+class PrintAuditRequest(BaseModel):
+    case_id: str | None = None
+    source: str = "draft"
 
 
 class EmployeeCreateRequest(BaseModel):
@@ -215,6 +222,80 @@ def generate_protocol_text(patient):
         text += "\n"
 
     return text.strip()
+
+
+def pdf_safe(value):
+    replacements = {
+        "ä": "ae", "ö": "oe", "ü": "ue",
+        "Ä": "Ae", "Ö": "Oe", "Ü": "Ue",
+        "ß": "ss", "·": "-", "–": "-", "—": "-",
+        "’": "'", "“": '"', "”": '"',
+    }
+    text = str(value or "")
+    for source, target in replacements.items():
+        text = text.replace(source, target)
+    return text.encode("latin-1", "replace").decode("latin-1")
+
+
+def write_pdf_line(pdf, line, height=5):
+    safe_line = pdf_safe(line)
+    if not safe_line.strip():
+        pdf.ln(height)
+        return
+    max_chars = 92
+    while safe_line:
+        part = safe_line[:max_chars]
+        safe_line = safe_line[max_chars:]
+        pdf.set_x(pdf.l_margin)
+        pdf.multi_cell(0, height, part)
+
+
+def build_pdf_bytes(title, protocol_text, metadata=None):
+    metadata = metadata or {}
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.set_fill_color(8, 20, 38)
+    pdf.set_text_color(255, 255, 255)
+    pdf.set_font("Helvetica", "B", 18)
+    pdf.cell(0, 12, pdf_safe("NANA Rettungsdienst-Protokoll"), ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.cell(0, 7, pdf_safe("Notfall-Aufzeichnungs- und Nachbearbeitungs-Assistent"), ln=True, fill=True)
+
+    pdf.ln(5)
+    pdf.set_text_color(20, 31, 48)
+    pdf.set_font("Helvetica", "B", 12)
+    pdf.cell(0, 8, pdf_safe(title), ln=True)
+    pdf.set_font("Helvetica", "", 9)
+    for label, value in metadata.items():
+        if valid(value):
+            pdf.cell(0, 6, pdf_safe(f"{label}: {value}"), ln=True)
+
+    pdf.ln(4)
+    pdf.set_font("Courier", "", 9)
+    for line in str(protocol_text or "").splitlines():
+        write_pdf_line(pdf, line)
+
+    pdf.ln(4)
+    pdf.set_font("Helvetica", "I", 8)
+    pdf.multi_cell(
+        0,
+        5,
+        pdf_safe("Hinweis: Dokumentationsentwurf. Vor medizinischer, rechtlicher oder abrechnungsrelevanter Weitergabe fachlich pruefen."),
+    )
+    data = pdf.output(dest="S")
+    if isinstance(data, str):
+        return data.encode("latin-1")
+    return bytes(data)
+
+
+def pdf_response(filename, pdf_bytes):
+    safe_filename = "".join(char for char in filename if char.isalnum() or char in ["-", "_", "."])
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
+    )
 
 
 def audit(action, employee=None, entity_type="", entity_id="", details=None):
@@ -470,6 +551,30 @@ def protocol_preview(payload: ProtocolRequest, employee=Depends(current_employee
     return {"protocol_text": protocol_text, "summary": build_case_summary(payload.patient)}
 
 
+@app.post("/api/protocol/pdf")
+def protocol_pdf(payload: ProtocolRequest, employee=Depends(current_employee)):
+    protocol_text = generate_protocol_text(payload.patient)
+    summary = build_case_summary(payload.patient)
+    created_at = datetime.now().isoformat(timespec="seconds")
+    pdf_bytes = build_pdf_bytes(
+        "Laufender Einsatz",
+        protocol_text,
+        {
+            "Exportiert am": created_at,
+            "Mitarbeiter": employee.get("name", ""),
+            "Zusammenfassung": summary,
+            "Quelle": "laufender Entwurf",
+        },
+    )
+    audit(
+        "api_protocol_pdf_exported",
+        employee=employee,
+        entity_type="case_draft",
+        details={"summary": summary, "format": "pdf"},
+    )
+    return pdf_response(f"nana-entwurf-{datetime.now().strftime('%Y%m%d-%H%M%S')}.pdf", pdf_bytes)
+
+
 @app.post("/api/cases/finish")
 def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
     protocol_text = generate_protocol_text(payload.patient)
@@ -495,6 +600,52 @@ def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
 
     audit("api_case_finished", employee=employee, entity_type="finished_case", entity_id=case_id)
     return {"status": "finished", "case_id": case_id, "protocol_text": protocol_text}
+
+
+@app.get("/api/cases/{case_id}/pdf")
+def case_pdf(case_id: str, employee=Depends(current_employee)):
+    item = get_finished_case(case_id)
+    if not item or item.get("status") == "deleted":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Einsatz nicht gefunden.")
+    if item.get("status") == "anonymized":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Anonymisierte Einsätze sind für PDF-Export gesperrt.")
+    if employee.get("role") != "admin" and item.get("employee_id") != employee.get("id"):
+        audit("api_case_export_denied", employee=employee, entity_type="finished_case", entity_id=case_id)
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Nicht freigegeben.")
+
+    pdf_bytes = build_pdf_bytes(
+        f"Einsatz {case_id}",
+        item.get("protocol_text", ""),
+        {
+            "Einsatz-ID": case_id,
+            "Abgeschlossen am": item.get("completed_at", ""),
+            "Mitarbeiter": item.get("employee_name", ""),
+            "Zusammenfassung": item.get("summary", ""),
+            "Aufbewahrung bis": item.get("retention_until", ""),
+        },
+    )
+    audit(
+        "api_case_pdf_exported",
+        employee=employee,
+        entity_type="finished_case",
+        entity_id=case_id,
+        details={"format": "pdf", "summary": item.get("summary", "")},
+    )
+    return pdf_response(f"nana-einsatz-{case_id}.pdf", pdf_bytes)
+
+
+@app.post("/api/protocol/print-audit")
+def print_audit(payload: PrintAuditRequest, employee=Depends(current_employee)):
+    entity_type = "finished_case" if payload.case_id else "case_draft"
+    entity_id = payload.case_id or ""
+    audit(
+        "api_protocol_print_started",
+        employee=employee,
+        entity_type=entity_type,
+        entity_id=entity_id,
+        details={"source": payload.source},
+    )
+    return {"status": "logged"}
 
 
 @app.get("/api/admin/audit")
