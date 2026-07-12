@@ -161,6 +161,26 @@ def add_lines(title, rows):
     return text + "\n"
 
 
+def format_observation(value, status_value="", unit=""):
+    value_text = str(value).strip() if valid(value) else ""
+    status_text = str(status_value).strip() if valid(status_value) else ""
+    unit_text = f" {unit}" if unit and value_text else ""
+    if value_text and status_text:
+        return f"{value_text}{unit_text} ({status_text})"
+    if value_text:
+        return f"{value_text}{unit_text}"
+    return status_text
+
+
+def format_blood_pressure(vital):
+    rr_sys = vital.get("rr_sys")
+    rr_dia = vital.get("rr_dia")
+    status_value = vital.get("rr_status")
+    if valid(rr_sys) or valid(rr_dia):
+        return format_observation(f"{rr_sys or ''}/{rr_dia or ''}", status_value, "mmHg")
+    return format_observation("", status_value)
+
+
 def amls_item_text(item, secondary_key="hinweis"):
     if isinstance(item, dict):
         name = item.get("diagnose") or item.get("name") or item.get("text") or item.get("value")
@@ -636,28 +656,21 @@ def generate_protocol_text(patient):
     handover = patient.get("uebergabe", {})
     amls = patient.get("amls", {})
 
-    text = "NANA RETTUNGSDIENST-PROTOKOLL\n"
+    text = "RD-PROTOKOLL - DOKUMENTATIONSENTWURF\n"
     text += "=" * 50 + "\n"
     text += f"Erstellt am {datetime.now().strftime('%d.%m.%Y um %H:%M:%S')} Uhr\n"
-    text += "Dokumentationsentwurf: vor Weitergabe fachlich pruefen.\n\n"
+    text += "Enthaelt ausschliesslich dokumentierte Angaben; vor Verwendung vollstaendig pruefen.\n\n"
 
     text += add_lines("VITALWERTE & DEMOGRAPHIE", [
         ("Alter", vital.get("alter")),
         ("Geschlecht", vital.get("geschlecht")),
-        ("RR", f"{vital.get('rr_sys', '')}/{vital.get('rr_dia', '')} mmHg" if valid(vital.get("rr_sys")) or valid(vital.get("rr_dia")) else ""),
-        ("RR Einordnung", vital.get("rr_status")),
-        ("Puls", vital.get("puls")),
-        ("Puls Einordnung", vital.get("puls_status")),
-        ("SpO2", vital.get("spo2")),
-        ("SpO2 Einordnung", vital.get("spo2_status")),
-        ("Atemfrequenz", vital.get("af")),
-        ("Atemfrequenz Einordnung", vital.get("af_status")),
-        ("BZ", vital.get("bz")),
-        ("BZ Einordnung", vital.get("bz_status")),
-        ("Temperatur", vital.get("temperatur")),
-        ("Temperatur Einordnung", vital.get("temperatur_status")),
-        ("GCS", vital.get("gcs")),
-        ("GCS Einordnung", vital.get("gcs_status")),
+        ("RR", format_blood_pressure(vital)),
+        ("Puls", format_observation(vital.get("puls"), vital.get("puls_status"), "/min")),
+        ("SpO2", format_observation(vital.get("spo2"), vital.get("spo2_status"), "%")),
+        ("Atemfrequenz", format_observation(vital.get("af"), vital.get("af_status"), "/min")),
+        ("BZ", format_observation(vital.get("bz"), vital.get("bz_status"), "mg/dL")),
+        ("Temperatur", format_observation(vital.get("temperatur"), vital.get("temperatur_status"), "°C")),
+        ("GCS", format_observation(vital.get("gcs"), vital.get("gcs_status"), "/15")),
         ("Kurzbericht", vital.get("kurzbericht")),
     ])
     text += add_lines("xABCDE", [

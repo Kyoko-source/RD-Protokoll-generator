@@ -84,6 +84,22 @@ function addProtocolBlock(title, rows) {
   return `${lines.join('\n')}\n\n`;
 }
 
+function formatObservation(value, status = '', unit = '') {
+  const valueText = hasValue(value) ? String(value).trim() : '';
+  const statusText = hasValue(status) ? String(status).trim() : '';
+  const unitText = unit && valueText ? ` ${unit}` : '';
+  if (valueText && statusText) return `${valueText}${unitText} (${statusText})`;
+  if (valueText) return `${valueText}${unitText}`;
+  return statusText;
+}
+
+function formatBloodPressure(vital) {
+  if (hasValue(vital.rr_sys) || hasValue(vital.rr_dia)) {
+    return formatObservation(`${vital.rr_sys || ''}/${vital.rr_dia || ''}`, vital.rr_status, 'mmHg');
+  }
+  return formatObservation('', vital.rr_status);
+}
+
 function renderListBlock(title, items, formatter) {
   const lines = (Array.isArray(items) ? items : []).map(formatter).filter(hasValue);
   if (lines.length === 0) return '';
@@ -98,27 +114,20 @@ function generateLocalProtocolText(patient) {
   const amls = patient.amls || {};
   const measures = patient.massnahmen || {};
   const handover = patient.uebergabe || {};
-  let text = 'NANA RETTUNGSDIENST-PROTOKOLL\n';
+  let text = 'RD-PROTOKOLL - DOKUMENTATIONSENTWURF\n';
   text += '==================================================\n';
   text += `Lokal erzeugt am ${new Date().toLocaleString('de-DE')}\n`;
-  text += 'Dokumentationsentwurf: vor Weitergabe fachlich pruefen.\n\n';
+  text += 'Enthaelt ausschliesslich dokumentierte Angaben; vor Verwendung vollstaendig pruefen.\n\n';
   text += addProtocolBlock('VITALWERTE & DEMOGRAPHIE', [
     ['Alter', vital.alter],
     ['Geschlecht', vital.geschlecht],
-    ['RR', hasValue(vital.rr_sys) || hasValue(vital.rr_dia) ? `${vital.rr_sys || ''}/${vital.rr_dia || ''} mmHg` : ''],
-    ['RR Einordnung', vital.rr_status],
-    ['Puls', vital.puls],
-    ['Puls Einordnung', vital.puls_status],
-    ['SpO2', vital.spo2],
-    ['SpO2 Einordnung', vital.spo2_status],
-    ['Atemfrequenz', vital.af],
-    ['Atemfrequenz Einordnung', vital.af_status],
-    ['BZ', vital.bz],
-    ['BZ Einordnung', vital.bz_status],
-    ['Temperatur', vital.temperatur],
-    ['Temperatur Einordnung', vital.temperatur_status],
-    ['GCS', vital.gcs],
-    ['GCS Einordnung', vital.gcs_status],
+    ['RR', formatBloodPressure(vital)],
+    ['Puls', formatObservation(vital.puls, vital.puls_status, '/min')],
+    ['SpO2', formatObservation(vital.spo2, vital.spo2_status, '%')],
+    ['Atemfrequenz', formatObservation(vital.af, vital.af_status, '/min')],
+    ['BZ', formatObservation(vital.bz, vital.bz_status, 'mg/dL')],
+    ['Temperatur', formatObservation(vital.temperatur, vital.temperatur_status, '°C')],
+    ['GCS', formatObservation(vital.gcs, vital.gcs_status, '/15')],
     ['Kurzbericht', vital.kurzbericht],
   ]);
   text += addProtocolBlock('xABCDE', [
@@ -2059,11 +2068,11 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             </select>
           </label>
           <label>
-            RR systolisch
+            RR systolisch optional
             <input value={vitalwerte.rr_sys || ''} onChange={(event) => updateVital('rr_sys', event.target.value)} inputMode="numeric" />
           </label>
           <label>
-            RR diastolisch
+            RR diastolisch optional
             <input value={vitalwerte.rr_dia || ''} onChange={(event) => updateVital('rr_dia', event.target.value)} inputMode="numeric" />
           </label>
           <label>
@@ -2073,7 +2082,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             </select>
           </label>
           <label>
-            Puls
+            Puls optional
             <input value={vitalwerte.puls || ''} onChange={(event) => updateVital('puls', event.target.value)} inputMode="numeric" />
           </label>
           <label>
@@ -2083,7 +2092,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             </select>
           </label>
           <label>
-            SpO2
+            SpO2 optional
             <input value={vitalwerte.spo2 || ''} onChange={(event) => updateVital('spo2', event.target.value)} inputMode="numeric" />
           </label>
           <label>
@@ -2093,7 +2102,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             </select>
           </label>
           <label>
-            Atemfrequenz
+            Atemfrequenz optional
             <input value={vitalwerte.af || ''} onChange={(event) => updateVital('af', event.target.value)} inputMode="numeric" />
           </label>
           <label>
@@ -2103,7 +2112,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             </select>
           </label>
           <label>
-            BZ
+            BZ optional
             <input value={vitalwerte.bz || ''} onChange={(event) => updateVital('bz', event.target.value)} inputMode="numeric" />
           </label>
           <label>
@@ -2113,7 +2122,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             </select>
           </label>
           <label>
-            Temperatur
+            Temperatur optional
             <input value={vitalwerte.temperatur || ''} onChange={(event) => updateVital('temperatur', event.target.value)} inputMode="decimal" />
           </label>
           <label>
@@ -2123,7 +2132,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             </select>
           </label>
           <label>
-            GCS
+            GCS optional
             <input value={vitalwerte.gcs || ''} onChange={(event) => updateVital('gcs', event.target.value)} inputMode="numeric" />
           </label>
           <label>
