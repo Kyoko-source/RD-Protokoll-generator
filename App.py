@@ -5220,23 +5220,63 @@ elif seite == "📄 Protokoll":
         escaped_protocol = json.dumps(st.session_state["generated_protocol_text"])
         components.html(
             f"""
-            <div style=\"margin-top:10px;\">
-                <button id=\"copy-protocol-btn\" style=\"
-                    width:100%;
-                    padding:12px 16px;
-                    border-radius:10px;
-                    border:none;
-                    background:linear-gradient(135deg, #4e72ff 0%, #5ac8ff 100%);
-                    color:#fff;
-                    font-weight:700;
-                    cursor:pointer;
-                \">📋 Protokoll kopieren</button>
-                <div id=\"copy-status\" style=\"margin-top:8px; color:#b7d7ff; font-size:0.92rem;\"></div>
+            <style>
+            .protocol-actions {{
+                display:grid;
+                grid-template-columns:1fr 1fr;
+                gap:10px;
+                margin-top:10px;
+            }}
+            .protocol-action-btn {{
+                width:100%;
+                padding:12px 16px;
+                border-radius:10px;
+                border:none;
+                color:#fff;
+                font-weight:800;
+                cursor:pointer;
+                min-height:46px;
+            }}
+            #copy-protocol-btn {{
+                background:linear-gradient(135deg, #4e72ff 0%, #5ac8ff 100%);
+            }}
+            #print-protocol-btn {{
+                background:linear-gradient(135deg, #0f9b72 0%, #42d392 100%);
+            }}
+            #copy-status {{
+                margin-top:8px;
+                color:#b7d7ff;
+                font-size:0.92rem;
+            }}
+            .print-doc {{
+                display:none;
+                white-space:pre-wrap;
+                font-family: Arial, Helvetica, sans-serif;
+                color:#111;
+                line-height:1.35;
+                font-size:11pt;
+            }}
+            @media print {{
+                .screen-only {{ display:none !important; }}
+                .print-doc {{ display:block !important; }}
+                @page {{ margin: 14mm; }}
+            }}
+            </style>
+            <div class=\"screen-only\">
+                <div class=\"protocol-actions\">
+                    <button id=\"copy-protocol-btn\" class=\"protocol-action-btn\">📋 Protokoll kopieren</button>
+                    <button id=\"print-protocol-btn\" class=\"protocol-action-btn\">🖨️ AirPrint / Drucken</button>
+                </div>
+                <div id=\"copy-status\"></div>
             </div>
+            <pre id=\"print-document\" class=\"print-doc\"></pre>
             <script>
             const text = {escaped_protocol};
             const btn = document.getElementById('copy-protocol-btn');
+            const printBtn = document.getElementById('print-protocol-btn');
+            const printDocument = document.getElementById('print-document');
             const status = document.getElementById('copy-status');
+            printDocument.textContent = text;
             btn.addEventListener('click', async () => {{
                 try {{
                     await navigator.clipboard.writeText(text);
@@ -5245,9 +5285,14 @@ elif seite == "📄 Protokoll":
                     status.textContent = 'Kopieren fehlgeschlagen. Bitte manuell markieren und kopieren.';
                 }}
             }});
+            printBtn.addEventListener('click', () => {{
+                status.textContent = 'Druckdialog geöffnet. AirPrint-Drucker werden dort vom Gerät angezeigt.';
+                window.focus();
+                window.print();
+            }});
             </script>
             """,
-            height=95,
+            height=135,
         )
 
 if seite != "🛠️ Admin" and current_workflow_index is not None:
