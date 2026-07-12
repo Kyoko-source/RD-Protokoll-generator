@@ -2,7 +2,7 @@
 import streamlit.components.v1 as components
 from io import BytesIO
 from fpdf import FPDF
-from datetime import datetime
+from datetime import datetime, timedelta
 import hashlib
 import hmac
 import html
@@ -17,6 +17,9 @@ from device_guides import DEVICE_GUIDES
 from hospital_finder import CATEGORIES, TOWNS, build_dutch_protocol, suitable_hospitals
 from interfaces import build_fhir_bundle, build_nana_case_export, parse_dispatch_import
 from storage import (
+    anonymize_finished_case,
+    delete_finished_case,
+    get_app_setting,
     get_finished_case,
     init_database,
     list_audit_events,
@@ -27,6 +30,7 @@ from storage import (
     save_case_draft_store as db_save_case_draft_store,
     save_employee_store as db_save_employee_store,
     save_finished_case,
+    set_app_setting,
     write_audit_event,
 )
 
@@ -1798,6 +1802,43 @@ def build_case_summary(patient_data):
     return " · ".join(parts) if parts else "Einsatz ohne Kurzangaben"
 
 
+def _parse_iso_datetime(value):
+    if not value:
+        return None
+    try:
+        return datetime.fromisoformat(str(value))
+    except ValueError:
+        return None
+
+
+def _retention_days():
+    return int(get_app_setting("retention_days", 180) or 180)
+
+
+def _retention_until(completed_at, retention_days=None):
+    completed_dt = _parse_iso_datetime(completed_at) or datetime.now()
+    days = int(retention_days if retention_days is not None else _retention_days())
+    return (completed_dt + timedelta(days=days)).isoformat(timespec="seconds")
+
+
+def _retention_state(case, retention_days=None):
+    completed_dt = _parse_iso_datetime(case.get("completed_at"))
+    if not completed_dt:
+        return {"age_days": None, "days_left": None, "expired": False, "retention_until": ""}
+
+    retention_until = case.get("retention_until") or _retention_until(case.get("completed_at"), retention_days)
+    retention_dt = _parse_iso_datetime(retention_until)
+    now = datetime.now()
+    age_days = max(0, (now - completed_dt).days)
+    days_left = (retention_dt - now).days if retention_dt else None
+    return {
+        "age_days": age_days,
+        "days_left": days_left,
+        "expired": days_left is not None and days_left < 0,
+        "retention_until": retention_until,
+    }
+
+
 def _employee_display_name(employee):
     role = "Admin" if employee.get("role") == "admin" else "Mitarbeiter"
     return f"{employee.get('name', 'Unbekannt')} · {role}"
@@ -2065,6 +2106,85 @@ def render_employee_admin_panel():
                             details={"target_name": employee.get("name", ""), "active": employee.get("active", True)},
                         )
                         st.rerun()
+
+
+def render_retention_admin_panel():
+    st.subheader("Datenschutz & Aufbewahrung")
+    st.caption("Aufbewahrungsfristen steuern, ablaufende Einsätze prüfen und Patientendaten anonymisieren oder löschen.")
+
+    current_days = _retention_days()
+    new_days = st.number_input(
+        "Standard-Aufbewahrungsfrist für neue Einsätze (Tage)",
+        min_value=1,
+        max_value=3650,
+        value=current_days,
+        step=30,
+        key="retention_days_input",
+    )
+    if st.button("Aufbewahrungsfrist speichern", key="save_retention_days", use_container_width=True, type="primary"):
+        set_app_setting("retention_days", int(new_days))
+        _audit("retention_policy_saved", entity_type="retention_policy", details={"days": int(new_days)})
+        st.success("Aufbewahrungsfrist gespeichert. Neue Einsätze verwenden diese Frist.")
+        st.rerun()
+
+    all_cases = list_finished_cases(include_deleted=True, limit=1000)
+    active_cases = [case for case in all_cases if case.get("status") == "active"]
+    anonymized_cases = [case for case in all_cases if case.get("status") == "anonymized"]
+    deleted_cases = [case for case in all_cases if case.get("status") == "deleted"]
+    expired_cases = [case for case in active_cases if _retention_state(case, current_days).get("expired")]
+    due_soon_cases = [
+        case for case in active_cases
+        if (lambda state: state.get("days_left") is not None and 0 <= state.get("days_left") <= 14)(_retention_state(case, current_days))
+    ]
+
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Aktiv", len(active_cases))
+    metric_cols[1].metric("Bald fällig", len(due_soon_cases))
+    metric_cols[2].metric("Überfällig", len(expired_cases))
+    metric_cols[3].metric("Anonymisiert", len(anonymized_cases))
+
+    if deleted_cases:
+        st.caption(f"{len(deleted_cases)} Fall/Fälle sind als gelöscht markiert und im normalen Archiv ausgeblendet.")
+
+    st.divider()
+    st.markdown("**Prüfliste**")
+    if not active_cases:
+        st.info("Keine aktiven abgeschlossenen Einsätze vorhanden.")
+        return
+
+    review_cases = sorted(
+        active_cases,
+        key=lambda case: (_retention_state(case, current_days).get("days_left") is None, _retention_state(case, current_days).get("days_left") or 999999),
+    )[:80]
+
+    for case in review_cases:
+        state = _retention_state(case, current_days)
+        status_text = "überfällig" if state["expired"] else f"noch {state['days_left']} Tage" if state["days_left"] is not None else "Frist unbekannt"
+        title = f"{case['completed_at']} · {case['summary']} · {status_text}"
+        with st.expander(title, expanded=state["expired"]):
+            st.caption(
+                f"Fall-ID {case['id']} · Mitarbeiter {case.get('employee_name') or 'nicht gespeichert'} · "
+                f"Alter {state['age_days']} Tage · Aufbewahren bis {state['retention_until'] or 'unbekannt'}"
+            )
+            st.text_area(
+                "Kurzvorschau",
+                (case.get("protocol_text") or "")[:1200],
+                height=180,
+                key=f"retention_preview_{case['id']}",
+            )
+            anon_col, delete_col = st.columns(2)
+            with anon_col:
+                if st.button("Fall anonymisieren", key=f"anonymize_case_{case['id']}", use_container_width=True):
+                    anonymize_finished_case(case["id"], datetime.now().isoformat(timespec="seconds"))
+                    _audit("finished_case_anonymized", entity_type="finished_case", entity_id=case["id"])
+                    st.success("Fall wurde anonymisiert.")
+                    st.rerun()
+            with delete_col:
+                if st.button("Fall löschen", key=f"delete_case_{case['id']}", use_container_width=True):
+                    delete_finished_case(case["id"], datetime.now().isoformat(timespec="seconds"))
+                    _audit("finished_case_deleted", entity_type="finished_case", entity_id=case["id"])
+                    st.success("Fall wurde gelöscht und aus dem normalen Archiv ausgeblendet.")
+                    st.rerun()
 
 
 def _has_content(values):
@@ -3163,6 +3283,8 @@ elif seite == ARCHIVE_PAGE:
         st.caption(f"{len(archived_cases)} Einsatz/Einsätze gefunden")
         for case in archived_cases:
             title = f"{case['completed_at']} · {case['summary']}"
+            if case.get("status") == "anonymized":
+                title += " · anonymisiert"
             if profile.get("role") == "admin":
                 title += f" · {case['employee_name']}"
             with st.expander(title, expanded=False):
@@ -3170,12 +3292,16 @@ elif seite == ARCHIVE_PAGE:
                 if not selected_case:
                     st.warning("Dieser Einsatz konnte nicht geladen werden.")
                     continue
+                if selected_case.get("status") == "deleted":
+                    st.warning("Dieser Einsatz wurde gelöscht.")
+                    continue
                 if profile.get("role") != "admin" and selected_case.get("employee_id") != profile.get("id"):
                     _audit("archive_access_denied", entity_type="finished_case", entity_id=case["id"])
                     st.warning("Dieser Einsatz ist für dein Profil nicht freigegeben.")
                     continue
 
-                st.caption(f"Dokumentiert von {selected_case['employee_name']} · Fall-ID {selected_case['id']}")
+                status_label = "anonymisiert" if selected_case.get("status") == "anonymized" else "aktiv"
+                st.caption(f"Status {status_label} · Dokumentiert von {selected_case['employee_name'] or 'nicht gespeichert'} · Fall-ID {selected_case['id']}")
                 st.text_area(
                     "Protokoll",
                     selected_case["protocol_text"],
@@ -3596,6 +3722,8 @@ elif seite == "🛠️ Admin":
                 st.error("Falsches Passwort")
     else:
         render_employee_admin_panel()
+        st.divider()
+        render_retention_admin_panel()
         st.divider()
 
         current_values = st.session_state["sop_admin_config"].get("value_overrides", {})
@@ -6149,14 +6277,16 @@ elif seite == "📄 Protokoll":
                 profile = st.session_state.get("employee_profile", {})
                 protocol_text = st.session_state.get("generated_protocol_text") or generate_protocol()
                 finished_case_id = secrets.token_hex(10)
+                completed_at = datetime.now().isoformat(timespec="seconds")
                 save_finished_case({
                     "id": finished_case_id,
                     "employee_id": profile.get("id", ""),
                     "employee_name": profile.get("name", ""),
-                    "completed_at": datetime.now().isoformat(timespec="seconds"),
+                    "completed_at": completed_at,
                     "summary": build_case_summary(patient),
                     "patient": patient,
                     "protocol_text": protocol_text,
+                    "retention_until": _retention_until(completed_at),
                 })
                 _audit(
                     "case_finished",

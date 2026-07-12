@@ -67,6 +67,25 @@ def init_database():
             )
             """
         )
+        existing_case_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(finished_cases)").fetchall()
+        }
+        if "status" not in existing_case_columns:
+            connection.execute("ALTER TABLE finished_cases ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
+        if "anonymized_at" not in existing_case_columns:
+            connection.execute("ALTER TABLE finished_cases ADD COLUMN anonymized_at TEXT NOT NULL DEFAULT ''")
+        if "deleted_at" not in existing_case_columns:
+            connection.execute("ALTER TABLE finished_cases ADD COLUMN deleted_at TEXT NOT NULL DEFAULT ''")
+        if "retention_until" not in existing_case_columns:
+            connection.execute("ALTER TABLE finished_cases ADD COLUMN retention_until TEXT NOT NULL DEFAULT ''")
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS app_settings (
+                key TEXT PRIMARY KEY,
+                value_json TEXT NOT NULL
+            )
+            """
+        )
         connection.commit()
 
 
@@ -188,9 +207,9 @@ def save_finished_case(case_record):
             """
             INSERT INTO finished_cases (
                 id, employee_id, employee_name, completed_at,
-                summary, patient_json, protocol_text
+                summary, patient_json, protocol_text, status, retention_until
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 case_record["id"],
@@ -200,19 +219,26 @@ def save_finished_case(case_record):
                 case_record.get("summary", ""),
                 json.dumps(case_record.get("patient", {}), ensure_ascii=False),
                 case_record.get("protocol_text", ""),
+                case_record.get("status", "active"),
+                case_record.get("retention_until", ""),
             ),
         )
         connection.commit()
 
 
-def list_finished_cases(employee_id=None, search=""):
+def list_finished_cases(employee_id=None, search="", include_deleted=False, limit=100):
     init_database()
+    safe_limit = max(1, min(int(limit or 100), 1000))
     query = """
-        SELECT id, employee_id, employee_name, completed_at, summary, protocol_text
+        SELECT id, employee_id, employee_name, completed_at, summary, protocol_text,
+               status, anonymized_at, deleted_at, retention_until
         FROM finished_cases
     """
     params = []
     clauses = []
+
+    if not include_deleted:
+        clauses.append("status != 'deleted'")
 
     if employee_id:
         clauses.append("employee_id = ?")
@@ -226,7 +252,8 @@ def list_finished_cases(employee_id=None, search=""):
     if clauses:
         query += " WHERE " + " AND ".join(clauses)
 
-    query += " ORDER BY completed_at DESC LIMIT 100"
+    query += " ORDER BY completed_at DESC LIMIT ?"
+    params.append(safe_limit)
 
     with _connect() as connection:
         rows = connection.execute(query, params).fetchall()
@@ -239,6 +266,10 @@ def list_finished_cases(employee_id=None, search=""):
             "completed_at": row["completed_at"],
             "summary": row["summary"],
             "protocol_text": row["protocol_text"],
+            "status": row["status"],
+            "anonymized_at": row["anonymized_at"],
+            "deleted_at": row["deleted_at"],
+            "retention_until": row["retention_until"],
         }
         for row in rows
     ]
@@ -265,7 +296,86 @@ def get_finished_case(case_id):
         "summary": row["summary"],
         "patient": patient,
         "protocol_text": row["protocol_text"],
+        "status": row["status"],
+        "anonymized_at": row["anonymized_at"],
+        "deleted_at": row["deleted_at"],
+        "retention_until": row["retention_until"],
     }
+
+
+def anonymize_finished_case(case_id, timestamp):
+    init_database()
+    anonymized_patient = {
+        "vitalwerte": {},
+        "xabcde": {},
+        "samplers": {},
+        "opqrst": {},
+        "einweisung": {},
+        "amls": {},
+        "massnahmen": {},
+        "transport": {},
+        "einsatz": {},
+    }
+    with _connect() as connection:
+        connection.execute(
+            """
+            UPDATE finished_cases
+            SET status = 'anonymized',
+                summary = 'Anonymisierter Einsatz',
+                patient_json = ?,
+                protocol_text = 'Dieser Einsatz wurde datenschutzbedingt anonymisiert.',
+                employee_name = '',
+                anonymized_at = ?
+            WHERE id = ? AND status != 'deleted'
+            """,
+            (json.dumps(anonymized_patient, ensure_ascii=False), timestamp, case_id),
+        )
+        connection.commit()
+
+
+def delete_finished_case(case_id, timestamp):
+    init_database()
+    with _connect() as connection:
+        connection.execute(
+            """
+            UPDATE finished_cases
+            SET status = 'deleted',
+                summary = 'Geloeschter Einsatz',
+                patient_json = '{}',
+                protocol_text = '',
+                employee_name = '',
+                deleted_at = ?
+            WHERE id = ?
+            """,
+            (timestamp, case_id),
+        )
+        connection.commit()
+
+
+def get_app_setting(key, default=None):
+    init_database()
+    with _connect() as connection:
+        row = connection.execute("SELECT value_json FROM app_settings WHERE key = ?", (key,)).fetchone()
+    if not row:
+        return default
+    try:
+        return json.loads(row["value_json"])
+    except json.JSONDecodeError:
+        return default
+
+
+def set_app_setting(key, value):
+    init_database()
+    with _connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO app_settings (key, value_json)
+            VALUES (?, ?)
+            ON CONFLICT(key) DO UPDATE SET value_json = excluded.value_json
+            """,
+            (key, json.dumps(value, ensure_ascii=False)),
+        )
+        connection.commit()
 
 
 def write_audit_event(event):
