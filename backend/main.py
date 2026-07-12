@@ -9,6 +9,8 @@ from fpdf import FPDF
 from pydantic import BaseModel
 
 from backend.security import expires_at, is_expired, new_token, password_hash, verify_password
+from device_guides import DEVICE_GUIDES
+from hospital_finder import CATEGORIES, HOSPITALS, TOWNS, distance_km
 from interfaces import build_fhir_bundle, build_nana_case_export, parse_corpuls_import, parse_dispatch_import
 from storage import (
     anonymize_finished_case,
@@ -77,6 +79,22 @@ class PrintAuditRequest(BaseModel):
 class InterfaceImportRequest(BaseModel):
     source: str = "dispatch"
     payload: str
+
+
+class IcdLookupRequest(BaseModel):
+    code: str
+
+
+class HospitalSaveRequest(BaseModel):
+    id: str | None = None
+    name: str
+    country: str = "DE"
+    address: str = ""
+    town: str = ""
+    phone: str = ""
+    categories: list[str] = []
+    estimated_minutes: int | None = None
+    source: str = ""
 
 
 class EmployeeCreateRequest(BaseModel):
@@ -313,6 +331,75 @@ def json_attachment(filename, payload):
     )
 
 
+ICD10_LOCAL = {
+    "I21": "Akuter Myokardinfarkt",
+    "I20": "Angina pectoris",
+    "I63": "Hirninfarkt",
+    "I64": "Schlaganfall, nicht als Blutung oder Infarkt bezeichnet",
+    "G40": "Epilepsie",
+    "R07": "Hals- und Brustschmerzen",
+    "R55": "Synkope und Kollaps",
+    "J44": "Sonstige chronische obstruktive Lungenkrankheit",
+    "J45": "Asthma bronchiale",
+    "E11": "Diabetes mellitus, Typ 2",
+    "S06": "Intrakranielle Verletzung",
+    "T14": "Verletzung an einer nicht näher bezeichneten Körperregion",
+    "O80": "Spontangeburt eines Einlings",
+    "F10": "Psychische und Verhaltensstörungen durch Alkohol",
+}
+
+
+def normalize_icd_code(value):
+    return str(value or "").strip().upper().replace(" ", "")
+
+
+def lookup_icd_local(code):
+    normalized = normalize_icd_code(code)
+    if not normalized:
+        return {"code": "", "diagnosis": "", "found": False}
+    candidates = [normalized]
+    if "." in normalized:
+        candidates.append(normalized.split(".", 1)[0])
+    candidates.append(normalized[:3])
+    for candidate in candidates:
+        if candidate in ICD10_LOCAL:
+            return {"code": normalized, "matched_code": candidate, "diagnosis": ICD10_LOCAL[candidate], "found": True}
+    return {"code": normalized, "matched_code": normalized[:3], "diagnosis": "Nicht im lokalen Grundkatalog gefunden", "found": False}
+
+
+def serialize_hospital(hospital):
+    item = dict(hospital)
+    item["categories"] = sorted(list(item.get("categories", [])))
+    coords = item.get("coords")
+    if coords:
+        item["coords"] = list(coords)
+    return item
+
+
+def hospital_records():
+    custom = get_app_setting("custom_hospitals", []) or []
+    defaults = [serialize_hospital(item) for item in HOSPITALS]
+    return defaults + [item for item in custom if isinstance(item, dict)]
+
+
+def ranked_hospitals(town, category):
+    origin = TOWNS.get(town)
+    matches = []
+    for hospital in hospital_records():
+        categories = hospital.get("categories", [])
+        if category and category not in categories:
+            continue
+        item = dict(hospital)
+        if origin and item.get("coords"):
+            item["distance_km"] = round(distance_km(origin, tuple(item["coords"])), 1)
+        else:
+            item["distance_km"] = None
+        if item.get("estimated_minutes") is None and item.get("distance_km") is not None:
+            item["estimated_minutes"] = max(5, int(round(item["distance_km"] * 1.4)))
+        matches.append(item)
+    return sorted(matches, key=lambda item: item.get("distance_km") if item.get("distance_km") is not None else 9999)
+
+
 def load_employee_patient_draft(employee):
     store = load_case_draft_store()
     draft = store.get("drafts", {}).get(employee["id"], {})
@@ -537,6 +624,68 @@ def dashboard(employee=Depends(current_employee)):
         tiles.append({"id": "interfaces", "label": "Schnittstellen", "subtitle": "Import und Export"})
         tiles.append({"id": "admin", "label": "Admin", "subtitle": "Sicherheit und Verwaltung"})
     return {"employee": public_employee(employee), "tiles": tiles}
+
+
+@app.get("/api/hospitals")
+def hospitals(town: str = "Borken", category: str = "Allgemeine Notaufnahme", employee=Depends(current_employee)):
+    selected_town = town if town in TOWNS else "Borken"
+    selected_category = category if category in CATEGORIES else "Allgemeine Notaufnahme"
+    return {
+        "towns": sorted(TOWNS.keys()),
+        "categories": CATEGORIES,
+        "town": selected_town,
+        "category": selected_category,
+        "hospitals": ranked_hospitals(selected_town, selected_category),
+    }
+
+
+@app.post("/api/admin/hospitals")
+def admin_save_hospital(payload: HospitalSaveRequest, employee=Depends(require_admin)):
+    hospital_id = payload.id or new_token()[:12]
+    existing = get_app_setting("custom_hospitals", []) or []
+    next_hospital = {
+        "id": hospital_id,
+        "name": payload.name.strip(),
+        "country": payload.country.strip().upper() or "DE",
+        "address": payload.address.strip(),
+        "town": payload.town.strip(),
+        "phone": payload.phone.strip(),
+        "categories": [item for item in payload.categories if item in CATEGORIES],
+        "estimated_minutes": payload.estimated_minutes,
+        "source": payload.source.strip(),
+    }
+    if not next_hospital["name"]:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Klinikname fehlt.")
+    updated = [item for item in existing if item.get("id") != hospital_id]
+    updated.append(next_hospital)
+    set_app_setting("custom_hospitals", updated)
+    audit("api_hospital_saved", employee=employee, entity_type="hospital", entity_id=hospital_id)
+    return {"status": "saved", "hospital": next_hospital}
+
+
+@app.get("/api/devices")
+def devices(employee=Depends(current_employee)):
+    return {
+        "devices": [
+            {
+                "name": name,
+                "icon": guide.get("icon", ""),
+                "model_note": guide.get("model_note", ""),
+                "source_label": guide.get("source_label", ""),
+                "source_url": guide.get("source_url", ""),
+                "topics": guide.get("topics", {}),
+                "topic_actions": guide.get("topic_actions", {}),
+            }
+            for name, guide in DEVICE_GUIDES.items()
+        ]
+    }
+
+
+@app.post("/api/icd10/lookup")
+def icd10_lookup(payload: IcdLookupRequest, employee=Depends(current_employee)):
+    result = lookup_icd_local(payload.code)
+    audit("api_icd10_lookup", employee=employee, details={"code": result.get("code"), "found": result.get("found")})
+    return result
 
 
 @app.get("/api/cases")

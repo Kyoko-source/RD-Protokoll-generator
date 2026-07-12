@@ -290,6 +290,18 @@ function Dashboard({ session, onLogout }) {
     return <ProtocolView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} />;
   }
 
+  if (view === 'hospital') {
+    return <HospitalView session={session} employee={employee} onBack={() => setView('home')} onOpenProtocol={() => setView('protocol')} onLogout={logout} />;
+  }
+
+  if (view === 'icd10') {
+    return <Icd10View session={session} employee={employee} onBack={() => setView('home')} onOpenProtocol={() => setView('protocol')} onLogout={logout} />;
+  }
+
+  if (view === 'devices') {
+    return <DevicesView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} />;
+  }
+
   if (view === 'interfaces') {
     return (
       <InterfacesView
@@ -348,6 +360,9 @@ function Dashboard({ session, onLogout }) {
               key={tile.id}
               onClick={() => {
                 if (tile.id === 'protocol') setView('protocol');
+                if (tile.id === 'hospital') setView('hospital');
+                if (tile.id === 'icd10') setView('icd10');
+                if (tile.id === 'devices') setView('devices');
                 if (tile.id === 'interfaces') setView('interfaces');
                 if (tile.id === 'admin') setView('admin');
               }}
@@ -559,6 +574,344 @@ function InterfacesView({ session, employee, onBack, onOpenProtocol, onLogout })
             </article>
           ))}
         </div>
+      </section>
+    </main>
+  );
+}
+
+function HospitalView({ session, employee, onBack, onOpenProtocol, onLogout }) {
+  const [town, setTown] = useState('Borken');
+  const [category, setCategory] = useState('Allgemeine Notaufnahme');
+  const [data, setData] = useState({ towns: [], categories: [], hospitals: [] });
+  const [patient, setPatient] = useState(emptyPatient);
+  const [newHospital, setNewHospital] = useState({ name: '', country: 'DE', address: '', town: '', phone: '', categories: [] });
+  const [statusText, setStatusText] = useState('');
+  const [error, setError] = useState('');
+
+  async function loadHospitals(nextTown = town, nextCategory = category) {
+    setError('');
+    try {
+      const [hospitalData, draftData] = await Promise.all([
+        api(`/api/hospitals?town=${encodeURIComponent(nextTown)}&category=${encodeURIComponent(nextCategory)}`, {}, session.token),
+        api('/api/draft', {}, session.token)
+      ]);
+      setData(hospitalData);
+      setPatient({ ...emptyPatient, ...(draftData.patient || {}) });
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  useEffect(() => {
+    loadHospitals();
+  }, [session.token]);
+
+  async function selectHospital(hospital) {
+    setError('');
+    setStatusText('');
+    const nextPatient = {
+      ...patient,
+      transport: {
+        ...(patient.transport || {}),
+        hospital_id: hospital.id,
+        hospital_name: hospital.name,
+        hospital_country: hospital.country,
+        hospital_address: hospital.address,
+        distance_km: hospital.distance_km,
+        category,
+        town
+      },
+      uebergabe: {
+        ...(patient.uebergabe || {}),
+        ziel: hospital.name
+      }
+    };
+    try {
+      await api('/api/draft', {
+        method: 'PUT',
+        body: JSON.stringify({ patient: nextPatient })
+      }, session.token);
+      setPatient(nextPatient);
+      setStatusText(`${hospital.name} wurde ins Protokoll übernommen.`);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function saveHospital(event) {
+    event.preventDefault();
+    setError('');
+    setStatusText('');
+    try {
+      await api('/api/admin/hospitals', {
+        method: 'POST',
+        body: JSON.stringify(newHospital)
+      }, session.token);
+      setNewHospital({ name: '', country: 'DE', address: '', town: '', phone: '', categories: [] });
+      setStatusText('Klinik wurde gespeichert.');
+      await loadHospitals();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function toggleNewHospitalCategory(item) {
+    setNewHospital((current) => {
+      const categories = current.categories.includes(item)
+        ? current.categories.filter((entry) => entry !== item)
+        : [...current.categories, item];
+      return { ...current, categories };
+    });
+  }
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <div>
+          <div className="app-name">NANA</div>
+          <div className="app-subtitle">Krankenhaus Finder · Zielklinik wählen</div>
+        </div>
+        <div className="user-area">
+          <span>{employee?.name}</span>
+          <button className="icon-button" onClick={onLogout} aria-label="Abmelden"><LogOut size={18} /></button>
+        </div>
+      </header>
+
+      <section className="protocol-toolbar">
+        <button type="button" onClick={onBack}>Zurück zum Hauptmenü</button>
+        <button type="button" onClick={onOpenProtocol}>Zum Protokoll</button>
+      </section>
+
+      {error && <div className="error-box">{error}</div>}
+      {statusText && <div className="success-box">{statusText}</div>}
+
+      <section className="finder-controls">
+        <label>
+          Standort
+          <select value={town} onChange={(event) => { setTown(event.target.value); loadHospitals(event.target.value, category); }}>
+            {(data.towns || []).map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+        <label>
+          Leitsymptom / Fachrichtung
+          <select value={category} onChange={(event) => { setCategory(event.target.value); loadHospitals(town, event.target.value); }}>
+            {(data.categories || []).map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+      </section>
+
+      <section className="hospital-grid">
+        {(data.hospitals || []).map((hospital) => (
+          <article className="hospital-card" key={hospital.id}>
+            <div className="hospital-meta">
+              <span>{hospital.country}</span>
+              <span>{hospital.distance_km ?? '-'} km</span>
+              <span>{hospital.estimated_minutes ?? '-'} min</span>
+            </div>
+            <h2>{hospital.name}</h2>
+            <p>{hospital.address}</p>
+            {hospital.phone && <p>{hospital.phone}</p>}
+            <div className="tag-list">
+              {(hospital.categories || []).slice(0, 5).map((item) => <span key={item}>{item}</span>)}
+            </div>
+            <button type="button" onClick={() => selectHospital(hospital)}>Als Ziel übernehmen</button>
+          </article>
+        ))}
+      </section>
+
+      {employee?.role === 'admin' && (
+        <section className="work-panel">
+          <div className="section-head">
+            <h2>Klinik pflegen</h2>
+            <span>Admin</span>
+          </div>
+          <form className="hospital-admin-form" onSubmit={saveHospital}>
+            <input value={newHospital.name} onChange={(event) => setNewHospital({ ...newHospital, name: event.target.value })} placeholder="Klinikname" />
+            <input value={newHospital.address} onChange={(event) => setNewHospital({ ...newHospital, address: event.target.value })} placeholder="Adresse" />
+            <input value={newHospital.phone} onChange={(event) => setNewHospital({ ...newHospital, phone: event.target.value })} placeholder="Telefon" />
+            <select value={newHospital.country} onChange={(event) => setNewHospital({ ...newHospital, country: event.target.value })}>
+              <option value="DE">DE</option>
+              <option value="NL">NL</option>
+            </select>
+            <div className="check-grid">
+              {(data.categories || []).map((item) => (
+                <label key={item}>
+                  <input type="checkbox" checked={newHospital.categories.includes(item)} onChange={() => toggleNewHospitalCategory(item)} />
+                  {item}
+                </label>
+              ))}
+            </div>
+            <button type="submit">Klinik speichern</button>
+          </form>
+        </section>
+      )}
+    </main>
+  );
+}
+
+function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
+  const [code, setCode] = useState('');
+  const [result, setResult] = useState(null);
+  const [patient, setPatient] = useState(emptyPatient);
+  const [statusText, setStatusText] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api('/api/draft', {}, session.token)
+      .then((data) => setPatient({ ...emptyPatient, ...(data.patient || {}) }))
+      .catch((err) => setError(err.message));
+  }, [session.token]);
+
+  async function lookup() {
+    setError('');
+    setStatusText('');
+    try {
+      const data = await api('/api/icd10/lookup', {
+        method: 'POST',
+        body: JSON.stringify({ code })
+      }, session.token);
+      setResult(data);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function applyIcd() {
+    if (!result) return;
+    const nextPatient = {
+      ...patient,
+      einweisung: {
+        ...(patient.einweisung || {}),
+        icd_code: result.code,
+        diagnose: result.diagnosis
+      }
+    };
+    try {
+      await api('/api/draft', {
+        method: 'PUT',
+        body: JSON.stringify({ patient: nextPatient })
+      }, session.token);
+      setPatient(nextPatient);
+      setStatusText('ICD10 wurde ins Protokoll übernommen.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <div>
+          <div className="app-name">NANA</div>
+          <div className="app-subtitle">ICD10 Code · Dekodierer</div>
+        </div>
+        <div className="user-area">
+          <span>{employee?.name}</span>
+          <button className="icon-button" onClick={onLogout} aria-label="Abmelden"><LogOut size={18} /></button>
+        </div>
+      </header>
+      <section className="protocol-toolbar">
+        <button type="button" onClick={onBack}>Zurück zum Hauptmenü</button>
+        <button type="button" onClick={onOpenProtocol}>Zum Protokoll</button>
+      </section>
+      {error && <div className="error-box">{error}</div>}
+      {statusText && <div className="success-box">{statusText}</div>}
+      <section className="work-panel icd-panel">
+        <div className="section-head">
+          <h2>ICD10 suchen</h2>
+          <span>lokaler Grundkatalog</span>
+        </div>
+        <div className="icd-search">
+          <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="z.B. I21.9, I63, R55" />
+          <button type="button" onClick={lookup}>Dekodieren</button>
+        </div>
+        {result && (
+          <div className="icd-result">
+            <strong>{result.code}</strong>
+            <span>{result.diagnosis}</span>
+            <small>{result.found ? `Treffer über ${result.matched_code}` : 'Bitte fachlich prüfen und ggf. manuell ergänzen.'}</small>
+            <button type="button" onClick={applyIcd}>Ins Protokoll übernehmen</button>
+          </div>
+        )}
+      </section>
+    </main>
+  );
+}
+
+function DevicesView({ session, employee, onBack, onLogout }) {
+  const [devices, setDevices] = useState([]);
+  const [selectedName, setSelectedName] = useState('');
+  const [selectedTopic, setSelectedTopic] = useState('');
+  const [stepIndex, setStepIndex] = useState(0);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api('/api/devices', {}, session.token)
+      .then((data) => {
+        const nextDevices = data.devices || [];
+        setDevices(nextDevices);
+        setSelectedName(nextDevices[0]?.name || '');
+        setSelectedTopic(Object.keys(nextDevices[0]?.topics || {})[0] || '');
+      })
+      .catch((err) => setError(err.message));
+  }, [session.token]);
+
+  const selectedDevice = devices.find((item) => item.name === selectedName) || {};
+  const topicNames = Object.keys(selectedDevice.topics || {});
+  const steps = selectedDevice.topics?.[selectedTopic] || [];
+  const currentStep = steps[Math.min(stepIndex, Math.max(steps.length - 1, 0))] || '';
+
+  function selectDevice(name) {
+    const device = devices.find((item) => item.name === name) || {};
+    const firstTopic = Object.keys(device.topics || {})[0] || '';
+    setSelectedName(name);
+    setSelectedTopic(firstTopic);
+    setStepIndex(0);
+  }
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <div>
+          <div className="app-name">NANA</div>
+          <div className="app-subtitle">Geräte · Kurzreferenzen</div>
+        </div>
+        <div className="user-area">
+          <span>{employee?.name}</span>
+          <button className="icon-button" onClick={onLogout} aria-label="Abmelden"><LogOut size={18} /></button>
+        </div>
+      </header>
+      <section className="protocol-toolbar">
+        <button type="button" onClick={onBack}>Zurück zum Hauptmenü</button>
+      </section>
+      {error && <div className="error-box">{error}</div>}
+      <section className="device-layout">
+        <aside className="work-panel device-list">
+          {devices.map((device) => (
+            <button type="button" className={device.name === selectedName ? 'active' : ''} key={device.name} onClick={() => selectDevice(device.name)}>
+              <span>{device.icon}</span>
+              <strong>{device.name}</strong>
+            </button>
+          ))}
+        </aside>
+        <section className="work-panel device-detail">
+          <div className="section-head">
+            <h2>{selectedDevice.icon} {selectedDevice.name}</h2>
+            <span>{selectedDevice.source_label}</span>
+          </div>
+          <p className="muted">{selectedDevice.model_note}</p>
+          <select value={selectedTopic} onChange={(event) => { setSelectedTopic(event.target.value); setStepIndex(0); }}>
+            {topicNames.map((topic) => <option key={topic} value={topic}>{topic}</option>)}
+          </select>
+          <div className="device-step">
+            <span>Schritt {steps.length ? stepIndex + 1 : 0} / {steps.length}</span>
+            <p>{currentStep}</p>
+          </div>
+          <div className="device-step-actions">
+            <button type="button" onClick={() => setStepIndex(Math.max(0, stepIndex - 1))} disabled={stepIndex === 0}>Zurück</button>
+            <button type="button" onClick={() => setStepIndex(Math.min(steps.length - 1, stepIndex + 1))} disabled={stepIndex >= steps.length - 1}>Weiter</button>
+          </div>
+        </section>
       </section>
     </main>
   );
