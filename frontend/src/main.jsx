@@ -1513,8 +1513,8 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
   function renderVitalStatus(statusKey, label) {
     return (
-      <label>
-        {label}
+      <label className="vital-status-field">
+        {label && <span>{label}</span>}
         <select value={vitalwerte[statusKey] || 'Keine Angabe'} onChange={(event) => updateVital(statusKey, event.target.value)}>
           {vitalStatusOptions[statusKey].map((item) => <option key={item} value={item}>{item}</option>)}
         </select>
@@ -1527,6 +1527,45 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           />
         )}
       </label>
+    );
+  }
+
+  function renderVitalPair({ title, valueKey, statusKey, inputMode = 'numeric', placeholder = 'Messwert optional' }) {
+    return (
+      <fieldset className="vital-pair">
+        <legend>{title}</legend>
+        <div className="vital-pair-grid">
+          <label>
+            Messwert optional
+            <input
+              value={vitalwerte[valueKey] || ''}
+              onChange={(event) => updateVital(valueKey, event.target.value)}
+              inputMode={inputMode}
+              placeholder={placeholder}
+            />
+          </label>
+          {renderVitalStatus(statusKey, 'Einordnung')}
+        </div>
+      </fieldset>
+    );
+  }
+
+  function renderBloodPressurePair() {
+    return (
+      <fieldset className="vital-pair">
+        <legend>RR</legend>
+        <div className="vital-pair-grid vital-bp-grid">
+          <label>
+            systolisch optional
+            <input value={vitalwerte.rr_sys || ''} onChange={(event) => updateVital('rr_sys', event.target.value)} inputMode="numeric" placeholder="sys" />
+          </label>
+          <label>
+            diastolisch optional
+            <input value={vitalwerte.rr_dia || ''} onChange={(event) => updateVital('rr_dia', event.target.value)} inputMode="numeric" placeholder="dia" />
+          </label>
+          {renderVitalStatus('rr_status', 'Einordnung')}
+        </div>
+      </fieldset>
     );
   }
 
@@ -2092,45 +2131,13 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
               <option value="divers">divers</option>
             </select>
           </label>
-          <label>
-            RR systolisch optional
-            <input value={vitalwerte.rr_sys || ''} onChange={(event) => updateVital('rr_sys', event.target.value)} inputMode="numeric" />
-          </label>
-          <label>
-            RR diastolisch optional
-            <input value={vitalwerte.rr_dia || ''} onChange={(event) => updateVital('rr_dia', event.target.value)} inputMode="numeric" />
-          </label>
-          {renderVitalStatus('rr_status', 'RR Einordnung')}
-          <label>
-            Puls optional
-            <input value={vitalwerte.puls || ''} onChange={(event) => updateVital('puls', event.target.value)} inputMode="numeric" />
-          </label>
-          {renderVitalStatus('puls_status', 'Puls Einordnung')}
-          <label>
-            SpO2 optional
-            <input value={vitalwerte.spo2 || ''} onChange={(event) => updateVital('spo2', event.target.value)} inputMode="numeric" />
-          </label>
-          {renderVitalStatus('spo2_status', 'SpO2 Einordnung')}
-          <label>
-            Atemfrequenz optional
-            <input value={vitalwerte.af || ''} onChange={(event) => updateVital('af', event.target.value)} inputMode="numeric" />
-          </label>
-          {renderVitalStatus('af_status', 'Atemfrequenz Einordnung')}
-          <label>
-            BZ optional
-            <input value={vitalwerte.bz || ''} onChange={(event) => updateVital('bz', event.target.value)} inputMode="numeric" />
-          </label>
-          {renderVitalStatus('bz_status', 'BZ Einordnung')}
-          <label>
-            Temperatur optional
-            <input value={vitalwerte.temperatur || ''} onChange={(event) => updateVital('temperatur', event.target.value)} inputMode="decimal" />
-          </label>
-          {renderVitalStatus('temperatur_status', 'Temperatur Einordnung')}
-          <label>
-            GCS optional
-            <input value={vitalwerte.gcs || ''} onChange={(event) => updateVital('gcs', event.target.value)} inputMode="numeric" />
-          </label>
-          {renderVitalStatus('gcs_status', 'GCS Einordnung')}
+          {renderBloodPressurePair()}
+          {renderVitalPair({ title: 'Puls', valueKey: 'puls', statusKey: 'puls_status', placeholder: '/min' })}
+          {renderVitalPair({ title: 'SpO2', valueKey: 'spo2', statusKey: 'spo2_status', placeholder: '%' })}
+          {renderVitalPair({ title: 'Atemfrequenz', valueKey: 'af', statusKey: 'af_status', placeholder: '/min' })}
+          {renderVitalPair({ title: 'BZ', valueKey: 'bz', statusKey: 'bz_status', placeholder: 'mg/dL' })}
+          {renderVitalPair({ title: 'Temperatur', valueKey: 'temperatur', statusKey: 'temperatur_status', inputMode: 'decimal', placeholder: '°C' })}
+          {renderVitalPair({ title: 'GCS', valueKey: 'gcs', statusKey: 'gcs_status', placeholder: '/15' })}
         </div>
 
         <label className="wide-field">

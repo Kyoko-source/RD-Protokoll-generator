@@ -874,6 +874,25 @@ form button,
   gap: 14px;
 }
 
+.vital-pair {
+  padding: 12px;
+}
+
+.vital-pair-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
+  gap: 10px;
+  align-items: start;
+}
+
+.vital-bp-grid {
+  grid-template-columns: minmax(0, 0.7fr) minmax(0, 0.7fr) minmax(0, 1.2fr);
+}
+
+.vital-status-field {
+  align-content: start;
+}
+
 .wide-field {
   margin-top: 14px;
 }
@@ -1244,6 +1263,8 @@ legend {
   .quality-box,
   .rules-grid,
   .form-grid,
+  .vital-pair-grid,
+  .vital-bp-grid,
   .assessment-grid,
   .amls-summary,
   .support-grid,
