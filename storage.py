@@ -39,6 +39,20 @@ def init_database():
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS finished_cases (
+                id TEXT PRIMARY KEY,
+                employee_id TEXT NOT NULL,
+                employee_name TEXT NOT NULL,
+                completed_at TEXT NOT NULL,
+                summary TEXT NOT NULL DEFAULT '',
+                patient_json TEXT NOT NULL,
+                protocol_text TEXT NOT NULL,
+                FOREIGN KEY(employee_id) REFERENCES employees(id)
+            )
+            """
+        )
         connection.commit()
 
 
@@ -151,6 +165,93 @@ def save_case_draft_store(store):
                 ),
             )
         connection.commit()
+
+
+def save_finished_case(case_record):
+    init_database()
+    with _connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO finished_cases (
+                id, employee_id, employee_name, completed_at,
+                summary, patient_json, protocol_text
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                case_record["id"],
+                case_record["employee_id"],
+                case_record.get("employee_name", ""),
+                case_record["completed_at"],
+                case_record.get("summary", ""),
+                json.dumps(case_record.get("patient", {}), ensure_ascii=False),
+                case_record.get("protocol_text", ""),
+            ),
+        )
+        connection.commit()
+
+
+def list_finished_cases(employee_id=None, search=""):
+    init_database()
+    query = """
+        SELECT id, employee_id, employee_name, completed_at, summary, protocol_text
+        FROM finished_cases
+    """
+    params = []
+    clauses = []
+
+    if employee_id:
+        clauses.append("employee_id = ?")
+        params.append(employee_id)
+
+    if search:
+        clauses.append("(summary LIKE ? OR protocol_text LIKE ? OR employee_name LIKE ?)")
+        search_param = f"%{search}%"
+        params.extend([search_param, search_param, search_param])
+
+    if clauses:
+        query += " WHERE " + " AND ".join(clauses)
+
+    query += " ORDER BY completed_at DESC LIMIT 100"
+
+    with _connect() as connection:
+        rows = connection.execute(query, params).fetchall()
+
+    return [
+        {
+            "id": row["id"],
+            "employee_id": row["employee_id"],
+            "employee_name": row["employee_name"],
+            "completed_at": row["completed_at"],
+            "summary": row["summary"],
+            "protocol_text": row["protocol_text"],
+        }
+        for row in rows
+    ]
+
+
+def get_finished_case(case_id):
+    init_database()
+    with _connect() as connection:
+        row = connection.execute("SELECT * FROM finished_cases WHERE id = ?", (case_id,)).fetchone()
+
+    if not row:
+        return None
+
+    try:
+        patient = json.loads(row["patient_json"])
+    except json.JSONDecodeError:
+        patient = {}
+
+    return {
+        "id": row["id"],
+        "employee_id": row["employee_id"],
+        "employee_name": row["employee_name"],
+        "completed_at": row["completed_at"],
+        "summary": row["summary"],
+        "patient": patient,
+        "protocol_text": row["protocol_text"],
+    }
 
 
 def migrate_json_files(employee_file="employees.json", draft_file="case_drafts.json"):

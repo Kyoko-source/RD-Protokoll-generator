@@ -16,12 +16,15 @@ from copy import deepcopy
 from device_guides import DEVICE_GUIDES
 from hospital_finder import CATEGORIES, TOWNS, build_dutch_protocol, suitable_hospitals
 from storage import (
+    get_finished_case,
     init_database,
+    list_finished_cases,
     load_case_draft_store as db_load_case_draft_store,
     load_employee_store as db_load_employee_store,
     migrate_json_files,
     save_case_draft_store as db_save_case_draft_store,
     save_employee_store as db_save_employee_store,
+    save_finished_case,
 )
 
 
@@ -1475,6 +1478,7 @@ WORKFLOW_STEPS = [
 HOME_PAGE = "🏠 Startseite"
 PROTOCOL_START_PAGE = "❤️ Vitalwerte"
 ICD10_PAGE = "🔤 ICD10 Code"
+ARCHIVE_PAGE = "🗂️ Archiv"
 ADMIN_SOP_FIELDS = {
     "Anaphylaxie (SOPKB0105)": [
         {"key": "ana_adult_age_threshold", "label": "Altersschwelle Erwachsene (Jahre)", "default": 12.0, "min": 0.0, "max": 21.0, "step": 1.0},
@@ -1699,6 +1703,26 @@ def clear_current_case_draft():
         _save_case_draft_store(store)
     st.session_state["case_draft_loaded"] = True
     st.session_state.pop("case_draft_restored", None)
+
+
+def build_case_summary(patient_data):
+    vital = patient_data.get("vitalwerte", {})
+    amls = patient_data.get("amls", {})
+    transport = patient_data.get("transport", {})
+
+    parts = []
+    if _is_valid_value(vital.get("alter")):
+        parts.append(f"{vital.get('alter')} J.")
+    if _is_valid_value(vital.get("geschlecht")):
+        parts.append(str(vital.get("geschlecht")))
+    if _is_valid_value(amls.get("arbeitsdiagnose")):
+        parts.append(str(amls.get("arbeitsdiagnose")))
+    if _is_valid_value(transport.get("hospital_name")):
+        parts.append(str(transport.get("hospital_name")))
+    if _is_valid_value(vital.get("kurzbericht")):
+        parts.append(str(vital.get("kurzbericht"))[:80])
+
+    return " · ".join(parts) if parts else "Einsatz ohne Kurzangaben"
 
 
 def _employee_display_name(employee):
@@ -2840,7 +2864,7 @@ if 'visited_pages' not in st.session_state:
 
 st.session_state['visited_pages'].add(st.session_state['seite'])
 
-topbar_left, topbar_home, topbar_spacer, topbar_profile, topbar_admin, topbar_logout = st.columns([2, 2.2, 3.2, 2.2, 1.4, 1.4])
+topbar_left, topbar_home, topbar_archive, topbar_spacer, topbar_profile, topbar_admin, topbar_logout = st.columns([2, 2.2, 1.6, 1.6, 2.2, 1.4, 1.4])
 with topbar_left:
     if st.button("＋ Neuer Einsatz", key="new_case_btn", use_container_width=True, type="secondary"):
         st.session_state["confirm_new_case"] = True
@@ -2850,6 +2874,11 @@ with topbar_home:
             st.session_state["seite"] = HOME_PAGE
             save_current_case_draft()
             st.rerun()
+with topbar_archive:
+    if st.button("Archiv", key="archive_nav_btn", use_container_width=True, type="secondary"):
+        st.session_state["seite"] = ARCHIVE_PAGE
+        save_current_case_draft()
+        st.rerun()
 with topbar_profile:
     profile = st.session_state.get("employee_profile", {})
     st.markdown(
@@ -2969,6 +2998,53 @@ if seite == HOME_PAGE:
             st.session_state["device_guide_return_page"] = HOME_PAGE
             st.session_state["seite"] = "🧰 Geräte-Guide"
             st.rerun()
+
+elif seite == ARCHIVE_PAGE:
+    archive_head, archive_back = st.columns([5, 1])
+    with archive_head:
+        st.header("🗂️ Einsatzarchiv")
+        if st.session_state.get("employee_profile", {}).get("role") == "admin":
+            st.caption("Abgeschlossene Einsätze aller Mitarbeiter durchsuchen und erneut öffnen")
+        else:
+            st.caption("Eigene abgeschlossene Einsätze durchsuchen und erneut öffnen")
+    with archive_back:
+        if st.button("← Start", key="archive_back_home", use_container_width=True):
+            st.session_state["seite"] = HOME_PAGE
+            st.rerun()
+
+    search = st.text_input("Suche", placeholder="Datum, Mitarbeiter, Diagnose, Stichwort aus dem Protokoll", key="archive_search")
+    profile = st.session_state.get("employee_profile", {})
+    employee_filter = None if profile.get("role") == "admin" else profile.get("id")
+    archived_cases = list_finished_cases(employee_id=employee_filter, search=search.strip())
+
+    if not archived_cases:
+        st.info("Noch keine abgeschlossenen Einsätze gefunden.")
+    else:
+        st.caption(f"{len(archived_cases)} Einsatz/Einsätze gefunden")
+        for case in archived_cases:
+            title = f"{case['completed_at']} · {case['summary']}"
+            if profile.get("role") == "admin":
+                title += f" · {case['employee_name']}"
+            with st.expander(title, expanded=False):
+                selected_case = get_finished_case(case["id"])
+                if not selected_case:
+                    st.warning("Dieser Einsatz konnte nicht geladen werden.")
+                    continue
+
+                st.caption(f"Dokumentiert von {selected_case['employee_name']} · Fall-ID {selected_case['id']}")
+                st.text_area(
+                    "Protokoll",
+                    selected_case["protocol_text"],
+                    height=420,
+                    key=f"archive_protocol_{selected_case['id']}",
+                )
+                st.download_button(
+                    "💾 Protokoll als TXT herunterladen",
+                    selected_case["protocol_text"],
+                    file_name=f"NANA_Einsatz_{selected_case['completed_at'].replace(':', '-').replace(' ', '_')}.txt",
+                    mime="text/plain",
+                    key=f"archive_download_{selected_case['id']}",
+                )
 
 elif seite == ICD10_PAGE:
     icd_head, icd_back = st.columns([5, 1])
@@ -5751,6 +5827,18 @@ elif seite == "📄 Protokoll":
         end_case_col, _ = st.columns([1.4, 4])
         with end_case_col:
             if st.button("✓ Einsatz beenden", key="finish_case_btn", use_container_width=True, type="primary"):
+                profile = st.session_state.get("employee_profile", {})
+                protocol_text = st.session_state.get("generated_protocol_text") or generate_protocol()
+                save_finished_case({
+                    "id": secrets.token_hex(10),
+                    "employee_id": profile.get("id", ""),
+                    "employee_name": profile.get("name", ""),
+                    "completed_at": datetime.now().isoformat(timespec="seconds"),
+                    "summary": build_case_summary(patient),
+                    "patient": patient,
+                    "protocol_text": protocol_text,
+                })
+                st.success("Einsatz wurde im Archiv gespeichert.")
                 reset_patient_case()
                 st.rerun()
 
