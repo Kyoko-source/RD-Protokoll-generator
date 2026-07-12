@@ -3119,7 +3119,11 @@ if seite == HOME_PAGE:
             st.session_state["seite"] = "🏥 Zielklinik"
             st.rerun()
 
-    tile_icd10, tile_devices, tile_interfaces = st.columns(3, gap="large")
+    home_profile = st.session_state.get("employee_profile", {})
+    if home_profile.get("role") == "admin":
+        tile_icd10, tile_devices, tile_interfaces = st.columns(3, gap="large")
+    else:
+        tile_icd10, tile_devices = st.columns(2, gap="large")
     with tile_icd10:
         if st.button("🔤 ICD10 Code\nCode dekodieren", key="home_tile_icd10", use_container_width=True):
             st.session_state["seite"] = ICD10_PAGE
@@ -3129,10 +3133,11 @@ if seite == HOME_PAGE:
             st.session_state["device_guide_return_page"] = HOME_PAGE
             st.session_state["seite"] = "🧰 Geräte-Guide"
             st.rerun()
-    with tile_interfaces:
-        if st.button("🔌 Schnittstellen\nImport & Export", key="home_tile_interfaces", use_container_width=True):
-            st.session_state["seite"] = INTERFACE_PAGE
-            st.rerun()
+    if home_profile.get("role") == "admin":
+        with tile_interfaces:
+            if st.button("🔌 Schnittstellen\nImport & Export", key="home_tile_interfaces", use_container_width=True):
+                st.session_state["seite"] = INTERFACE_PAGE
+                st.rerun()
 
 elif seite == ARCHIVE_PAGE:
     archive_head, archive_back = st.columns([5, 1])
@@ -3188,6 +3193,14 @@ elif seite == ARCHIVE_PAGE:
                     _audit("archive_protocol_downloaded", entity_type="finished_case", entity_id=selected_case["id"])
 
 elif seite == INTERFACE_PAGE:
+    if st.session_state.get("employee_profile", {}).get("role") != "admin":
+        _audit("interface_access_denied", entity_type="interfaces")
+        st.error("Dieser Bereich ist nur für Administratoren freigegeben.")
+        if st.button("← Zur Startseite", key="interface_denied_back_home", use_container_width=True):
+            st.session_state["seite"] = HOME_PAGE
+            st.rerun()
+        st.stop()
+
     interface_head, interface_back = st.columns([5, 1])
     with interface_head:
         st.header("🔌 Schnittstellen")
