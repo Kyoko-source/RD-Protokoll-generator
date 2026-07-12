@@ -749,7 +749,7 @@ def generate_protocol():
 # --------------------------------------------------
 
 st.set_page_config(
-    page_title="RD-Protokoll Generator",
+    page_title="Blaulicht Bericht",
     page_icon="🚑",
     layout="wide"
 )
@@ -951,13 +951,13 @@ st.markdown(
     }
     .rd-summary-empty .rd-summary-muted { color: rgba(234,243,255,0.62); font-size:0.88rem; }
     .home-shell {
-        margin: 4px 0 18px;
-        padding: 10px 0 6px;
+        margin: 8px 0 22px;
+        padding: 4px 0 8px;
     }
     .home-title {
         margin: 0 0 8px;
         color:#fbfdff;
-        font-size:1.52rem;
+        font-size:2.1rem;
         font-weight:950;
         letter-spacing:0;
     }
@@ -967,35 +967,49 @@ st.markdown(
         font-weight:650;
         margin-bottom:18px;
     }
+    .st-key-new_case_btn button {
+        max-width: 180px;
+        min-height: 48px !important;
+        border-radius: 16px !important;
+    }
     .st-key-home_tile_protocol button,
     .st-key-home_tile_hospital button,
     .st-key-home_tile_icd10 button,
     .st-key-home_tile_devices button {
-        min-height: 158px !important;
-        border-radius: 22px !important;
+        min-height: 178px !important;
+        border-radius: 26px !important;
         align-items:flex-start !important;
-        justify-content:flex-end !important;
-        padding: 22px !important;
-        font-size:1.28rem !important;
+        justify-content:center !important;
+        padding: 24px 28px !important;
+        font-size:1.35rem !important;
         font-weight:950 !important;
         text-align:left !important;
         letter-spacing:0 !important;
         box-shadow: 0 22px 42px rgba(2,8,24,0.26) !important;
+        margin-bottom: 16px !important;
     }
     .st-key-home_tile_protocol button {
-        background:linear-gradient(135deg, rgba(49,116,255,.94) 0%, rgba(83,211,255,.82) 100%) !important;
+        background:
+            radial-gradient(circle at 10% 18%, rgba(255,255,255,.20), transparent 20%),
+            linear-gradient(135deg, rgba(49,116,255,.96) 0%, rgba(73,185,226,.90) 100%) !important;
         border-color:rgba(159,205,255,.42) !important;
     }
     .st-key-home_tile_hospital button {
-        background:linear-gradient(135deg, rgba(0,145,124,.94) 0%, rgba(89,214,158,.82) 100%) !important;
+        background:
+            radial-gradient(circle at 10% 18%, rgba(255,255,255,.18), transparent 20%),
+            linear-gradient(135deg, rgba(0,144,125,.96) 0%, rgba(69,185,139,.90) 100%) !important;
         border-color:rgba(147,255,219,.36) !important;
     }
     .st-key-home_tile_icd10 button {
-        background:linear-gradient(135deg, rgba(141,74,222,.94) 0%, rgba(248,106,163,.84) 100%) !important;
+        background:
+            radial-gradient(circle at 10% 18%, rgba(255,255,255,.18), transparent 20%),
+            linear-gradient(135deg, rgba(132,73,214,.96) 0%, rgba(219,83,153,.90) 100%) !important;
         border-color:rgba(244,180,255,.36) !important;
     }
     .st-key-home_tile_devices button {
-        background:linear-gradient(135deg, rgba(234,126,39,.95) 0%, rgba(255,190,87,.82) 100%) !important;
+        background:
+            radial-gradient(circle at 10% 18%, rgba(255,255,255,.18), transparent 20%),
+            linear-gradient(135deg, rgba(226,120,32,.96) 0%, rgba(221,164,64,.90) 100%) !important;
         border-color:rgba(255,218,151,.38) !important;
     }
     .st-key-home_tile_protocol button p,
@@ -1003,8 +1017,8 @@ st.markdown(
     .st-key-home_tile_icd10 button p,
     .st-key-home_tile_devices button p {
         color:#fff !important;
-        font-size:1.28rem !important;
-        line-height:1.15 !important;
+        font-size:1.34rem !important;
+        line-height:1.18 !important;
         white-space:pre-line !important;
     }
     [data-testid="stButton"] > button {
@@ -1306,13 +1320,13 @@ st.markdown(
             <div>
                 <div style="display:inline-flex; align-items:center; gap:10px; font-size:0.76rem; letter-spacing:0.16em; text-transform:uppercase; color:rgba(231,241,255,0.72); font-weight:900;">
                     <span style="width:10px; height:10px; border-radius:999px; background:linear-gradient(135deg, #61b6ff 0%, #ff7b8f 100%); box-shadow:0 0 0 5px rgba(97,182,255,0.10);"></span>
-                    RD-Protokoll Generator
+                    Blaulicht Bericht
                 </div>
                 <div style="margin-top:10px; font-size:2.35rem; line-height:0.98; font-weight:950; letter-spacing:-0.05em; color:#fbfdff;">
-                    Einsatzdokumentation, die mitdenkt.
+                    Rettungsdienst-Dokumentation, die mitdenkt.
                 </div>
                 <div style="margin-top:10px; color:rgba(231,241,255,0.70); font-size:0.98rem; font-weight:600;">
-                    Dokumentationshilfe f\u00fcr den Rettungsdienst
+                    Einsatzbericht, Klinikfinder, ICD10 und Gerätewissen in einer Oberfläche.
                 </div>
                 <div style="display:flex; gap:12px; flex-wrap:wrap; margin-top:18px;">
                     <div style="padding:10px 13px; border-radius:999px; background:rgba(255,255,255,0.06); border:1px solid rgba(255,255,255,0.10); color:#eef5ff; font-size:0.8rem; font-weight:850;">17 SOPs <span style='opacity:0.72; font-weight:700;'>zentral steuerbar</span></div>
@@ -2437,38 +2451,10 @@ if 'visited_pages' not in st.session_state:
 
 st.session_state['visited_pages'].add(st.session_state['seite'])
 
-topbar_left, topbar_home, topbar_hospital, topbar_guide, topbar_right = st.columns([8, 2, 2, 2, 2])
+topbar_left, _ = st.columns([2, 10])
 with topbar_left:
-    new_case_col, _ = st.columns([2.4, 9.6])
-    with new_case_col:
-        if st.button("＋ Neuer Einsatz", key="new_case_btn", use_container_width=True, type="secondary"):
-            st.session_state["confirm_new_case"] = True
-with topbar_home:
-    st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
-    if st.button("Start", key="top_home_btn", use_container_width=True, type="secondary"):
-        st.session_state["seite"] = HOME_PAGE
-        st.rerun()
-with topbar_hospital:
-    st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
-    if st.button("🏥 Klinik", key="top_hospital_finder_btn", use_container_width=True, type="secondary"):
-        st.session_state["hospital_finder_return_page"] = (
-            st.session_state["seite"] if workflow_step_index(st.session_state["seite"]) is not None else HOME_PAGE
-        )
-        st.session_state["seite"] = "🏥 Zielklinik"
-        st.rerun()
-with topbar_guide:
-    st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
-    if st.button("🧰 Geräte", key="top_device_guide_btn", use_container_width=True, type="secondary"):
-        st.session_state["device_guide_return_page"] = (
-            st.session_state["seite"] if workflow_step_index(st.session_state["seite"]) is not None else HOME_PAGE
-        )
-        st.session_state["seite"] = "🧰 Geräte-Guide"
-        st.rerun()
-with topbar_right:
-    st.markdown("<div style='height: 0.1rem;'></div>", unsafe_allow_html=True)
-    if st.button("Admin", key="top_admin_btn", use_container_width=True, type="secondary"):
-        st.session_state["seite"] = "🛠️ Admin"
-        st.rerun()
+    if st.button("＋ Neuer Einsatz", key="new_case_btn", use_container_width=True, type="secondary"):
+        st.session_state["confirm_new_case"] = True
 
 if st.session_state.get("confirm_new_case"):
     st.warning("Alle Eingaben des aktuellen Einsatzes werden gelöscht. Wirklich neu beginnen?")
@@ -2549,8 +2535,8 @@ if seite == HOME_PAGE:
     st.markdown(
         """
         <div class="home-shell">
-            <div class="home-title">Rettungsdienst-Protokoll</div>
-            <div class="home-subtitle">Zentrale Arbeitsoberfläche für Einsatzdokumentation, Zielklinik, ICD10 und Geräte.</div>
+            <div class="home-title">Blaulicht Bericht</div>
+            <div class="home-subtitle">Deine zentrale Oberfläche für Einsatzdokumentation, Zielklinik, ICD10 und Geräte.</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -2558,7 +2544,7 @@ if seite == HOME_PAGE:
 
     tile_protocol, tile_hospital = st.columns(2, gap="large")
     with tile_protocol:
-        if st.button("📄 Protokoll\nEinsatz dokumentieren", key="home_tile_protocol", use_container_width=True):
+        if st.button("📄 Protokoll\nEinsatzbericht schreiben", key="home_tile_protocol", use_container_width=True):
             st.session_state["seite"] = PROTOCOL_START_PAGE
             st.rerun()
     with tile_hospital:
