@@ -69,6 +69,7 @@ class DraftRequest(BaseModel):
 
 class ProtocolRequest(BaseModel):
     patient: dict
+    force_finish: bool = False
 
 
 class PrintAuditRequest(BaseModel):
@@ -158,6 +159,162 @@ def build_case_summary(patient):
     elif valid(samplers.get("symptome")):
         parts.append(str(samplers.get("symptome"))[:80])
     return " · ".join(parts) if parts else "Einsatz ohne Kurzangaben"
+
+
+QUALITY_RULES = [
+    {"id": "vital_age", "label": "Alter dokumentiert", "severity": "warning", "section": "Vitalwerte"},
+    {"id": "vital_gender", "label": "Geschlecht dokumentiert", "severity": "info", "section": "Vitalwerte"},
+    {"id": "vital_core", "label": "Puls, SpO2, RR und GCS geprüft", "severity": "warning", "section": "Vitalwerte"},
+    {"id": "short_report", "label": "Kurzbericht oder Leitsymptome vorhanden", "severity": "warning", "section": "Anamnese"},
+    {"id": "xabcde", "label": "xABCDE Kernfelder dokumentiert", "severity": "warning", "section": "Erstbeurteilung"},
+    {"id": "diagnosis", "label": "Arbeitsdiagnose/Verdacht eingetragen", "severity": "warning", "section": "Abschluss"},
+    {"id": "target", "label": "Zielklinik ausgewählt", "severity": "warning", "section": "Transport"},
+    {"id": "handover", "label": "Übergabeziel oder Übergabetext vorhanden", "severity": "warning", "section": "Übergabe"},
+    {"id": "measures", "label": "Maßnahmen/Medikation geprüft", "severity": "info", "section": "Maßnahmen"},
+]
+
+
+def as_number(value):
+    try:
+        return float(str(value).replace(",", "."))
+    except (TypeError, ValueError):
+        return None
+
+
+def quality_item(rule_id, status_value, message, severity="warning"):
+    rule = next((item for item in QUALITY_RULES if item["id"] == rule_id), {})
+    return {
+        "id": rule_id,
+        "label": rule.get("label", rule_id),
+        "section": rule.get("section", ""),
+        "severity": severity or rule.get("severity", "warning"),
+        "status": status_value,
+        "message": message,
+    }
+
+
+def assess_protocol_quality(patient):
+    vital = patient.get("vitalwerte", {}) or {}
+    xabcde = patient.get("xabcde", {}) or {}
+    samplers = patient.get("samplers", {}) or {}
+    amls = patient.get("amls", {}) or {}
+    transport = patient.get("transport", {}) or {}
+    handover = patient.get("uebergabe", {}) or {}
+    measures = patient.get("massnahmen", {}) or {}
+
+    items = []
+    items.append(quality_item(
+        "vital_age",
+        "ok" if valid(vital.get("alter")) else "warning",
+        "Alter ist dokumentiert." if valid(vital.get("alter")) else "Alter fehlt.",
+    ))
+    items.append(quality_item(
+        "vital_gender",
+        "ok" if valid(vital.get("geschlecht")) else "info",
+        "Geschlecht ist dokumentiert." if valid(vital.get("geschlecht")) else "Geschlecht fehlt.",
+        "info",
+    ))
+
+    core_vitals = ["puls", "spo2", "rr_sys", "rr_dia", "gcs"]
+    missing_core = [key for key in core_vitals if not valid(vital.get(key))]
+    items.append(quality_item(
+        "vital_core",
+        "ok" if not missing_core else "warning",
+        "Kernvitalwerte sind vollständig." if not missing_core else "Fehlende Kernvitalwerte: " + ", ".join(missing_core),
+    ))
+
+    has_report = valid(vital.get("kurzbericht")) or valid(samplers.get("symptome"))
+    items.append(quality_item(
+        "short_report",
+        "ok" if has_report else "warning",
+        "Kurzbericht/Leitsymptome vorhanden." if has_report else "Kurzbericht oder Leitsymptome fehlen.",
+    ))
+
+    x_required = ["atemweg", "atmung", "haut", "avpu"]
+    missing_x = [key for key in x_required if not valid(xabcde.get(key))]
+    items.append(quality_item(
+        "xabcde",
+        "ok" if not missing_x else "warning",
+        "xABCDE Kernfelder sind dokumentiert." if not missing_x else "Fehlende xABCDE-Felder: " + ", ".join(missing_x),
+    ))
+
+    diagnosis_ok = valid(amls.get("arbeitsdiagnose")) or valid(patient.get("einweisung", {}).get("diagnose"))
+    items.append(quality_item(
+        "diagnosis",
+        "ok" if diagnosis_ok else "warning",
+        "Arbeitsdiagnose/Verdacht vorhanden." if diagnosis_ok else "Arbeitsdiagnose oder Verdacht fehlt.",
+    ))
+
+    items.append(quality_item(
+        "target",
+        "ok" if valid(transport.get("hospital_name")) else "warning",
+        "Zielklinik ist ausgewählt." if valid(transport.get("hospital_name")) else "Zielklinik fehlt.",
+    ))
+
+    handover_ok = valid(handover.get("ziel")) or valid(handover.get("text"))
+    items.append(quality_item(
+        "handover",
+        "ok" if handover_ok else "warning",
+        "Übergabe ist vorbereitet." if handover_ok else "Übergabeziel oder Übergabetext fehlt.",
+    ))
+
+    has_measures = bool(measures.get("timeline")) or bool(measures.get("medikation"))
+    items.append(quality_item(
+        "measures",
+        "ok" if has_measures else "info",
+        "Maßnahmen/Medikation dokumentiert." if has_measures else "Keine Maßnahmen oder Medikation dokumentiert.",
+        "info",
+    ))
+
+    criticals = []
+    spo2 = as_number(vital.get("spo2"))
+    gcs = as_number(vital.get("gcs"))
+    rr_sys = as_number(vital.get("rr_sys"))
+    pulse = as_number(vital.get("puls"))
+    af = as_number(vital.get("af"))
+    if spo2 is not None and spo2 < 92:
+        criticals.append("SpO2 unter 92 Prozent")
+    if gcs is not None and gcs < 15:
+        criticals.append("GCS unter 15")
+    if rr_sys is not None and (rr_sys < 90 or rr_sys > 200):
+        criticals.append("RR systolisch außerhalb 90-200 mmHg")
+    if pulse is not None and (pulse < 45 or pulse > 130):
+        criticals.append("Puls außerhalb 45-130/min")
+    if af is not None and (af < 8 or af > 30):
+        criticals.append("Atemfrequenz außerhalb 8-30/min")
+
+    for index, message in enumerate(criticals, start=1):
+        items.append({
+            "id": f"critical_{index}",
+            "label": "Kritischer Vitalwert",
+            "section": "Plausibilität",
+            "severity": "critical",
+            "status": "critical",
+            "message": message,
+        })
+
+    warning_count = len([item for item in items if item["status"] == "warning"])
+    critical_count = len([item for item in items if item["status"] == "critical"])
+    info_count = len([item for item in items if item["status"] == "info"])
+    ok_count = len([item for item in items if item["status"] == "ok"])
+    base_items = [item for item in items if not item["id"].startswith("critical_")]
+    score = max(0, min(100, round((ok_count / max(1, len(base_items))) * 100) - critical_count * 10))
+    if critical_count:
+        level = "critical"
+    elif warning_count:
+        level = "warning"
+    else:
+        level = "ok"
+    return {
+        "score": score,
+        "level": level,
+        "ok_count": ok_count,
+        "warning_count": warning_count,
+        "critical_count": critical_count,
+        "info_count": info_count,
+        "items": items,
+        "rules": QUALITY_RULES,
+    }
 
 
 def generate_protocol_text(patient):
@@ -729,6 +886,18 @@ def protocol_preview(payload: ProtocolRequest, employee=Depends(current_employee
     return {"protocol_text": protocol_text, "summary": build_case_summary(payload.patient)}
 
 
+@app.post("/api/protocol/quality")
+def protocol_quality(payload: ProtocolRequest, employee=Depends(current_employee)):
+    result = assess_protocol_quality(payload.patient)
+    audit(
+        "api_protocol_quality_checked",
+        employee=employee,
+        entity_type="case_draft",
+        details={"score": result["score"], "level": result["level"], "warnings": result["warning_count"], "criticals": result["critical_count"]},
+    )
+    return result
+
+
 @app.post("/api/protocol/pdf")
 def protocol_pdf(payload: ProtocolRequest, employee=Depends(current_employee)):
     protocol_text = generate_protocol_text(payload.patient)
@@ -756,6 +925,7 @@ def protocol_pdf(payload: ProtocolRequest, employee=Depends(current_employee)):
 @app.post("/api/cases/finish")
 def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
     protocol_text = generate_protocol_text(payload.patient)
+    quality = assess_protocol_quality(payload.patient)
     completed_at = datetime.now().isoformat(timespec="seconds")
     retention_days = int(get_app_setting("retention_days", 3650) or 3650)
     retention_until = (datetime.now() + timedelta(days=max(1, retention_days))).date().isoformat()
@@ -776,8 +946,15 @@ def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
         store["drafts"].pop(employee.get("id"), None)
         save_case_draft_store(store)
 
-    audit("api_case_finished", employee=employee, entity_type="finished_case", entity_id=case_id)
-    return {"status": "finished", "case_id": case_id, "protocol_text": protocol_text}
+    finish_action = "api_case_finished_with_warnings" if quality["warning_count"] or quality["critical_count"] else "api_case_finished"
+    audit(
+        finish_action,
+        employee=employee,
+        entity_type="finished_case",
+        entity_id=case_id,
+        details={"quality_score": quality["score"], "warnings": quality["warning_count"], "criticals": quality["critical_count"], "force_finish": payload.force_finish},
+    )
+    return {"status": "finished", "case_id": case_id, "protocol_text": protocol_text, "quality": quality}
 
 
 @app.get("/api/cases/{case_id}/pdf")
@@ -829,6 +1006,11 @@ def print_audit(payload: PrintAuditRequest, employee=Depends(current_employee)):
 @app.get("/api/admin/audit")
 def audit_log(employee=Depends(require_admin)):
     return {"events": list_audit_events(limit=100)}
+
+
+@app.get("/api/admin/quality-rules")
+def admin_quality_rules(employee=Depends(require_admin)):
+    return {"rules": QUALITY_RULES}
 
 
 @app.post("/api/admin/interfaces/import")

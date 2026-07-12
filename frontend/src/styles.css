@@ -153,6 +153,93 @@ form button,
   font-weight: 820;
 }
 
+.quality-box {
+  display: grid;
+  grid-template-columns: 130px minmax(0, 1fr);
+  gap: 14px;
+  margin-bottom: 14px;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(4, 12, 24, 0.36);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.quality-ok {
+  border-color: rgba(78, 211, 171, 0.38);
+}
+
+.quality-warning {
+  border-color: rgba(255, 205, 86, 0.42);
+}
+
+.quality-critical {
+  border-color: rgba(228, 61, 93, 0.48);
+}
+
+.quality-score {
+  display: grid;
+  place-items: center;
+  min-height: 112px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.quality-score strong {
+  font-size: 2.4rem;
+  line-height: 1;
+}
+
+.quality-score span,
+.quality-summary span,
+.quality-item span {
+  color: rgba(235, 244, 255, 0.66);
+}
+
+.quality-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.quality-summary span {
+  padding: 6px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  font-weight: 820;
+}
+
+.quality-list {
+  display: grid;
+  gap: 8px;
+}
+
+.quality-item {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 8px;
+  align-items: start;
+  padding: 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.055);
+}
+
+.quality-item-warning {
+  color: #ffe199;
+}
+
+.quality-item-critical {
+  color: #ffb7c2;
+}
+
+.quality-item-info {
+  color: #bfdbff;
+}
+
+.quality-item-ok {
+  color: #8cf1d1;
+}
+
 .secret-box {
   display: grid;
   gap: 8px;
@@ -656,6 +743,34 @@ form button,
   gap: 10px;
 }
 
+.rules-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.rule-card {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(4, 12, 24, 0.30);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.rule-card span {
+  color: rgba(235, 244, 255, 0.62);
+  font-size: 0.9rem;
+}
+
+.rule-warning {
+  border-color: rgba(255, 205, 86, 0.26);
+}
+
+.rule-critical {
+  border-color: rgba(228, 61, 93, 0.32);
+}
+
 .admin-row {
   display: grid;
   grid-template-columns: minmax(180px, 1fr) 150px 110px 92px;
@@ -842,6 +957,8 @@ legend {
   .login-shell,
   .status-band,
   .tile-grid,
+  .quality-box,
+  .rules-grid,
   .form-grid,
   .assessment-grid,
   .admin-grid,

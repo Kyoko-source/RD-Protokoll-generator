@@ -2,8 +2,10 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
+  AlertTriangle,
   Building2,
   Cable,
+  CheckCircle2,
   Download,
   FileText,
   HeartPulse,
@@ -921,6 +923,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [employees, setEmployees] = useState([]);
   const [auditEvents, setAuditEvents] = useState([]);
   const [privacy, setPrivacy] = useState(null);
+  const [qualityRules, setQualityRules] = useState([]);
   const [cases, setCases] = useState([]);
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState('employee');
@@ -939,9 +942,11 @@ function AdminView({ session, employee, onBack, onLogout }) {
         api('/api/admin/privacy', {}, session.token),
         api('/api/cases', {}, session.token)
       ]);
+      const qualityData = await api('/api/admin/quality-rules', {}, session.token).catch(() => ({ rules: [] }));
       setEmployees(employeeData.employees || []);
       setAuditEvents(auditData.events || []);
       setPrivacy(privacyData);
+      setQualityRules(qualityData.rules || []);
       setRetentionDays(privacyData.retention_days || 3650);
       setCases(caseData.cases || []);
     } catch (err) {
@@ -1152,6 +1157,21 @@ function AdminView({ session, employee, onBack, onLogout }) {
 
       <section className="work-panel">
         <div className="section-head">
+          <h2>QS-Regeln</h2>
+          <span>{qualityRules.length} aktiv</span>
+        </div>
+        <div className="rules-grid">
+          {qualityRules.map((rule) => (
+            <div className={`rule-card rule-${rule.severity}`} key={rule.id}>
+              <strong>{rule.label}</strong>
+              <span>{rule.section} · {rule.severity}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="work-panel">
+        <div className="section-head">
           <h2>Audit-Log</h2>
           <span>letzte Ereignisse</span>
         </div>
@@ -1204,6 +1224,8 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
   const [generatedProtocol, setGeneratedProtocol] = useState('');
+  const [qualityResult, setQualityResult] = useState(null);
+  const [forceFinish, setForceFinish] = useState(false);
   const vitalwerte = patient.vitalwerte || {};
   const xabcde = patient.xabcde || {};
   const samplers = patient.samplers || {};
@@ -1376,18 +1398,47 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
     }
   }
 
+  async function checkQuality() {
+    setError('');
+    setStatusText('');
+    try {
+      const result = await api('/api/protocol/quality', {
+        method: 'POST',
+        body: JSON.stringify({ patient })
+      }, session.token);
+      setQualityResult(result);
+      setForceFinish(false);
+      setProtocolSection('protokoll');
+      setStatusText(`QS geprüft: ${result.score} Punkte.`);
+      return result;
+    } catch (err) {
+      setError(err.message);
+      return null;
+    }
+  }
+
   async function finishCase() {
     setError('');
     setStatusText('');
     try {
+      const quality = qualityResult || await checkQuality();
+      if (quality && (quality.warning_count > 0 || quality.critical_count > 0) && !forceFinish) {
+        setProtocolSection('protokoll');
+        setStatusText('Bitte Warnungen prüfen. Danach kann der Einsatz bewusst mit Warnungen beendet werden.');
+        setForceFinish(true);
+        return;
+      }
       const result = await api('/api/cases/finish', {
         method: 'POST',
-        body: JSON.stringify({ patient })
+        body: JSON.stringify({ patient, force_finish: forceFinish })
       }, session.token);
       setGeneratedProtocol(result.protocol_text || '');
+      setQualityResult(result.quality || qualityResult);
       setPatient(emptyPatient);
       setProtocolSection('protokoll');
-      setStatusText(`Einsatz beendet und archiviert: ${result.case_id}`);
+      setForceFinish(false);
+      const warningText = result.quality?.warning_count || result.quality?.critical_count ? ' mit QS-Warnungen' : '';
+      setStatusText(`Einsatz${warningText} beendet und archiviert: ${result.case_id}`);
     } catch (err) {
       setError(err.message);
     }
@@ -1446,11 +1497,12 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
 
       <section className="protocol-toolbar">
         <button type="button" onClick={onBack}>Zurück zum Hauptmenü</button>
+        <button type="button" onClick={checkQuality}><CheckCircle2 size={16} /> QS prüfen</button>
         <button type="button" onClick={generateProtocol}>Protokoll generieren</button>
         <button type="button" onClick={exportDraftPdf}><Download size={16} /> PDF</button>
         <button type="button" onClick={printDraftPdf}><Printer size={16} /> Drucken</button>
         <button type="button" onClick={saveDraft}>Entwurf speichern</button>
-        <button type="button" onClick={finishCase}>Einsatz beenden</button>
+        <button type="button" onClick={finishCase}>{forceFinish ? 'Mit Warnungen beenden' : 'Einsatz beenden'}</button>
       </section>
 
       {error && <div className="error-box">{error}</div>}
@@ -1867,6 +1919,39 @@ function ProtocolView({ session, employee, onBack, onLogout }) {
           <h2>Protokoll</h2>
           <span>Vorschau und Abschluss</span>
         </div>
+        {qualityResult && (
+          <div className={`quality-box quality-${qualityResult.level}`}>
+            <div className="quality-score">
+              <strong>{qualityResult.score}</strong>
+              <span>QS-Punkte</span>
+            </div>
+            <div className="quality-summary">
+              <span>{qualityResult.ok_count} erfüllt</span>
+              <span>{qualityResult.warning_count} Warnungen</span>
+              <span>{qualityResult.critical_count} kritisch</span>
+            </div>
+            <div className="quality-list">
+              {(qualityResult.items || []).filter((item) => item.status !== 'ok').map((item) => (
+                <div className={`quality-item quality-item-${item.status}`} key={item.id}>
+                  <AlertTriangle size={16} />
+                  <div>
+                    <strong>{item.label}</strong>
+                    <span>{item.message}</span>
+                  </div>
+                </div>
+              ))}
+              {(qualityResult.items || []).filter((item) => item.status !== 'ok').length === 0 && (
+                <div className="quality-item quality-item-ok">
+                  <CheckCircle2 size={16} />
+                  <div>
+                    <strong>Keine Warnungen</strong>
+                    <span>Die aktiven QS-Regeln sind erfüllt.</span>
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
         <textarea
           className="protocol-preview"
           value={generatedProtocol}
