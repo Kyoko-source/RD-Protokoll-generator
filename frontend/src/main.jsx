@@ -66,6 +66,16 @@ function hasValue(value) {
   return ![undefined, null, '', 'Keine Angabe'].includes(value) && !(Array.isArray(value) && value.length === 0);
 }
 
+const vitalStatusOptions = {
+  spo2_status: ['Keine Angabe', 'Normal', 'Leicht erniedrigt', 'Kritisch erniedrigt', 'Nicht messbar'],
+  af_status: ['Keine Angabe', 'Bradypnoe', 'Normal', 'Tachypnoe', 'Schwere Tachypnoe', 'Apnoe'],
+  rr_status: ['Keine Angabe', 'Hypotonie', 'Normal', 'Leicht erhöht', 'Hypertonie', 'Hypertensive Krise', 'Nicht messbar'],
+  puls_status: ['Keine Angabe', 'Bradykardie', 'Normal', 'Tachykardie', 'Starke Tachykardie', 'Nicht tastbar'],
+  gcs_status: ['Keine Angabe', 'Normal', 'Leicht eingeschränkt', 'Mittelgradig eingeschränkt', 'Schwer eingeschränkt'],
+  bz_status: ['Keine Angabe', 'Hypoglykämie', 'Normal', 'Hyperglykämie', 'Nicht messbar'],
+  temperatur_status: ['Keine Angabe', 'Unterkühlung', 'Normal', 'Erhöht / subfebril', 'Fieber', 'Hohes Fieber', 'Nicht gemessen']
+};
+
 function addProtocolBlock(title, rows) {
   const documented = rows.filter(([, value]) => hasValue(value));
   if (documented.length === 0) return '';
@@ -96,12 +106,19 @@ function generateLocalProtocolText(patient) {
     ['Alter', vital.alter],
     ['Geschlecht', vital.geschlecht],
     ['RR', hasValue(vital.rr_sys) || hasValue(vital.rr_dia) ? `${vital.rr_sys || ''}/${vital.rr_dia || ''} mmHg` : ''],
+    ['RR Einordnung', vital.rr_status],
     ['Puls', vital.puls],
+    ['Puls Einordnung', vital.puls_status],
     ['SpO2', vital.spo2],
+    ['SpO2 Einordnung', vital.spo2_status],
     ['Atemfrequenz', vital.af],
+    ['Atemfrequenz Einordnung', vital.af_status],
     ['BZ', vital.bz],
+    ['BZ Einordnung', vital.bz_status],
     ['Temperatur', vital.temperatur],
+    ['Temperatur Einordnung', vital.temperatur_status],
     ['GCS', vital.gcs],
+    ['GCS Einordnung', vital.gcs_status],
     ['Kurzbericht', vital.kurzbericht],
   ]);
   text += addProtocolBlock('xABCDE', [
@@ -112,6 +129,12 @@ function generateLocalProtocolText(patient) {
     ['D AVPU', x.avpu],
     ['E Bodycheck', x.bodycheck],
     ['Auffaelligkeiten', x.bodycheck_text],
+    ['BE-FAST Balance', x.befast_balance],
+    ['BE-FAST Eyes', x.befast_eyes],
+    ['BE-FAST Face', x.befast_face],
+    ['BE-FAST Arms', x.befast_arms],
+    ['BE-FAST Speech', x.befast_speech],
+    ['BE-FAST Time', x.befast_time],
   ]);
   text += addProtocolBlock('SAMPLERS', [
     ['Symptome', s.symptome],
@@ -2044,28 +2067,70 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             <input value={vitalwerte.rr_dia || ''} onChange={(event) => updateVital('rr_dia', event.target.value)} inputMode="numeric" />
           </label>
           <label>
+            RR Einordnung
+            <select value={vitalwerte.rr_status || 'Keine Angabe'} onChange={(event) => updateVital('rr_status', event.target.value)}>
+              {vitalStatusOptions.rr_status.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>
             Puls
             <input value={vitalwerte.puls || ''} onChange={(event) => updateVital('puls', event.target.value)} inputMode="numeric" />
+          </label>
+          <label>
+            Puls Einordnung
+            <select value={vitalwerte.puls_status || 'Keine Angabe'} onChange={(event) => updateVital('puls_status', event.target.value)}>
+              {vitalStatusOptions.puls_status.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
           </label>
           <label>
             SpO2
             <input value={vitalwerte.spo2 || ''} onChange={(event) => updateVital('spo2', event.target.value)} inputMode="numeric" />
           </label>
           <label>
+            SpO2 Einordnung
+            <select value={vitalwerte.spo2_status || 'Keine Angabe'} onChange={(event) => updateVital('spo2_status', event.target.value)}>
+              {vitalStatusOptions.spo2_status.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>
             Atemfrequenz
             <input value={vitalwerte.af || ''} onChange={(event) => updateVital('af', event.target.value)} inputMode="numeric" />
+          </label>
+          <label>
+            Atemfrequenz Einordnung
+            <select value={vitalwerte.af_status || 'Keine Angabe'} onChange={(event) => updateVital('af_status', event.target.value)}>
+              {vitalStatusOptions.af_status.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
           </label>
           <label>
             BZ
             <input value={vitalwerte.bz || ''} onChange={(event) => updateVital('bz', event.target.value)} inputMode="numeric" />
           </label>
           <label>
+            BZ Einordnung
+            <select value={vitalwerte.bz_status || 'Keine Angabe'} onChange={(event) => updateVital('bz_status', event.target.value)}>
+              {vitalStatusOptions.bz_status.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>
             Temperatur
             <input value={vitalwerte.temperatur || ''} onChange={(event) => updateVital('temperatur', event.target.value)} inputMode="decimal" />
           </label>
           <label>
+            Temperatur Einordnung
+            <select value={vitalwerte.temperatur_status || 'Keine Angabe'} onChange={(event) => updateVital('temperatur_status', event.target.value)}>
+              {vitalStatusOptions.temperatur_status.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          <label>
             GCS
             <input value={vitalwerte.gcs || ''} onChange={(event) => updateVital('gcs', event.target.value)} inputMode="numeric" />
+          </label>
+          <label>
+            GCS Einordnung
+            <select value={vitalwerte.gcs_status || 'Keine Angabe'} onChange={(event) => updateVital('gcs_status', event.target.value)}>
+              {vitalStatusOptions.gcs_status.map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
           </label>
         </div>
 
@@ -2105,14 +2170,19 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
               Atemweg
               <select value={xabcde.atemweg || ''} onChange={(event) => updateXabcde('atemweg', event.target.value)}>
                 <option value="">Keine Angabe</option>
-                <option value="frei">frei</option>
-                <option value="gefährdet">gefährdet</option>
-                <option value="verlegt">verlegt</option>
+                <option value="Frei">Frei</option>
+                <option value="Gefährdet">Gefährdet</option>
+                <option value="Verlegt">Verlegt</option>
               </select>
             </label>
             <label>
               HWS / Stabilisierung
-              <input value={xabcde.hws || ''} onChange={(event) => updateXabcde('hws', event.target.value)} />
+              <select value={xabcde.hws || ''} onChange={(event) => updateXabcde('hws', event.target.value)}>
+                <option value="">Keine Angabe</option>
+                <option value="Keine Immobilisation">Keine Immobilisation</option>
+                <option value="Stifneck">Stifneck</option>
+                <option value="Vakuummatratze">Vakuummatratze</option>
+              </select>
             </label>
           </fieldset>
 
@@ -2122,19 +2192,34 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
               Atmung
               <select value={xabcde.atmung || ''} onChange={(event) => updateXabcde('atmung', event.target.value)}>
                 <option value="">Keine Angabe</option>
-                <option value="unauffällig">unauffällig</option>
-                <option value="erschwert">erschwert</option>
-                <option value="insuffizient">insuffizient</option>
+                <option value="Unauffällig">Unauffällig</option>
+                <option value="Dyspnoe">Dyspnoe</option>
+                <option value="Bradypnoe">Bradypnoe</option>
+                <option value="Tachypnoe">Tachypnoe</option>
                 <option value="Apnoe">Apnoe</option>
               </select>
             </label>
             <label>
               Atemgeräusche
-              <input value={xabcde.atemgeraeusche || ''} onChange={(event) => updateXabcde('atemgeraeusche', event.target.value)} />
+              <select value={xabcde.atemgeraeusche || ''} onChange={(event) => updateXabcde('atemgeraeusche', event.target.value)}>
+                <option value="">Keine Angabe</option>
+                <option value="Beidseits vorhanden">Beidseits vorhanden</option>
+                <option value="Links abgeschwächt">Links abgeschwächt</option>
+                <option value="Rechts abgeschwächt">Rechts abgeschwächt</option>
+                <option value="Keine">Keine</option>
+              </select>
             </label>
             <label>
               Sauerstofftherapie
-              <input value={xabcde.sauerstoff || ''} onChange={(event) => updateXabcde('sauerstoff', event.target.value)} />
+              <select value={xabcde.sauerstoff || ''} onChange={(event) => updateXabcde('sauerstoff', event.target.value)}>
+                <option value="">Keine Angabe</option>
+                <option value="Keine">Keine</option>
+                <option value="2 l/min">2 l/min</option>
+                <option value="4 l/min">4 l/min</option>
+                <option value="6 l/min">6 l/min</option>
+                <option value="10 l/min">10 l/min</option>
+                <option value="15 l/min">15 l/min</option>
+              </select>
             </label>
           </fieldset>
 
@@ -2144,19 +2229,28 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
               Hautzeichen
               <select value={xabcde.haut || ''} onChange={(event) => updateXabcde('haut', event.target.value)}>
                 <option value="">Keine Angabe</option>
-                <option value="rosig/warm/trocken">rosig/warm/trocken</option>
-                <option value="blass">blass</option>
-                <option value="kaltschweißig">kaltschweißig</option>
-                <option value="zyanotisch">zyanotisch</option>
+                <option value="Rosig / warm">Rosig / warm</option>
+                <option value="Blass">Blass</option>
+                <option value="Kalt / schweißig">Kalt / schweißig</option>
+                <option value="Zyanotisch">Zyanotisch</option>
               </select>
             </label>
             <label>
               Rekapillarisierungszeit
-              <input value={xabcde.rekap || ''} onChange={(event) => updateXabcde('rekap', event.target.value)} />
+              <select value={xabcde.rekap || ''} onChange={(event) => updateXabcde('rekap', event.target.value)}>
+                <option value="">Keine Angabe</option>
+                <option value="< 2 Sekunden">&lt; 2 Sekunden</option>
+                <option value="> 2 Sekunden">&gt; 2 Sekunden</option>
+              </select>
             </label>
             <label>
               Pulsqualität
-              <input value={xabcde.pulsqualitaet || ''} onChange={(event) => updateXabcde('pulsqualitaet', event.target.value)} />
+              <select value={xabcde.pulsqualitaet || ''} onChange={(event) => updateXabcde('pulsqualitaet', event.target.value)}>
+                <option value="">Keine Angabe</option>
+                <option value="Kräftig">Kräftig</option>
+                <option value="Schwach">Schwach</option>
+                <option value="Fadenförmig">Fadenförmig</option>
+              </select>
             </label>
           </fieldset>
 
@@ -2166,15 +2260,72 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
               AVPU
               <select value={xabcde.avpu || ''} onChange={(event) => updateXabcde('avpu', event.target.value)}>
                 <option value="">Keine Angabe</option>
-                <option value="Alert">Alert</option>
-                <option value="Voice">Voice</option>
-                <option value="Pain">Pain</option>
-                <option value="Unresponsive">Unresponsive</option>
+                <option value="A">A</option>
+                <option value="V">V</option>
+                <option value="P">P</option>
+                <option value="U">U</option>
               </select>
             </label>
             <label>
               Pupillen
-              <input value={xabcde.pupillen || ''} onChange={(event) => updateXabcde('pupillen', event.target.value)} />
+              <select value={xabcde.pupillen || ''} onChange={(event) => updateXabcde('pupillen', event.target.value)}>
+                <option value="">Keine Angabe</option>
+                <option value="Isokor">Isokor</option>
+                <option value="Anisokor">Anisokor</option>
+                <option value="Lichtstarr">Lichtstarr</option>
+              </select>
+            </label>
+            <label>
+              BE-FAST Balance
+              <select value={xabcde.befast_balance || ''} onChange={(event) => updateXabcde('befast_balance', event.target.value)}>
+                <option value="">Keine Angabe</option>
+                <option value="Unauffällig">Unauffällig</option>
+                <option value="Akute Gang-/Standunsicherheit">Akute Gang-/Standunsicherheit</option>
+                <option value="Akuter Schwindel / Ataxie">Akuter Schwindel / Ataxie</option>
+              </select>
+            </label>
+            <label>
+              BE-FAST Face
+              <select value={xabcde.befast_face || ''} onChange={(event) => updateXabcde('befast_face', event.target.value)}>
+                <option value="">Keine Angabe</option>
+                <option value="Symmetrisch">Symmetrisch</option>
+                <option value="Fazialisparese links">Fazialisparese links</option>
+                <option value="Fazialisparese rechts">Fazialisparese rechts</option>
+              </select>
+            </label>
+            <label>
+              BE-FAST Speech
+              <select value={xabcde.befast_speech || ''} onChange={(event) => updateXabcde('befast_speech', event.target.value)}>
+                <option value="">Keine Angabe</option>
+                <option value="Unauffällig">Unauffällig</option>
+                <option value="Dysarthrie">Dysarthrie</option>
+                <option value="Aphasie">Aphasie</option>
+                <option value="Sprachverständnis gestört">Sprachverständnis gestört</option>
+              </select>
+            </label>
+            <label>
+              BE-FAST Eyes
+              <select value={xabcde.befast_eyes || ''} onChange={(event) => updateXabcde('befast_eyes', event.target.value)}>
+                <option value="">Keine Angabe</option>
+                <option value="Unauffällig">Unauffällig</option>
+                <option value="Akute Sehstörung">Akute Sehstörung</option>
+                <option value="Doppelbilder">Doppelbilder</option>
+                <option value="Gesichtsfeldausfall">Gesichtsfeldausfall</option>
+              </select>
+            </label>
+            <label>
+              BE-FAST Arms
+              <select value={xabcde.befast_arms || ''} onChange={(event) => updateXabcde('befast_arms', event.target.value)}>
+                <option value="">Keine Angabe</option>
+                <option value="Kein Absinken">Kein Absinken</option>
+                <option value="Armabsinken links">Armabsinken links</option>
+                <option value="Armabsinken rechts">Armabsinken rechts</option>
+                <option value="Armabsinken beidseits">Armabsinken beidseits</option>
+              </select>
+            </label>
+            <label>
+              BE-FAST Time / Symptombeginn
+              <input value={xabcde.befast_time || ''} onChange={(event) => updateXabcde('befast_time', event.target.value)} />
             </label>
           </fieldset>
 
@@ -2184,9 +2335,9 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
               Bodycheck
               <select value={xabcde.bodycheck || ''} onChange={(event) => updateXabcde('bodycheck', event.target.value)}>
                 <option value="">Keine Angabe</option>
-                <option value="unauffällig">unauffällig</option>
-                <option value="auffällig">auffällig</option>
-                <option value="nicht vollständig möglich">nicht vollständig möglich</option>
+                <option value="Unauffällig">Unauffällig</option>
+                <option value="Auffällig">Auffällig</option>
+                <option value="Nicht vollständig möglich">Nicht vollständig möglich</option>
               </select>
             </label>
             <label>

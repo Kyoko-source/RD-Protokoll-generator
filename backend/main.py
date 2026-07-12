@@ -266,7 +266,7 @@ def build_suspicion_assessment(patient):
             "Neurologischen Verlauf wiederholt dokumentieren",
             "Zielklinik mit neurologischer Versorgung bevorzugen",
         )
-    if any(term in text for term in ["sturz", "unfall", "trauma", "kollision"]) or xabcde.get("bodycheck") == "auffällig":
+    if any(term in text for term in ["sturz", "unfall", "trauma", "kollision"]) or str(xabcde.get("bodycheck", "")).lower() == "auffällig":
         add(
             "Traumatische Genese / relevante Verletzung moeglich",
             "Vollstaendigen Bodycheck und Blutungskontrolle sichern",
@@ -386,7 +386,7 @@ def amls_candidate_conflicts(candidate_name, patient):
     bz = as_number(vital.get("bz"))
 
     if any(term in name for term in ["pneumonie", "respirator", "asthma", "copd", "lungenembolie", "lungenoedem", "pneumothorax"]):
-        if spo2 is not None and spo2 >= 95 and xabcde.get("atmung") in ["unauffällig", "frei"]:
+        if spo2 is not None and spo2 >= 95 and str(xabcde.get("atmung", "")).lower() in ["unauffällig", "frei"]:
             conflicts.append("SpO2/Atmung bislang unauffaellig dokumentiert")
     if any(term in name for term in ["schock", "blutung", "volumenmangel", "sepsis"]):
         if rr_sys is not None and rr_sys >= 100 and pulse is not None and pulse <= 100:
@@ -515,8 +515,13 @@ def assess_protocol_quality(patient):
         "info",
     ))
 
-    core_vitals = ["puls", "spo2", "rr_sys", "rr_dia", "gcs"]
-    missing_core = [key for key in core_vitals if not valid(vital.get(key))]
+    core_vital_groups = [
+        ("Puls", ["puls", "puls_status"]),
+        ("SpO2", ["spo2", "spo2_status"]),
+        ("RR", ["rr_sys", "rr_dia", "rr_status"]),
+        ("GCS", ["gcs", "gcs_status"]),
+    ]
+    missing_core = [label for label, keys in core_vital_groups if not any(valid(vital.get(key)) for key in keys)]
     items.append(quality_item(
         "vital_core",
         "ok" if not missing_core else "warning",
@@ -640,12 +645,19 @@ def generate_protocol_text(patient):
         ("Alter", vital.get("alter")),
         ("Geschlecht", vital.get("geschlecht")),
         ("RR", f"{vital.get('rr_sys', '')}/{vital.get('rr_dia', '')} mmHg" if valid(vital.get("rr_sys")) or valid(vital.get("rr_dia")) else ""),
+        ("RR Einordnung", vital.get("rr_status")),
         ("Puls", vital.get("puls")),
+        ("Puls Einordnung", vital.get("puls_status")),
         ("SpO2", vital.get("spo2")),
+        ("SpO2 Einordnung", vital.get("spo2_status")),
         ("Atemfrequenz", vital.get("af")),
+        ("Atemfrequenz Einordnung", vital.get("af_status")),
         ("BZ", vital.get("bz")),
+        ("BZ Einordnung", vital.get("bz_status")),
         ("Temperatur", vital.get("temperatur")),
+        ("Temperatur Einordnung", vital.get("temperatur_status")),
         ("GCS", vital.get("gcs")),
+        ("GCS Einordnung", vital.get("gcs_status")),
         ("Kurzbericht", vital.get("kurzbericht")),
     ])
     text += add_lines("xABCDE", [
@@ -661,6 +673,12 @@ def generate_protocol_text(patient):
         ("Pulsqualitaet", x.get("pulsqualitaet")),
         ("D AVPU", x.get("avpu")),
         ("Pupillen", x.get("pupillen")),
+        ("BE-FAST Balance", x.get("befast_balance")),
+        ("BE-FAST Eyes", x.get("befast_eyes")),
+        ("BE-FAST Face", x.get("befast_face")),
+        ("BE-FAST Arms", x.get("befast_arms")),
+        ("BE-FAST Speech", x.get("befast_speech")),
+        ("BE-FAST Time", x.get("befast_time")),
         ("E Bodycheck", x.get("bodycheck")),
         ("Bodycheck Auffaelligkeiten", x.get("bodycheck_text")),
     ])
