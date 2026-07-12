@@ -915,6 +915,39 @@ form button,
   font-weight: 780;
 }
 
+.amls-funnel {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  margin: 2px 0 18px;
+  text-align: center;
+}
+
+.amls-funnel div,
+.amls-funnel strong {
+  width: 100%;
+  padding: 12px;
+  border-radius: 18px 18px 10px 10px;
+  background: linear-gradient(135deg, rgba(94, 168, 255, 0.20), rgba(139, 92, 246, 0.18));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 850;
+}
+
+.amls-funnel span {
+  width: 72%;
+  height: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  clip-path: polygon(8% 0, 92% 0, 84% 100%, 16% 100%);
+}
+
+.amls-funnel strong {
+  width: min(560px, 76%);
+  min-width: 250px;
+  border-radius: 12px 12px 22px 22px;
+  background: linear-gradient(135deg, rgba(68, 221, 189, 0.18), rgba(94, 168, 255, 0.18));
+  border-color: rgba(92, 255, 177, 0.22);
+}
+
 fieldset {
   display: grid;
   gap: 12px;
@@ -1050,9 +1083,59 @@ legend {
   cursor: pointer;
 }
 
+.candidate-grid .amls-candidate-card {
+  position: relative;
+  overflow: hidden;
+  align-content: center;
+  min-height: 104px;
+}
+
+.candidate-grid .amls-candidate-card small {
+  color: #fff8d7;
+  font-weight: 720;
+}
+
+.candidate-grid .amls-matching {
+  background: linear-gradient(135deg, #087f5b 0%, #22a06b 100%);
+  border-color: #63e6be;
+}
+
+.candidate-grid .amls-check {
+  background: linear-gradient(135deg, #a16207 0%, #f4b942 100%);
+  border-color: #ffd978;
+}
+
+.candidate-grid .amls-excluded {
+  background: linear-gradient(135deg, #991b1b 0%, #ef4444 100%);
+  border-color: #ff8a8a;
+}
+
 .candidate-grid span {
   color: #d8fff2;
   font-size: 0.86rem;
+}
+
+.amls-final {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px;
+  margin: 0 0 16px;
+  border-radius: 14px;
+  background: rgba(68, 221, 189, 0.10);
+  border: 1px solid rgba(92, 255, 177, 0.22);
+}
+
+.amls-final button {
+  min-height: 40px;
+  padding: 0 14px;
+  border-radius: 10px;
+  color: #07131f;
+  background: #63e6be;
+  border: 0;
+  font-weight: 900;
+  cursor: pointer;
 }
 
 .dynamic-row {
@@ -1198,7 +1281,8 @@ legend {
   .topbar,
   .case-row,
   .protocol-toolbar,
-  .list-head {
+  .list-head,
+  .amls-final {
     align-items: stretch;
     flex-direction: column;
   }

@@ -1396,6 +1396,22 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const uebergabe = patient.uebergabe || {};
   const amlsCandidates = Array.isArray(amls.custom_candidates) ? amls.custom_candidates : [];
   const amlsExcluded = Array.isArray(amls.excluded) ? amls.excluded : [];
+  const amlsExcludedNames = new Set(amlsExcluded.map((item) => (
+    typeof item === 'string' ? item : item?.diagnose || item?.name || ''
+  )).filter(Boolean));
+  const amlsVisibleCandidates = amlsSuggestions.length > 0 ? amlsSuggestions : amlsCandidates.map((item) => {
+    const candidate = typeof item === 'string' ? { diagnose: item } : item || {};
+    return {
+      name: candidate.diagnose || candidate.name || '',
+      category: 'Eigene Ergänzung',
+      rationale: candidate.hinweis || candidate.rationale || 'Manuell ergänzt',
+      conflicts: [],
+      status: amlsExcludedNames.has(candidate.diagnose || candidate.name || '') ? 'excluded' : 'matching',
+    };
+  }).filter((item) => item.name);
+  const amlsRemainingCandidates = amlsVisibleCandidates.filter((item) => !amlsExcludedNames.has(item.name));
+  const amlsMatchingCount = amlsVisibleCandidates.filter((item) => !amlsExcludedNames.has(item.name) && !(item.conflicts || []).length).length;
+  const amlsCheckCount = amlsVisibleCandidates.filter((item) => !amlsExcludedNames.has(item.name) && (item.conflicts || []).length).length;
 
   useEffect(() => {
     api('/api/draft', {}, session.token)
@@ -1425,6 +1441,12 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       setLocalDraft(saved);
     }
   }, [patient, draftReady, employee?.id]);
+
+  useEffect(() => {
+    if (protocolSection === 'amls' && amlsSuggestions.length === 0) {
+      loadAmlsSuggestions();
+    }
+  }, [protocolSection]);
 
   function restoreLocalDraft() {
     const draft = loadLocalDraft(employee?.id);
@@ -1684,6 +1706,38 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       };
     });
     setStatusText(`${name} wurde in den AMLS-Trichter übernommen.`);
+  }
+
+  function toggleAmlsExclusion(item) {
+    const name = item?.name || '';
+    if (!name) return;
+    const isExcluded = amlsExcludedNames.has(name);
+    if (!isExcluded && amlsRemainingCandidates.length <= 1) {
+      setStatusText('Der letzte Kandidat bleibt im Trichter. Du kannst ihn als Arbeitsdiagnose übernehmen.');
+      return;
+    }
+    setPatient((current) => {
+      const currentAmls = current.amls || {};
+      const excluded = Array.isArray(currentAmls.excluded) ? currentAmls.excluded : [];
+      const nextExcluded = isExcluded
+        ? excluded.filter((entry) => (typeof entry === 'string' ? entry : entry?.diagnose || entry?.name || '') !== name)
+        : [...excluded, name];
+      return {
+        ...current,
+        amls: {
+          ...currentAmls,
+          excluded: nextExcluded,
+          arbeitsdiagnose: currentAmls.arbeitsdiagnose === name && !isExcluded ? '' : currentAmls.arbeitsdiagnose
+        }
+      };
+    });
+    setStatusText(isExcluded ? `${name} wurde zurück in den Trichter geholt.` : `${name} wurde im AMLS-Trichter zurückgestellt.`);
+  }
+
+  function adoptAmlsDiagnosis(name) {
+    if (!name) return;
+    updateAmls('arbeitsdiagnose', name);
+    setStatusText(`${name} wurde als Arbeitsdiagnose übernommen.`);
   }
 
   async function calculateMedication() {
@@ -2292,7 +2346,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
         <div className="amls-summary">
           <div>
-            <strong>{amlsCandidates.length}</strong>
+            <strong>{amlsVisibleCandidates.length}</strong>
             <span>Kandidaten</span>
           </div>
           <div>
@@ -2300,9 +2354,14 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             <span>zurückgestellt</span>
           </div>
           <div>
-            <strong>{amls.arbeitsdiagnose ? '1' : '0'}</strong>
-            <span>Arbeitsdiagnose</span>
+            <strong>{amlsRemainingCandidates.length}</strong>
+            <span>verbleibend</span>
           </div>
+        </div>
+        <div className="amls-funnel">
+          <div>Ausgangstrichter · {amlsVisibleCandidates.length} Kandidaten · passend {amlsMatchingCount} · prüfen {amlsCheckCount} · zurückgestellt {amlsExcluded.length}</div>
+          <span />
+          <strong>{amlsRemainingCandidates.length} verbleibend</strong>
         </div>
 
         <div className="assessment-grid">
@@ -2329,18 +2388,36 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         <div className="list-head">
           <h3>Differenzialdiagnosen</h3>
           <div className="list-actions">
-            <button type="button" onClick={loadAmlsSuggestions}>Vorschläge ableiten</button>
+            <button type="button" onClick={loadAmlsSuggestions}>Trichter aktualisieren</button>
             <button type="button" onClick={addAmlsCandidate}>Kandidat hinzufügen</button>
           </div>
         </div>
-        {amlsSuggestions.length > 0 && (
-          <div className="candidate-grid">
-            {amlsSuggestions.map((item) => (
-              <button type="button" key={`${item.category}-${item.name}`} onClick={() => applyAmlsSuggestion(item)}>
-                <strong>{item.name}</strong>
+        <div className="candidate-grid amls-candidate-grid">
+          {amlsVisibleCandidates.map((item) => {
+            const isExcluded = amlsExcludedNames.has(item.name);
+            const conflicts = item.conflicts || [];
+            const statusClass = isExcluded ? 'excluded' : conflicts.length ? 'check' : 'matching';
+            return (
+              <button
+                type="button"
+                className={`amls-candidate-card amls-${statusClass}`}
+                key={`${item.category}-${item.name}`}
+                onClick={() => toggleAmlsExclusion(item)}
+              >
+                <strong>{isExcluded ? `Zurückgestellt: ${item.name}` : item.name}</strong>
                 <span>{item.category} · {item.rationale}</span>
+                {conflicts.length > 0 && !isExcluded && <small>Prüfen: {conflicts.join(' · ')}</small>}
               </button>
-            ))}
+            );
+          })}
+          {amlsVisibleCandidates.length === 0 && <p className="muted">Noch keine Kandidaten. Trichter aktualisieren oder eigene Diagnosen ergänzen.</p>}
+        </div>
+        {amlsRemainingCandidates.length === 1 && (
+          <div className="amls-final">
+            <strong>Letzter Kandidat im Trichter: {amlsRemainingCandidates[0].name}</strong>
+            <button type="button" onClick={() => adoptAmlsDiagnosis(amlsRemainingCandidates[0].name)}>
+              Als Arbeitsdiagnose übernehmen
+            </button>
           </div>
         )}
         <div className="dynamic-list">

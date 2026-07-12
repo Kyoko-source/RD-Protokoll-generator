@@ -359,7 +359,47 @@ def build_amls_candidates(patient):
         name = item.get("diagnose") if isinstance(item, dict) else item
         if valid(name):
             add(str(name), "Eigene Ergaenzung", "Manuell zum Trichter hinzugefuegt")
+
+    excluded_names = {
+        str(item.get("diagnose") or item.get("name") or "").strip() if isinstance(item, dict) else str(item).strip()
+        for item in amls.get("excluded", [])
+        if valid(item)
+    }
+    for item in candidates:
+        conflicts = [] if item["category"] == "Eigene Ergaenzung" else amls_candidate_conflicts(item["name"], patient)
+        item["conflicts"] = conflicts
+        item["excluded"] = item["name"] in excluded_names
+        item["status"] = "excluded" if item["excluded"] else "check" if conflicts else "matching"
     return candidates
+
+
+def amls_candidate_conflicts(candidate_name, patient):
+    vital = patient.get("vitalwerte", {}) or {}
+    xabcde = patient.get("xabcde", {}) or {}
+    name = str(candidate_name or "").lower()
+    conflicts = []
+    spo2 = as_number(vital.get("spo2"))
+    rr_sys = as_number(vital.get("rr_sys"))
+    pulse = as_number(vital.get("puls"))
+    temp = as_number(vital.get("temperatur"))
+    gcs = as_number(vital.get("gcs"))
+    bz = as_number(vital.get("bz"))
+
+    if any(term in name for term in ["pneumonie", "respirator", "asthma", "copd", "lungenembolie", "lungenoedem", "pneumothorax"]):
+        if spo2 is not None and spo2 >= 95 and xabcde.get("atmung") in ["unauffällig", "frei"]:
+            conflicts.append("SpO2/Atmung bislang unauffaellig dokumentiert")
+    if any(term in name for term in ["schock", "blutung", "volumenmangel", "sepsis"]):
+        if rr_sys is not None and rr_sys >= 100 and pulse is not None and pulse <= 100:
+            conflicts.append("RR/Puls sprechen aktuell nicht fuer Schock")
+    if "sepsis" in name or "infektion" in name:
+        if temp is not None and temp < 38:
+            conflicts.append("Kein Fieber dokumentiert")
+    if any(term in name for term in ["intrakraniell", "neurolog", "schlaganfall", "tia"]):
+        if gcs is not None and gcs == 15 and xabcde.get("avpu") in ["Alert", "A", ""]:
+            conflicts.append("Vigilanz aktuell unauffaellig")
+    if "hypogly" in name and bz is not None and bz >= 70:
+        conflicts.append("BZ nicht im hypoglykaemen Bereich")
+    return conflicts
 
 
 def calculate_medication(payload):
