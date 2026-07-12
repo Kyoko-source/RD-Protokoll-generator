@@ -78,6 +78,26 @@ const vitalStatusOptions = {
   temperatur_status: ['Keine Angabe', 'Unterkühlung', 'Normal', 'Erhöht / subfebril', 'Fieber', 'Hohes Fieber', 'Nicht gemessen', CUSTOM_STATUS]
 };
 
+const samplersSections = [
+  { key: 'S1', label: 'S1', title: 'Symptome' },
+  { key: 'A', label: 'A', title: 'Allergien' },
+  { key: 'M', label: 'M', title: 'Medikamente' },
+  { key: 'P', label: 'P', title: 'Patientenvorgeschichte' },
+  { key: 'L', label: 'L', title: 'Letzte Ereignisse' },
+  { key: 'E', label: 'E', title: 'Ereignis' },
+  { key: 'R', label: 'R', title: 'Risikofaktoren' },
+  { key: 'S2', label: 'S2', title: 'Schwangerschaft' }
+];
+
+const riskFactorLabels = {
+  raucher: 'Raucher',
+  alkohol: 'Alkoholkonsum',
+  drogen: 'Drogen',
+  diabetes: 'Diabetes',
+  hypertonie: 'Hypertonie',
+  antikoagulation: 'Antikoagulation'
+};
+
 function effectiveVitalStatus(vital, statusKey) {
   return vital?.[statusKey] === CUSTOM_STATUS ? vital?.[`${statusKey}_custom`] : vital?.[statusKey];
 }
@@ -104,6 +124,34 @@ function formatBloodPressure(vital) {
     return formatObservation(`${vital.rr_sys || ''}/${vital.rr_dia || ''}`, effectiveVitalStatus(vital, 'rr_status'), 'mmHg');
   }
   return formatObservation('', effectiveVitalStatus(vital, 'rr_status'));
+}
+
+function formatSelectedAllergies(s) {
+  if (s.allergien === 'Vorhanden' && hasValue(s.allergien_text)) return `Vorhanden: ${s.allergien_text}`;
+  return s.allergien;
+}
+
+function formatSelectedMedication(s) {
+  if (s.medikamente_option === 'Medikamente eingeben' && hasValue(s.medikamente)) return s.medikamente;
+  return s.medikamente_option || s.medikamente;
+}
+
+function formatLastMeal(s) {
+  if (s.letzte_mahlzeit === 'Eigene Eingabe' && hasValue(s.letzte_mahlzeit_text)) return s.letzte_mahlzeit_text;
+  return s.letzte_mahlzeit || s.letzte_aufnahme;
+}
+
+function formatRiskFactors(s) {
+  const risks = Object.entries(riskFactorLabels)
+    .filter(([key]) => Boolean(s[key]))
+    .map(([, label]) => label);
+  if (hasValue(s.risiken_sonstige)) risks.push(s.risiken_sonstige);
+  if (hasValue(s.risikofaktoren)) risks.push(s.risikofaktoren);
+  return risks.join(', ');
+}
+
+function formatPregnancyStatus(s) {
+  return s.schwangerschaft === 'Nicht relevant' ? '' : s.schwangerschaft;
 }
 
 function documentedVitalStatusValues(patient) {
@@ -173,12 +221,17 @@ function generateLocalProtocolText(patient) {
   ]);
   text += addProtocolBlock('SAMPLERS', [
     ['Symptome', s.symptome],
-    ['Allergien', s.allergien],
-    ['Medikamente', s.medikamente],
+    ['Allergien', formatSelectedAllergies(s)],
+    ['Medikamente', formatSelectedMedication(s)],
     ['Vorgeschichte', s.vorgeschichte],
-    ['Letzte Aufnahme', s.letzte_aufnahme],
+    ['Letzte Mahlzeit', formatLastMeal(s)],
+    ['Letzte Medikamenteneinnahme', s.letzte_medikamenteneinnahme],
+    ['Letzter Stuhlgang', s.letzter_stuhlgang],
+    ['Letzte Miktion', s.letzte_miktion],
+    ['Letztes Erbrechen', s.letztes_erbrechen],
     ['Ereignis', s.ereignis],
-    ['Risikofaktoren', s.risikofaktoren],
+    ['Risikofaktoren', formatRiskFactors(s)],
+    ['Schwangerschaft', formatPregnancyStatus(s)],
     ['Sonstiges', s.sonstiges],
   ]);
   text += addProtocolBlock('OPQRST', [
@@ -1434,6 +1487,7 @@ const emptyPatient = {
 function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSync }) {
   const [patient, setPatient] = useState(emptyPatient);
   const [protocolSection, setProtocolSection] = useState('vitalwerte');
+  const [samplersSection, setSamplersSection] = useState('S1');
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
   const [generatedProtocol, setGeneratedProtocol] = useState('');
@@ -1607,6 +1661,158 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         [key]: value
       }
     }));
+  }
+
+  function toggleSamplerRisk(key) {
+    updateSamplers(key, !Boolean(samplers[key]));
+  }
+
+  function renderSamplersContent() {
+    if (samplersSection === 'S1') {
+      return (
+        <fieldset className="samplers-panel">
+          <legend>S - Symptome</legend>
+          <label>
+            Beschwerden / Symptome
+            <textarea value={samplers.symptome || ''} onChange={(event) => updateSamplers('symptome', event.target.value)} rows={7} />
+          </label>
+        </fieldset>
+      );
+    }
+
+    if (samplersSection === 'A') {
+      return (
+        <fieldset className="samplers-panel">
+          <legend>A - Allergien</legend>
+          <label>
+            Allergien
+            <select value={samplers.allergien || 'Keine Angabe'} onChange={(event) => updateSamplers('allergien', event.target.value)}>
+              {['Keine Angabe', 'Keine bekannt', 'Vorhanden'].map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          {samplers.allergien === 'Vorhanden' && (
+            <label>
+              Welche Allergien?
+              <input value={samplers.allergien_text || ''} onChange={(event) => updateSamplers('allergien_text', event.target.value)} />
+            </label>
+          )}
+        </fieldset>
+      );
+    }
+
+    if (samplersSection === 'M') {
+      return (
+        <fieldset className="samplers-panel">
+          <legend>M - Medikamente</legend>
+          <label>
+            Medikamente
+            <select value={samplers.medikamente_option || 'Keine Angabe'} onChange={(event) => updateSamplers('medikamente_option', event.target.value)}>
+              {['Keine Angabe', 'Siehe Medikamentenplan', 'Medikamente eingeben'].map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          {samplers.medikamente_option === 'Medikamente eingeben' && (
+            <label>
+              Bitte Medikamente eingeben
+              <textarea value={samplers.medikamente || ''} onChange={(event) => updateSamplers('medikamente', event.target.value)} rows={6} />
+            </label>
+          )}
+        </fieldset>
+      );
+    }
+
+    if (samplersSection === 'P') {
+      return (
+        <fieldset className="samplers-panel">
+          <legend>P - Patientenvorgeschichte</legend>
+          <label>
+            Vorerkrankungen
+            <textarea value={samplers.vorgeschichte || ''} onChange={(event) => updateSamplers('vorgeschichte', event.target.value)} rows={7} />
+          </label>
+        </fieldset>
+      );
+    }
+
+    if (samplersSection === 'L') {
+      return (
+        <fieldset className="samplers-panel">
+          <legend>L - Letzte Nahrungsaufnahme</legend>
+          <label>
+            Letzte Mahlzeit
+            <select value={samplers.letzte_mahlzeit || 'Keine Angabe'} onChange={(event) => updateSamplers('letzte_mahlzeit', event.target.value)}>
+              {['Keine Angabe', '< 2 Stunden', '2-6 Stunden', '> 6 Stunden', 'Unbekannt', 'Eigene Eingabe'].map((item) => <option key={item} value={item}>{item}</option>)}
+            </select>
+          </label>
+          {samplers.letzte_mahlzeit === 'Eigene Eingabe' && (
+            <label>
+              Eigene Eingabe
+              <input value={samplers.letzte_mahlzeit_text || ''} onChange={(event) => updateSamplers('letzte_mahlzeit_text', event.target.value)} />
+            </label>
+          )}
+          <div className="samplers-subgrid">
+            <label>
+              Letzte Medikamenteneinnahme
+              <input value={samplers.letzte_medikamenteneinnahme || ''} onChange={(event) => updateSamplers('letzte_medikamenteneinnahme', event.target.value)} />
+            </label>
+            <label>
+              Letzter Stuhlgang
+              <input value={samplers.letzter_stuhlgang || ''} onChange={(event) => updateSamplers('letzter_stuhlgang', event.target.value)} />
+            </label>
+            <label>
+              Letzte Miktion / Wasserlassen
+              <input value={samplers.letzte_miktion || ''} onChange={(event) => updateSamplers('letzte_miktion', event.target.value)} />
+            </label>
+            <label>
+              Letztes Erbrechen
+              <input value={samplers.letztes_erbrechen || ''} onChange={(event) => updateSamplers('letztes_erbrechen', event.target.value)} />
+            </label>
+          </div>
+        </fieldset>
+      );
+    }
+
+    if (samplersSection === 'E') {
+      return (
+        <fieldset className="samplers-panel">
+          <legend>E - Ereignis</legend>
+          <label>
+            Ereignisbeschreibung
+            <textarea value={samplers.ereignis || ''} onChange={(event) => updateSamplers('ereignis', event.target.value)} rows={8} />
+          </label>
+        </fieldset>
+      );
+    }
+
+    if (samplersSection === 'R') {
+      return (
+        <fieldset className="samplers-panel">
+          <legend>R - Risikofaktoren</legend>
+          <div className="samplers-check-grid">
+            {Object.entries(riskFactorLabels).map(([key, label]) => (
+              <label key={key} className="checkbox-line">
+                <input type="checkbox" checked={Boolean(samplers[key])} onChange={() => toggleSamplerRisk(key)} />
+                {label}
+              </label>
+            ))}
+          </div>
+          <label>
+            Weitere Risikofaktoren
+            <input value={samplers.risiken_sonstige || ''} onChange={(event) => updateSamplers('risiken_sonstige', event.target.value)} />
+          </label>
+        </fieldset>
+      );
+    }
+
+    return (
+      <fieldset className="samplers-panel">
+        <legend>S - Schwangerschaft</legend>
+        <label>
+          Schwangerschaft
+          <select value={samplers.schwangerschaft || 'Nicht relevant'} onChange={(event) => updateSamplers('schwangerschaft', event.target.value)}>
+            {['Nicht relevant', 'Nein', 'Ja', 'Unbekannt'].map((item) => <option key={item} value={item}>{item}</option>)}
+          </select>
+        </label>
+      </fieldset>
+    );
   }
 
   function updateOpqrst(key, value) {
@@ -2382,70 +2588,31 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <span>strukturierte Patientenbefragung</span>
         </div>
 
-        <div className="assessment-grid">
-          <fieldset>
-            <legend>S · Symptome</legend>
-            <label>
-              Leitsymptome
-              <textarea value={samplers.symptome || ''} onChange={(event) => updateSamplers('symptome', event.target.value)} rows={4} />
-            </label>
-          </fieldset>
+        <div className="samplers-layout">
+          <div className="samplers-nav" role="tablist" aria-label="SAMPLERS Unterpunkte">
+            {samplersSections.map((section) => (
+              <button
+                key={section.key}
+                type="button"
+                className={samplersSection === section.key ? 'active' : ''}
+                onClick={() => setSamplersSection(section.key)}
+                title={section.title}
+              >
+                {section.label}
+              </button>
+            ))}
+          </div>
 
-          <fieldset>
-            <legend>A · Allergien</legend>
-            <label>
-              Allergien / Unverträglichkeiten
-              <textarea value={samplers.allergien || ''} onChange={(event) => updateSamplers('allergien', event.target.value)} rows={4} />
-            </label>
-          </fieldset>
+          {renderSamplersContent()}
 
-          <fieldset>
-            <legend>M · Medikamente</legend>
-            <label>
-              Dauermedikation / Bedarfsmedikation
-              <textarea value={samplers.medikamente || ''} onChange={(event) => updateSamplers('medikamente', event.target.value)} rows={4} />
-            </label>
-          </fieldset>
-
-          <fieldset>
-            <legend>P · Patientenvorgeschichte</legend>
-            <label>
-              Vorerkrankungen / relevante Vorgeschichte
-              <textarea value={samplers.vorgeschichte || ''} onChange={(event) => updateSamplers('vorgeschichte', event.target.value)} rows={4} />
-            </label>
-          </fieldset>
-
-          <fieldset>
-            <legend>L · Letzte orale Aufnahme</legend>
-            <label>
-              Essen / Trinken / Zeitpunkt
-              <input value={samplers.letzte_aufnahme || ''} onChange={(event) => updateSamplers('letzte_aufnahme', event.target.value)} />
-            </label>
-          </fieldset>
-
-          <fieldset>
-            <legend>E · Ereignis</legend>
-            <label>
-              Ereignis / Auslöser / Verlauf
-              <textarea value={samplers.ereignis || ''} onChange={(event) => updateSamplers('ereignis', event.target.value)} rows={4} />
-            </label>
-          </fieldset>
-
-          <fieldset>
-            <legend>R · Risikofaktoren</legend>
-            <label>
-              Risikofaktoren
-              <textarea value={samplers.risikofaktoren || ''} onChange={(event) => updateSamplers('risikofaktoren', event.target.value)} rows={4} />
-            </label>
-          </fieldset>
-
-          <fieldset>
-            <legend>S · Sonstiges</legend>
-            <label>
-              Schwangerschaft / Sonstiges
-              <textarea value={samplers.sonstiges || ''} onChange={(event) => updateSamplers('sonstiges', event.target.value)} rows={4} />
-            </label>
-          </fieldset>
+          <aside className="samplers-summary">
+            <h3>Live-Zusammenfassung</h3>
+            <p>{hasValue(samplers.symptome) ? `Symptome: ${samplers.symptome}` : 'Symptome noch offen'}</p>
+            <p>{hasValue(formatSelectedAllergies(samplers)) ? `Allergien: ${formatSelectedAllergies(samplers)}` : 'Allergien noch offen'}</p>
+            <p>{hasValue(samplers.vorgeschichte) ? `Vorgeschichte: ${samplers.vorgeschichte}` : 'Vorgeschichte noch offen'}</p>
+            <p>{hasValue(formatLastMeal(samplers)) ? `Letzte Mahlzeit: ${formatLastMeal(samplers)}` : 'Letzte Mahlzeit noch offen'}</p>
+            <p>{hasValue(samplers.ereignis) ? `Ereignis: ${samplers.ereignis}` : 'Ereignis noch offen'}</p>
+          </aside>
         </div>
       </section>}
 

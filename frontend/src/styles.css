@@ -903,6 +903,95 @@ form button,
   gap: 14px;
 }
 
+.samplers-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(280px, 0.34fr);
+  gap: 14px;
+}
+
+.samplers-nav {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.samplers-nav button {
+  min-height: 48px;
+  border-radius: 12px;
+  color: rgba(239, 248, 255, 0.78);
+  background: rgba(255, 255, 255, 0.065);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.samplers-nav button.active {
+  color: #fff;
+  border-color: rgba(18, 198, 178, 0.62);
+  background: linear-gradient(135deg, #2d7cff 0%, #12c6b2 100%);
+  box-shadow: 0 12px 28px rgba(18, 198, 178, 0.16);
+}
+
+.samplers-panel {
+  min-height: 360px;
+}
+
+.samplers-panel label + label,
+.samplers-panel label + .samplers-subgrid,
+.samplers-panel .samplers-subgrid + label {
+  margin-top: 12px;
+}
+
+.samplers-subgrid,
+.samplers-check-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.checkbox-line {
+  min-height: 48px;
+  display: flex;
+  align-items: center;
+  flex-direction: row;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.checkbox-line input {
+  width: 18px;
+  min-height: 18px;
+}
+
+.samplers-summary {
+  align-self: start;
+  display: grid;
+  gap: 9px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(4, 12, 24, 0.32);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.samplers-summary h3,
+.samplers-summary p {
+  margin: 0;
+}
+
+.samplers-summary h3 {
+  font-size: 1rem;
+}
+
+.samplers-summary p {
+  color: rgba(235, 244, 255, 0.70);
+  font-weight: 740;
+  line-height: 1.4;
+}
+
 .amls-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -1266,6 +1355,9 @@ legend {
   .vital-pair-grid,
   .vital-bp-grid,
   .assessment-grid,
+  .samplers-layout,
+  .samplers-subgrid,
+  .samplers-check-grid,
   .amls-summary,
   .support-grid,
   .candidate-grid,
@@ -1288,6 +1380,10 @@ legend {
   .dynamic-row,
   .medication-row {
     grid-template-columns: 1fr;
+  }
+
+  .samplers-nav {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
   .login-shell {

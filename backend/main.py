@@ -188,6 +188,49 @@ def format_blood_pressure(vital):
     return format_observation("", status_value)
 
 
+RISK_FACTOR_LABELS = {
+    "raucher": "Raucher",
+    "alkohol": "Alkoholkonsum",
+    "drogen": "Drogen",
+    "diabetes": "Diabetes",
+    "hypertonie": "Hypertonie",
+    "antikoagulation": "Antikoagulation",
+}
+
+
+def format_selected_allergies(s):
+    if s.get("allergien") == "Vorhanden" and valid(s.get("allergien_text")):
+        return f"Vorhanden: {s.get('allergien_text')}"
+    return s.get("allergien")
+
+
+def format_selected_medication(s):
+    if s.get("medikamente_option") == "Medikamente eingeben" and valid(s.get("medikamente")):
+        return s.get("medikamente")
+    return s.get("medikamente_option") or s.get("medikamente")
+
+
+def format_last_meal(s):
+    if s.get("letzte_mahlzeit") == "Eigene Eingabe" and valid(s.get("letzte_mahlzeit_text")):
+        return s.get("letzte_mahlzeit_text")
+    return s.get("letzte_mahlzeit") or s.get("letzte_aufnahme")
+
+
+def format_risk_factors(s):
+    risks = [label for key, label in RISK_FACTOR_LABELS.items() if s.get(key)]
+    if valid(s.get("risiken_sonstige")):
+        risks.append(s.get("risiken_sonstige"))
+    if valid(s.get("risikofaktoren")):
+        risks.append(s.get("risikofaktoren"))
+    return ", ".join(risks)
+
+
+def format_pregnancy_status(s):
+    if s.get("schwangerschaft") == "Nicht relevant":
+        return ""
+    return s.get("schwangerschaft")
+
+
 def amls_item_text(item, secondary_key="hinweis"):
     if isinstance(item, dict):
         name = item.get("diagnose") or item.get("name") or item.get("text") or item.get("value")
@@ -704,12 +747,17 @@ def generate_protocol_text(patient):
     ])
     text += add_lines("SAMPLERS", [
         ("Symptome", s.get("symptome")),
-        ("Allergien", s.get("allergien")),
-        ("Medikamente", s.get("medikamente")),
+        ("Allergien", format_selected_allergies(s)),
+        ("Medikamente", format_selected_medication(s)),
         ("Vorgeschichte", s.get("vorgeschichte")),
-        ("Letzte orale Aufnahme", s.get("letzte_aufnahme")),
+        ("Letzte Mahlzeit", format_last_meal(s)),
+        ("Letzte Medikamenteneinnahme", s.get("letzte_medikamenteneinnahme")),
+        ("Letzter Stuhlgang", s.get("letzter_stuhlgang")),
+        ("Letzte Miktion", s.get("letzte_miktion")),
+        ("Letztes Erbrechen", s.get("letztes_erbrechen")),
         ("Ereignis", s.get("ereignis")),
-        ("Risikofaktoren", s.get("risikofaktoren")),
+        ("Risikofaktoren", format_risk_factors(s)),
+        ("Schwangerschaft", format_pregnancy_status(s)),
         ("Sonstiges", s.get("sonstiges")),
     ])
     text += add_lines("OPQRST", [
