@@ -1042,10 +1042,20 @@ def pdf_safe(value):
     return text.encode("latin-1", "replace").decode("latin-1")
 
 
+class NanaPDF(FPDF):
+    def footer(self):
+        self.set_y(-14)
+        self.set_font("Helvetica", "I", 7)
+        self.set_text_color(92, 106, 122)
+        self.cell(0, 5, pdf_safe(f"NANA Dokumentationsentwurf · Seite {self.page_no()}"), align="C")
+
+
 def write_pdf_line(pdf, line, height=5):
     safe_line = pdf_safe(line)
     if not safe_line.strip():
-        pdf.ln(height)
+        pdf.ln(2)
+        return
+    if len(safe_line) >= 10 and set(safe_line.strip()) == {"="}:
         return
     max_chars = 92
     while safe_line:
@@ -1055,34 +1065,90 @@ def write_pdf_line(pdf, line, height=5):
         pdf.multi_cell(0, height, part)
 
 
+def write_pdf_section_title(pdf, title):
+    if pdf.get_y() > 250:
+        pdf.add_page()
+    pdf.ln(2)
+    pdf.set_fill_color(225, 236, 249)
+    pdf.set_text_color(8, 20, 38)
+    pdf.set_font("Helvetica", "B", 10)
+    pdf.cell(0, 8, pdf_safe(title), ln=True, fill=True)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(24, 37, 52)
+
+
+def write_pdf_protocol_text(pdf, protocol_text):
+    lines = str(protocol_text or "").splitlines()
+    for index, line in enumerate(lines):
+        next_line = lines[index + 1] if index + 1 < len(lines) else ""
+        if line.strip() and len(next_line.strip()) >= 10 and set(next_line.strip()) == {"="}:
+            write_pdf_section_title(pdf, line.strip())
+            continue
+        if len(line.strip()) >= 10 and set(line.strip()) == {"="}:
+            continue
+        if line.startswith("- "):
+            pdf.set_text_color(34, 62, 92)
+            write_pdf_line(pdf, f"  {line}", 4.8)
+            pdf.set_text_color(24, 37, 52)
+            continue
+        if ": " in line:
+            label, value = line.split(": ", 1)
+            pdf.set_font("Helvetica", "B", 8.7)
+            pdf.set_text_color(8, 20, 38)
+            pdf.set_x(pdf.l_margin)
+            pdf.multi_cell(46, 4.8, pdf_safe(label))
+            y_after_label = pdf.get_y()
+            pdf.set_xy(pdf.l_margin + 48, y_after_label - 4.8)
+            pdf.set_font("Helvetica", "", 8.7)
+            pdf.set_text_color(24, 37, 52)
+            pdf.multi_cell(0, 4.8, pdf_safe(value))
+            continue
+        pdf.set_font("Helvetica", "", 8.7)
+        write_pdf_line(pdf, line, 4.8)
+
+
 def build_pdf_bytes(title, protocol_text, metadata=None):
     metadata = metadata or {}
-    pdf = FPDF()
+    pdf = NanaPDF(format="A4")
     pdf.set_auto_page_break(auto=True, margin=15)
     pdf.add_page()
+
     pdf.set_fill_color(8, 20, 38)
     pdf.set_text_color(255, 255, 255)
-    pdf.set_font("Helvetica", "B", 18)
-    pdf.cell(0, 12, pdf_safe("NANA Rettungsdienst-Protokoll"), ln=True, fill=True)
+    pdf.set_font("Helvetica", "B", 20)
+    pdf.cell(0, 13, pdf_safe("NANA"), ln=True, fill=True)
     pdf.set_font("Helvetica", "", 9)
-    pdf.cell(0, 7, pdf_safe("Notfall-Aufzeichnungs- und Nachbearbeitungs-Assistent"), ln=True, fill=True)
-
-    pdf.ln(5)
-    pdf.set_text_color(20, 31, 48)
-    pdf.set_font("Helvetica", "B", 12)
-    pdf.cell(0, 8, pdf_safe(title), ln=True)
-    pdf.set_font("Helvetica", "", 9)
-    for label, value in metadata.items():
-        if valid(value):
-            pdf.cell(0, 6, pdf_safe(f"{label}: {value}"), ln=True)
+    pdf.cell(0, 7, pdf_safe("Notfall-Aufzeichnungs- und Nachbearbeitungs-Assistent · Rettungsdienst-Protokoll"), ln=True, fill=True)
 
     pdf.ln(4)
-    pdf.set_font("Courier", "", 9)
-    for line in str(protocol_text or "").splitlines():
-        write_pdf_line(pdf, line)
+    pdf.set_text_color(20, 31, 48)
+    pdf.set_font("Helvetica", "B", 13)
+    pdf.cell(0, 8, pdf_safe(title), ln=True)
+
+    pdf.set_fill_color(246, 249, 252)
+    pdf.set_draw_color(210, 220, 232)
+    pdf.set_font("Helvetica", "", 9)
+    documented_metadata = [(label, value) for label, value in metadata.items() if valid(value)]
+    if documented_metadata:
+        pdf.ln(1)
+        for label, value in documented_metadata:
+            x = pdf.l_margin
+            y = pdf.get_y()
+            value_width = pdf.w - pdf.r_margin - x - 40
+            pdf.set_font("Helvetica", "B", 8.5)
+            pdf.set_text_color(68, 82, 98)
+            pdf.cell(40, 6, pdf_safe(label), border=1, fill=True)
+            pdf.set_xy(x + 40, y)
+            pdf.set_font("Helvetica", "", 8.5)
+            pdf.set_text_color(20, 31, 48)
+            pdf.multi_cell(value_width, 6, pdf_safe(str(value)), border=1, fill=True)
+
+    pdf.ln(4)
+    write_pdf_protocol_text(pdf, protocol_text)
 
     pdf.ln(4)
     pdf.set_font("Helvetica", "I", 8)
+    pdf.set_text_color(92, 106, 122)
     pdf.multi_cell(
         0,
         5,

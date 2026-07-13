@@ -1294,6 +1294,8 @@ function DevicesView({ session, employee, onBack, onLogout }) {
   const [selectedName, setSelectedName] = useState('');
   const [selectedTopic, setSelectedTopic] = useState('');
   const [stepIndex, setStepIndex] = useState(0);
+  const [query, setQuery] = useState('');
+  const [checkedSteps, setCheckedSteps] = useState({});
   const [error, setError] = useState('');
 
   useEffect(() => {
@@ -1311,6 +1313,14 @@ function DevicesView({ session, employee, onBack, onLogout }) {
   const topicNames = Object.keys(selectedDevice.topics || {});
   const steps = selectedDevice.topics?.[selectedTopic] || [];
   const currentStep = steps[Math.min(stepIndex, Math.max(steps.length - 1, 0))] || '';
+  const filteredDevices = devices.filter((device) => {
+    const haystack = `${device.name} ${device.model_note} ${Object.keys(device.topics || {}).join(' ')}`.toLowerCase();
+    return haystack.includes(query.trim().toLowerCase());
+  });
+  const topicActions = selectedDevice.topic_actions?.[selectedTopic];
+  const checklistKey = `${selectedName}:${selectedTopic}`;
+  const checkedForTopic = checkedSteps[checklistKey] || {};
+  const completedSteps = steps.filter((_, index) => checkedForTopic[index]).length;
 
   function selectDevice(name) {
     const device = devices.find((item) => item.name === name) || {};
@@ -1318,6 +1328,16 @@ function DevicesView({ session, employee, onBack, onLogout }) {
     setSelectedName(name);
     setSelectedTopic(firstTopic);
     setStepIndex(0);
+  }
+
+  function toggleDeviceStep(index) {
+    setCheckedSteps((current) => ({
+      ...current,
+      [checklistKey]: {
+        ...(current[checklistKey] || {}),
+        [index]: !Boolean((current[checklistKey] || {})[index])
+      }
+    }));
   }
 
   return (
@@ -1338,12 +1358,20 @@ function DevicesView({ session, employee, onBack, onLogout }) {
       {error && <div className="error-box">{error}</div>}
       <section className="device-layout">
         <aside className="work-panel device-list">
-          {devices.map((device) => (
+          <label className="device-search">
+            Geräte suchen
+            <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="z. B. corpuls, Absaugung, Beatmung" />
+          </label>
+          {filteredDevices.map((device) => (
             <button type="button" className={device.name === selectedName ? 'active' : ''} key={device.name} onClick={() => selectDevice(device.name)}>
               <span>{device.icon}</span>
-              <strong>{device.name}</strong>
+              <div>
+                <strong>{device.name}</strong>
+                <small>{Object.keys(device.topics || {}).length} Kurzreferenzen</small>
+              </div>
             </button>
           ))}
+          {filteredDevices.length === 0 && <p className="muted">Kein Gerät gefunden.</p>}
         </aside>
         <section className="work-panel device-detail">
           <div className="section-head">
@@ -1351,16 +1379,55 @@ function DevicesView({ session, employee, onBack, onLogout }) {
             <span>{selectedDevice.source_label}</span>
           </div>
           <p className="muted">{selectedDevice.model_note}</p>
+          <div className="device-meta-grid">
+            <div>
+              <strong>{topicNames.length}</strong>
+              <span>Themen</span>
+            </div>
+            <div>
+              <strong>{steps.length}</strong>
+              <span>Schritte</span>
+            </div>
+            <div>
+              <strong>{completedSteps}</strong>
+              <span>abgehakt</span>
+            </div>
+          </div>
           <select value={selectedTopic} onChange={(event) => { setSelectedTopic(event.target.value); setStepIndex(0); }}>
             {topicNames.map((topic) => <option key={topic} value={topic}>{topic}</option>)}
           </select>
+          {topicActions && (
+            <a className="device-action-link" href={topicActions.url} target="_blank" rel="noreferrer">
+              {topicActions.label || 'Herstellerlink öffnen'}
+              <small>{topicActions.hint}</small>
+            </a>
+          )}
           <div className="device-step">
             <span>Schritt {steps.length ? stepIndex + 1 : 0} / {steps.length}</span>
             <p>{currentStep}</p>
+            {steps.length > 0 && (
+              <label className="checkbox-line device-check-current">
+                <input type="checkbox" checked={Boolean(checkedForTopic[stepIndex])} onChange={() => toggleDeviceStep(stepIndex)} />
+                Schritt erledigt
+              </label>
+            )}
           </div>
           <div className="device-step-actions">
             <button type="button" onClick={() => setStepIndex(Math.max(0, stepIndex - 1))} disabled={stepIndex === 0}>Zurück</button>
             <button type="button" onClick={() => setStepIndex(Math.min(steps.length - 1, stepIndex + 1))} disabled={stepIndex >= steps.length - 1}>Weiter</button>
+          </div>
+          <div className="device-checklist">
+            {steps.map((step, index) => (
+              <button
+                type="button"
+                className={index === stepIndex ? 'active' : ''}
+                key={`${selectedTopic}-${index}`}
+                onClick={() => setStepIndex(index)}
+              >
+                <input type="checkbox" checked={Boolean(checkedForTopic[index])} onChange={(event) => { event.stopPropagation(); toggleDeviceStep(index); }} />
+                <span>{index + 1}. {step}</span>
+              </button>
+            ))}
           </div>
         </section>
       </section>
@@ -1738,6 +1805,15 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const amlsMatchingCount = amlsVisibleCandidates.filter((item) => !amlsExcludedNames.has(item.name) && !(item.conflicts || []).length).length;
   const amlsCheckCount = amlsVisibleCandidates.filter((item) => !amlsExcludedNames.has(item.name) && (item.conflicts || []).length).length;
   const sinnhaftPreviewRows = sinnhaftRows(patient);
+  const xabcdeCompletedCount = xabcdeSections.filter((section) => xabcdeSectionComplete(section.key)).length;
+  const xabcdeOpenSections = xabcdeSections.filter((section) => !xabcdeSectionComplete(section.key)).map((section) => section.key);
+  const samplersCompletedCount = samplersSections.filter((section) => samplersSectionComplete(section.key)).length;
+  const samplersOpenSections = samplersSections.filter((section) => !samplersSectionComplete(section.key)).map((section) => section.label);
+  const amlsReadiness = amls.arbeitsdiagnose
+    ? { level: 'ok', text: `Arbeitsdiagnose gesetzt: ${amls.arbeitsdiagnose}` }
+    : amlsRemainingCandidates.length === 1
+      ? { level: 'warning', text: `Ein Kandidat verbleibt: ${amlsRemainingCandidates[0].name}` }
+      : { level: 'info', text: 'Arbeitsdiagnose noch offen.' };
 
   useEffect(() => {
     api('/api/draft', {}, session.token)
@@ -1900,6 +1976,18 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     if (positives.length > 0) return { level: 'critical', text: `BE-FAST auffällig: ${positives.join(' · ')}` };
     if (documented.length === keys.length) return { level: 'ok', text: 'BE-FAST ohne dokumentierte Auffälligkeit' };
     return null;
+  }
+
+  function samplersSectionComplete(sectionKey) {
+    if (sectionKey === 'S1') return hasValue(samplers.symptome);
+    if (sectionKey === 'A') return hasValue(formatSelectedAllergies(samplers));
+    if (sectionKey === 'M') return hasValue(formatSelectedMedication(samplers));
+    if (sectionKey === 'P') return hasValue(samplers.vorgeschichte);
+    if (sectionKey === 'L') return hasValue(formatLastMeal(samplers)) || hasValue(samplers.letzte_medikamenteneinnahme);
+    if (sectionKey === 'E') return hasValue(samplers.ereignis);
+    if (sectionKey === 'R') return hasValue(formatRiskFactors(samplers));
+    if (sectionKey === 'S2') return hasValue(formatPregnancyStatus(samplers)) || samplers.schwangerschaft === 'Nicht relevant';
+    return false;
   }
 
   function renderXabcdeContent() {
@@ -2846,7 +2934,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
                 <button
                   key={section.key}
                   type="button"
-                  className={xabcdeSection === section.key ? 'active' : ''}
+                  className={`${xabcdeSection === section.key ? 'active' : ''} ${incomplete ? 'incomplete' : 'complete'}`}
                   onClick={() => setXabcdeSection(section.key)}
                   title={section.title}
                 >
@@ -2857,13 +2945,14 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           </div>
 
           <div className="xabcde-active-hint">
-            Aktive Sektion: {xabcdeSection} · offene Reiter sind mit ! markiert.
+            {xabcdeCompletedCount}/{xabcdeSections.length} abgeschlossen · offen: {xabcdeOpenSections.length ? xabcdeOpenSections.join(', ') : 'keine'}
           </div>
 
           {renderXabcdeContent()}
 
           <aside className="xabcde-summary">
             <h3>Live-Zusammenfassung</h3>
+            <div className="summary-meter"><span style={{ width: `${Math.round((xabcdeCompletedCount / xabcdeSections.length) * 100)}%` }} /></div>
             <p>{hasValue(xabcde.blutung) ? `X: ${xabcde.blutung}` : 'X noch offen'}</p>
             <p>{hasValue(xabcde.atemweg) ? `A: ${xabcde.atemweg}` : 'A noch offen'}</p>
             <p>{hasValue(xabcde.atmung) ? `B: ${xabcde.atmung}` : 'B noch offen'}</p>
@@ -2886,19 +2975,24 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
               <button
                 key={section.key}
                 type="button"
-                className={samplersSection === section.key ? 'active' : ''}
+                className={`${samplersSection === section.key ? 'active' : ''} ${samplersSectionComplete(section.key) ? 'complete' : 'incomplete'}`}
                 onClick={() => setSamplersSection(section.key)}
                 title={section.title}
               >
-                {section.label}
+                {samplersSectionComplete(section.key) ? section.label : `${section.label} !`}
               </button>
             ))}
+          </div>
+
+          <div className="samplers-active-hint">
+            {samplersCompletedCount}/{samplersSections.length} Bereiche dokumentiert · offen: {samplersOpenSections.length ? samplersOpenSections.join(', ') : 'keine'}
           </div>
 
           {renderSamplersContent()}
 
           <aside className="samplers-summary">
             <h3>Live-Zusammenfassung</h3>
+            <div className="summary-meter"><span style={{ width: `${Math.round((samplersCompletedCount / samplersSections.length) * 100)}%` }} /></div>
             <p>{hasValue(samplers.symptome) ? `Symptome: ${samplers.symptome}` : 'Symptome noch offen'}</p>
             <p>{hasValue(formatSelectedAllergies(samplers)) ? `Allergien: ${formatSelectedAllergies(samplers)}` : 'Allergien noch offen'}</p>
             <p>{hasValue(samplers.vorgeschichte) ? `Vorgeschichte: ${samplers.vorgeschichte}` : 'Vorgeschichte noch offen'}</p>
@@ -2982,6 +3076,10 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             <strong>{amlsRemainingCandidates.length}</strong>
             <span>verbleibend</span>
           </div>
+        </div>
+        <div className={`amls-readiness amls-readiness-${amlsReadiness.level}`}>
+          <CheckCircle2 size={18} />
+          <span>{amlsReadiness.text}</span>
         </div>
         <div className="amls-funnel">
           <div>Ausgangstrichter · {amlsVisibleCandidates.length} Kandidaten · passend {amlsMatchingCount} · prüfen {amlsCheckCount} · zurückgestellt {amlsExcluded.length}</div>

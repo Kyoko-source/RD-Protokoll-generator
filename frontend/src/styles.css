@@ -789,6 +789,10 @@ form button,
   align-content: start;
 }
 
+.device-search {
+  margin-bottom: 8px;
+}
+
 .device-list button {
   min-height: 54px;
   display: grid;
@@ -804,6 +808,16 @@ form button,
   cursor: pointer;
 }
 
+.device-list button div {
+  display: grid;
+  gap: 3px;
+}
+
+.device-list button small {
+  color: rgba(235, 244, 255, 0.62);
+  font-weight: 760;
+}
+
 .device-list button.active {
   background: linear-gradient(135deg, #e27820 0%, #dda440 100%);
 }
@@ -811,6 +825,45 @@ form button,
 .device-detail {
   display: grid;
   gap: 14px;
+}
+
+.device-meta-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.device-meta-grid div {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(4, 12, 24, 0.30);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.device-meta-grid strong {
+  font-size: 1.35rem;
+}
+
+.device-meta-grid span {
+  color: rgba(235, 244, 255, 0.62);
+  font-weight: 780;
+}
+
+.device-action-link {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  color: #06111f;
+  background: linear-gradient(135deg, #5fe0ff 0%, #63e6be 100%);
+  font-weight: 950;
+  text-decoration: none;
+}
+
+.device-action-link small {
+  color: rgba(6, 17, 31, 0.72);
 }
 
 .device-step {
@@ -834,6 +887,10 @@ form button,
   line-height: 1.5;
 }
 
+.device-check-current {
+  width: fit-content;
+}
+
 .device-step-actions {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -843,6 +900,36 @@ form button,
 .device-step-actions button:disabled {
   opacity: 0.45;
   cursor: not-allowed;
+}
+
+.device-checklist {
+  display: grid;
+  gap: 8px;
+}
+
+.device-checklist button {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: rgba(235, 244, 255, 0.80);
+  text-align: left;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+}
+
+.device-checklist button.active {
+  color: #fff;
+  border-color: rgba(226, 120, 32, 0.44);
+  background: rgba(226, 120, 32, 0.16);
+}
+
+.device-checklist input {
+  margin-top: 3px;
 }
 
 .interface-import {
@@ -1164,6 +1251,16 @@ form button,
   box-shadow: 0 12px 28px rgba(18, 198, 178, 0.16);
 }
 
+.xabcde-nav button.complete,
+.samplers-nav button.complete {
+  border-color: rgba(99, 230, 190, 0.35);
+}
+
+.xabcde-nav button.incomplete,
+.samplers-nav button.incomplete {
+  border-color: rgba(255, 205, 86, 0.26);
+}
+
 .xabcde-active-hint {
   grid-column: 1 / -1;
   padding: 12px 14px;
@@ -1172,6 +1269,30 @@ form button,
   border: 1px solid rgba(45, 124, 255, 0.22);
   color: rgba(235, 244, 255, 0.76);
   font-weight: 820;
+}
+
+.samplers-active-hint {
+  grid-column: 1 / -1;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(45, 124, 255, 0.10);
+  border: 1px solid rgba(45, 124, 255, 0.22);
+  color: rgba(235, 244, 255, 0.76);
+  font-weight: 820;
+}
+
+.summary-meter {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.summary-meter span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2d7cff, #63e6be);
 }
 
 .xabcde-panel {
@@ -1462,6 +1583,36 @@ form button,
 .amls-summary span {
   color: #b8c7da;
   font-weight: 780;
+}
+
+.amls-readiness {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  max-width: 100%;
+  margin-bottom: 14px;
+  padding: 11px 13px;
+  border-radius: 12px;
+  font-weight: 900;
+}
+
+.amls-readiness-ok {
+  color: #dffdf6;
+  background: rgba(18, 198, 178, 0.14);
+  border: 1px solid rgba(18, 198, 178, 0.30);
+}
+
+.amls-readiness-warning {
+  color: #ffe7a8;
+  background: rgba(255, 205, 86, 0.13);
+  border: 1px solid rgba(255, 205, 86, 0.28);
+}
+
+.amls-readiness-info {
+  color: #ddecff;
+  background: rgba(45, 124, 255, 0.12);
+  border: 1px solid rgba(45, 124, 255, 0.25);
 }
 
 .amls-funnel {
