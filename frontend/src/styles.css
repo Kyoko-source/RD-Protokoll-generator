@@ -357,6 +357,26 @@ form button,
   font-weight: 850;
 }
 
+.header-button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border-radius: 11px;
+  color: rgba(235, 244, 255, 0.82);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.header-button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.095);
+}
+
 .icon-button {
   width: 48px;
   display: inline-grid;
@@ -413,6 +433,10 @@ form button,
     rgba(4, 12, 24, 0.30);
   border: 1px solid rgba(255, 255, 255, 0.10);
   box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
+}
+
+.protocol-actionbar-panel {
+  margin: 2px 0 16px;
 }
 
 .toolbar-group {

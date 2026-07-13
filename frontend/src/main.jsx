@@ -2561,42 +2561,15 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <div className="app-subtitle">Protokoll · Vitalwerte & Demographie</div>
         </div>
         <div className="user-area">
+          <button className="header-button" type="button" onClick={onBack}>
+            <Home size={16} /> Hauptmenü
+          </button>
           <span>{employee?.name}</span>
           <button className="icon-button" onClick={onLogout} aria-label="Abmelden">
             <LogOut size={18} />
           </button>
         </div>
       </header>
-
-      <section className="protocol-toolbar protocol-actionbar">
-        <div className="toolbar-group toolbar-group-back">
-          <button type="button" className="toolbar-button ghost" onClick={onBack}>
-            <Home size={16} /> Hauptmenü
-          </button>
-        </div>
-        <div className="toolbar-group toolbar-group-main">
-          <button type="button" className="toolbar-button" onClick={checkQuality}>
-            <CheckCircle2 size={16} /> QS prüfen
-          </button>
-          <button type="button" className="toolbar-button primary" onClick={generateProtocol}>
-            <FileText size={16} /> Protokoll generieren
-          </button>
-          <button type="button" className="toolbar-button icon-label" onClick={exportDraftPdf}>
-            <Download size={16} /> PDF
-          </button>
-          <button type="button" className="toolbar-button icon-label" onClick={printDraftPdf}>
-            <Printer size={16} /> Drucken
-          </button>
-        </div>
-        <div className="toolbar-group toolbar-group-end">
-          <button type="button" className="toolbar-button save" onClick={saveDraft}>
-            <Save size={16} /> Entwurf speichern
-          </button>
-          <button type="button" className="toolbar-button danger" onClick={finishCase}>
-            {forceFinish ? 'Mit Warnungen beenden' : 'Einsatz beenden'}
-          </button>
-        </div>
-      </section>
 
       {error && <div className="error-box">{error}</div>}
       {statusText && <div className="success-box">{statusText}</div>}
@@ -3135,6 +3108,30 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <h2>Protokoll</h2>
           <span>Vorschau und Abschluss</span>
         </div>
+        <section className="protocol-toolbar protocol-actionbar protocol-actionbar-panel">
+          <div className="toolbar-group toolbar-group-main">
+            <button type="button" className="toolbar-button" onClick={checkQuality}>
+              <CheckCircle2 size={16} /> QS prüfen
+            </button>
+            <button type="button" className="toolbar-button primary" onClick={generateProtocol}>
+              <FileText size={16} /> Protokoll generieren
+            </button>
+            <button type="button" className="toolbar-button icon-label" onClick={exportDraftPdf}>
+              <Download size={16} /> PDF
+            </button>
+            <button type="button" className="toolbar-button icon-label" onClick={printDraftPdf}>
+              <Printer size={16} /> Drucken
+            </button>
+          </div>
+          <div className="toolbar-group toolbar-group-end">
+            <button type="button" className="toolbar-button save" onClick={saveDraft}>
+              <Save size={16} /> Entwurf speichern
+            </button>
+            <button type="button" className="toolbar-button danger" onClick={finishCase}>
+              {forceFinish ? 'Mit Warnungen beenden' : 'Einsatz beenden'}
+            </button>
+          </div>
+        </section>
         {qualityResult && (
           <div className={`quality-box quality-${qualityResult.level}`}>
             <div className="quality-score">
