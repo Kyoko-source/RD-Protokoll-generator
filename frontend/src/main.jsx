@@ -696,14 +696,21 @@ function LoginTransition({ session, onComplete }) {
           <div className="ambulance">
             <div className="ambulance-light ambulance-light-blue" />
             <div className="ambulance-light ambulance-light-red" />
+            <div className="ambulance-body-shadow" />
             <div className="ambulance-cabin">
               <span />
+              <i />
             </div>
             <div className="ambulance-box">
               <strong>RTW</strong>
               <i />
+              <em />
             </div>
+            <div className="ambulance-front" />
             <div className="ambulance-stripe" />
+            <div className="ambulance-bumper" />
+            <div className="ambulance-headlight" />
+            <div className="ambulance-taillight" />
             <div className="ambulance-wheel wheel-left" />
             <div className="ambulance-wheel wheel-right" />
           </div>
