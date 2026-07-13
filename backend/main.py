@@ -1118,6 +1118,7 @@ def write_pdf_metadata(pdf, metadata):
             pdf.add_page()
 
         width = pdf.w - pdf.l_margin - pdf.r_margin
+        pdf.set_x(pdf.l_margin)
         pdf.set_font("Helvetica", "B", 8)
         pdf.set_text_color(68, 82, 98)
         pdf.cell(31, 4.8, pdf_safe(f"{label}:"))
