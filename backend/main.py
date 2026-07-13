@@ -1107,6 +1107,41 @@ def write_pdf_protocol_text(pdf, protocol_text):
         write_pdf_line(pdf, line, 4.8)
 
 
+def write_pdf_metadata(pdf, metadata):
+    documented_metadata = [(label, value) for label, value in metadata.items() if valid(value)]
+    if not documented_metadata:
+        return
+
+    pdf.ln(1)
+    pdf.set_draw_color(210, 220, 232)
+    for label, value in documented_metadata:
+        if pdf.get_y() > 250:
+            pdf.add_page()
+
+        x = pdf.l_margin
+        width = pdf.w - pdf.l_margin - pdf.r_margin
+        value_text = pdf_safe(str(value))
+        line_height = 5
+        value_lines = max(1, len(pdf.multi_cell(width - 4, line_height, value_text, split_only=True)))
+        row_height = 5 + (value_lines * line_height) + 2
+
+        y = pdf.get_y()
+        pdf.set_fill_color(246, 249, 252)
+        pdf.rect(x, y, width, row_height, style="DF")
+
+        pdf.set_xy(x + 2, y + 1)
+        pdf.set_font("Helvetica", "B", 7.5)
+        pdf.set_text_color(68, 82, 98)
+        pdf.cell(width - 4, 4, pdf_safe(label), ln=True)
+
+        pdf.set_x(x + 2)
+        pdf.set_font("Helvetica", "", 8.2)
+        pdf.set_text_color(20, 31, 48)
+        pdf.multi_cell(width - 4, line_height, value_text)
+
+        pdf.set_y(y + row_height)
+
+
 def build_pdf_bytes(title, protocol_text, metadata=None):
     metadata = metadata or {}
     pdf = NanaPDF(format="A4")
@@ -1126,22 +1161,8 @@ def build_pdf_bytes(title, protocol_text, metadata=None):
     pdf.cell(0, 8, pdf_safe(title), ln=True)
 
     pdf.set_fill_color(246, 249, 252)
-    pdf.set_draw_color(210, 220, 232)
     pdf.set_font("Helvetica", "", 9)
-    documented_metadata = [(label, value) for label, value in metadata.items() if valid(value)]
-    if documented_metadata:
-        pdf.ln(1)
-        for label, value in documented_metadata:
-            x = pdf.l_margin
-            y = pdf.get_y()
-            value_width = pdf.w - pdf.r_margin - x - 40
-            pdf.set_font("Helvetica", "B", 8.5)
-            pdf.set_text_color(68, 82, 98)
-            pdf.cell(40, 6, pdf_safe(label), border=1, fill=True)
-            pdf.set_xy(x + 40, y)
-            pdf.set_font("Helvetica", "", 8.5)
-            pdf.set_text_color(20, 31, 48)
-            pdf.multi_cell(value_width, 6, pdf_safe(str(value)), border=1, fill=True)
+    write_pdf_metadata(pdf, metadata)
 
     pdf.ln(4)
     write_pdf_protocol_text(pdf, protocol_text)

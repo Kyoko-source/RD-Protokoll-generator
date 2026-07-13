@@ -1,0 +1,9 @@
+[Unit]
+Description=NANA database backup
+Wants=docker.service
+After=docker.service
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/NANA
+ExecStart=/opt/NANA/deploy/scripts/backup_nana.sh
