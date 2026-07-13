@@ -427,6 +427,45 @@ def delete_finished_case(case_id, timestamp):
         connection.commit()
 
 
+def list_expired_finished_cases(today):
+    init_database()
+    with _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, employee_id, employee_name, completed_at, summary,
+                   status, anonymized_at, deleted_at, retention_until
+            FROM finished_cases
+            WHERE status != 'deleted'
+              AND retention_until != ''
+              AND retention_until <= ?
+            ORDER BY retention_until ASC, completed_at ASC
+            """,
+            (today,),
+        ).fetchall()
+
+    return [
+        {
+            "id": row["id"],
+            "employee_id": row["employee_id"],
+            "employee_name": row["employee_name"],
+            "completed_at": row["completed_at"],
+            "summary": row["summary"],
+            "status": row["status"],
+            "anonymized_at": row["anonymized_at"],
+            "deleted_at": row["deleted_at"],
+            "retention_until": row["retention_until"],
+        }
+        for row in rows
+    ]
+
+
+def delete_expired_finished_cases(today, timestamp):
+    expired = list_expired_finished_cases(today)
+    for item in expired:
+        delete_finished_case(item["id"], timestamp)
+    return expired
+
+
 def encrypt_existing_patient_data():
     init_database()
     changed = 0

@@ -110,6 +110,17 @@ const opqrstSections = [
   { key: 'T', label: 'T', title: 'Time' }
 ];
 
+const sinnhaftFields = [
+  ['sinnhaft_start', 'S - Start', 'Ruhe herstellen, Face-to-Face-Übergabe, Manipulationen möglichst pausieren.'],
+  ['sinnhaft_identifikation', 'I - Identifikation', 'Geschlecht, Nachname/ID falls zulässig, Alter.'],
+  ['sinnhaft_notfallereignis', 'N - Notfallereignis', 'Was ist passiert, Leitsymptom, Ursache, Ort/Auffindesituation, Zeitpunkt.'],
+  ['sinnhaft_notfallprioritaet', 'N - Notfallpriorität', 'ABCDE-Befunde, kritische Vitalwerte, Dringlichkeit.'],
+  ['sinnhaft_handlung', 'H - Handlung', 'Maßnahmen, Dosis/Umfang/Zeitpunkt, Wirkung, bewusst unterlassene Maßnahmen.'],
+  ['sinnhaft_anamnese', 'A - Anamnese', 'Allergien, Medikamente, Vorerkrankungen, Infektion, Soziales, Besonderheiten.'],
+  ['sinnhaft_fazit', 'F - Fazit', 'Kernaussage, Verdacht, Übergabeziel, Bitte um Wiederholung.'],
+  ['sinnhaft_teamfragen', 'T - Teamfragen', 'Offene Fragen des aufnehmenden Teams, Rückfragen, Klärungsbedarf.']
+];
+
 const xabcdeOptions = {
   blutung: ['Keine Angabe', 'Keine starke Blutung', 'Starke Blutung kontrolliert', 'Starke Blutung unkontrolliert'],
   atemweg: ['Keine Angabe', 'Frei', 'Gefährdet', 'Verlegt'],
@@ -231,6 +242,79 @@ function renderListBlock(title, items, formatter) {
   return `${title}\n==================================================\n${lines.map((line) => `- ${line}`).join('\n')}\n\n`;
 }
 
+function compactJoin(values, separator = ', ') {
+  return values.filter(hasValue).map((value) => String(value).trim()).join(separator);
+}
+
+function addProtocolParagraph(title, sentences) {
+  const lines = sentences.filter(hasValue).map((value) => String(value).trim());
+  if (lines.length === 0) return '';
+  return `${title}\n==================================================\n${lines.join(' ')}\n\n`;
+}
+
+function patientIdentity(vital) {
+  return compactJoin([
+    vital.geschlecht,
+    hasValue(vital.alter) ? `${vital.alter} Jahre` : ''
+  ]) || 'Patientendaten nicht vollständig dokumentiert';
+}
+
+function symptomSummary(vital, samplers, opqrst) {
+  if (hasValue(vital.kurzbericht)) return vital.kurzbericht;
+  if (hasValue(samplers.symptome)) return samplers.symptome;
+  return compactJoin([
+    opqrst.region,
+    opqrst.quality,
+    hasValue(opqrst.nrs) ? `NRS ${opqrst.nrs}/10` : ''
+  ]);
+}
+
+function actionLines(measures) {
+  const timeline = Array.isArray(measures.timeline) ? measures.timeline : [];
+  const medication = Array.isArray(measures.medikation) ? measures.medikation : [];
+  return [
+    ...timeline.map((item) => `${item.zeit || ''} - ${item.massnahme || ''}`.trim()),
+    ...medication.map((item) => `${item.zeit || ''} - ${item.medikament || ''} ${item.dosis || ''} ${item.weg || ''}`.trim())
+  ].filter(hasValue);
+}
+
+function sinnhaftRows(patient) {
+  const vital = patient.vitalwerte || {};
+  const x = patient.xabcde || {};
+  const s = patient.samplers || {};
+  const o = patient.opqrst || {};
+  const amls = patient.amls || {};
+  const measures = patient.massnahmen || {};
+  const handover = patient.uebergabe || {};
+  const priority = compactJoin([
+    hasValue(formatBloodPressure(vital)) ? `RR ${formatBloodPressure(vital)}` : '',
+    hasValue(vital.puls) ? `Puls ${formatObservation(vital.puls, effectiveVitalStatus(vital, 'puls_status'), '/min')}` : '',
+    hasValue(vital.spo2) ? `SpO2 ${formatObservation(vital.spo2, effectiveVitalStatus(vital, 'spo2_status'), '%')}` : '',
+    hasValue(vital.gcs) ? `GCS ${formatObservation(vital.gcs, effectiveVitalStatus(vital, 'gcs_status'), '/15')}` : '',
+    hasValue(x.atemweg) ? `Atemweg ${x.atemweg}` : '',
+    hasValue(x.atmung) ? `Atmung ${x.atmung}` : '',
+    hasValue(x.haut) ? `Kreislauf ${x.haut}` : '',
+    hasValue(x.avpu) ? `AVPU ${x.avpu}` : ''
+  ]);
+  const anamnesis = compactJoin([
+    hasValue(formatSelectedAllergies(s)) ? `Allergien: ${formatSelectedAllergies(s)}` : '',
+    hasValue(formatSelectedMedication(s)) ? `Medikation: ${formatSelectedMedication(s)}` : '',
+    hasValue(s.vorgeschichte) ? `Vorgeschichte: ${s.vorgeschichte}` : '',
+    hasValue(formatLastMeal(s)) ? `Letzte Mahlzeit: ${formatLastMeal(s)}` : '',
+    hasValue(formatRiskFactors(s)) ? `Risiken: ${formatRiskFactors(s)}` : ''
+  ], '; ');
+  return [
+    ['S Start', handover.sinnhaft_start || 'Ruhe herstellen, Face-to-Face-Übergabe, Manipulationen am Patienten möglichst pausieren.'],
+    ['I Identifikation', handover.sinnhaft_identifikation || patientIdentity(vital)],
+    ['N Notfallereignis', handover.sinnhaft_notfallereignis || compactJoin([symptomSummary(vital, s, o), s.ereignis], '; ')],
+    ['N Notfallpriorität', handover.sinnhaft_notfallprioritaet || priority],
+    ['H Handlung', handover.sinnhaft_handlung || actionLines(measures).join('; ')],
+    ['A Anamnese', handover.sinnhaft_anamnese || anamnesis],
+    ['F Fazit', handover.sinnhaft_fazit || compactJoin([amls.arbeitsdiagnose, handover.ziel], ' -> ')],
+    ['T Teamfragen', handover.sinnhaft_teamfragen]
+  ];
+}
+
 function generateLocalProtocolText(patient) {
   const vital = patient.vitalwerte || {};
   const x = patient.xabcde || {};
@@ -243,6 +327,30 @@ function generateLocalProtocolText(patient) {
   text += '==================================================\n';
   text += `Lokal erzeugt am ${new Date().toLocaleString('de-DE')}\n`;
   text += 'Enthaelt ausschliesslich dokumentierte Angaben; vor Verwendung vollstaendig pruefen.\n\n';
+  const symptom = symptomSummary(vital, s, o);
+  text += addProtocolParagraph('EINSATZBERICHT', [
+    hasValue(symptom)
+      ? `Bei ${patientIdentity(vital)} wurde praeklinisch folgendes Hauptproblem dokumentiert: ${symptom}.`
+      : `Bei ${patientIdentity(vital)} wurde ein Rettungsdiensteinsatz dokumentiert; ein Kurzbericht ist noch nicht hinterlegt.`,
+    hasValue(amls.arbeitsdiagnose) ? `Als Arbeitsdiagnose/Verdacht wurde ${amls.arbeitsdiagnose} festgehalten.` : ''
+  ]);
+  text += addProtocolParagraph('ERSTBEFUND UND VERLAUF', [
+    compactJoin([
+      hasValue(formatBloodPressure(vital)) ? `RR ${formatBloodPressure(vital)}` : '',
+      hasValue(vital.puls) ? `Puls ${formatObservation(vital.puls, effectiveVitalStatus(vital, 'puls_status'), '/min')}` : '',
+      hasValue(vital.spo2) ? `SpO2 ${formatObservation(vital.spo2, effectiveVitalStatus(vital, 'spo2_status'), '%')}` : '',
+      hasValue(vital.gcs) ? `GCS ${formatObservation(vital.gcs, effectiveVitalStatus(vital, 'gcs_status'), '/15')}` : ''
+    ]),
+    compactJoin([
+      hasValue(x.blutung) ? `xABCDE: X ${x.blutung}` : '',
+      hasValue(x.atemweg) ? `A ${x.atemweg}` : '',
+      hasValue(x.atmung) ? `B ${x.atmung}` : '',
+      hasValue(x.haut) ? `C ${x.haut}` : '',
+      hasValue(x.avpu) ? `D AVPU ${x.avpu}` : '',
+      hasValue(x.bodycheck) ? `E ${x.bodycheck}` : ''
+    ])
+  ]);
+  text += addProtocolParagraph('MASSNAHMEN UND WIRKUNG', [actionLines(measures).join('; ') || 'Keine Maßnahmen/Medikationen dokumentiert.']);
   text += addProtocolBlock('VITALWERTE & DEMOGRAPHIE', [
     ['Alter', vital.alter],
     ['Geschlecht', vital.geschlecht],
@@ -324,6 +432,7 @@ function generateLocalProtocolText(patient) {
   });
   text += renderListBlock('MASSNAHMEN', measures.timeline, (item) => `${item.zeit || ''} - ${item.massnahme || ''}`.trim());
   text += renderListBlock('MEDIKATION', measures.medikation, (item) => `${item.zeit || ''} - ${item.medikament || ''} ${item.dosis || ''} ${item.weg || ''}`.trim());
+  text += addProtocolBlock('SINNHAFT-UEBERGABE', sinnhaftRows(patient));
   text += addProtocolBlock('UEBERGABE', [
     ['Ziel', handover.ziel],
     ['Text', handover.text],
@@ -1344,6 +1453,18 @@ function AdminView({ session, employee, onBack, onLogout }) {
     }
   }
 
+  async function purgeExpiredCases() {
+    setError('');
+    setStatusText('');
+    try {
+      const result = await api('/api/admin/privacy/purge-expired', { method: 'POST' }, session.token);
+      setStatusText(`${result.count} abgelaufene Einsätze gelöscht.`);
+      await loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function anonymizeCase(caseId) {
     setError('');
     setStatusText('');
@@ -1455,10 +1576,27 @@ function AdminView({ session, employee, onBack, onLogout }) {
               <strong>Audit-Log</strong>
               <span>{privacy?.audit_events || 0} letzte Ereignisse abrufbar</span>
             </div>
+            <div>
+              <strong>Abgelaufene Fälle</strong>
+              <span>{privacy?.expired_cases || 0} nach Aufbewahrungsfrist fällig</span>
+            </div>
           </div>
           <div className="inline-form">
             <input value={retentionDays} onChange={(event) => setRetentionDays(event.target.value)} inputMode="numeric" />
             <button type="button" onClick={saveRetention}>Aufbewahrung speichern</button>
+          </div>
+          <div className="privacy-actions">
+            <button type="button" className="danger-button" onClick={purgeExpiredCases}>
+              <Trash2 size={16} /> Abgelaufene Fälle löschen
+            </button>
+          </div>
+          <div className="privacy-checklist">
+            {(privacy?.checklist || []).map((item) => (
+              <div className={`privacy-check privacy-${item.status}`} key={item.label}>
+                <strong>{item.label}</strong>
+                <span>{item.detail}</span>
+              </div>
+            ))}
           </div>
           <p className="muted">{privacy?.encryption?.production_hint}</p>
         </article>
@@ -1592,6 +1730,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const amlsRemainingCandidates = amlsVisibleCandidates.filter((item) => !amlsExcludedNames.has(item.name));
   const amlsMatchingCount = amlsVisibleCandidates.filter((item) => !amlsExcludedNames.has(item.name) && !(item.conflicts || []).length).length;
   const amlsCheckCount = amlsVisibleCandidates.filter((item) => !amlsExcludedNames.has(item.name) && (item.conflicts || []).length).length;
+  const sinnhaftPreviewRows = sinnhaftRows(patient);
 
   useEffect(() => {
     api('/api/draft', {}, session.token)
@@ -3079,28 +3218,50 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
       {protocolSection === 'abschluss' && <section className="work-panel">
         <div className="section-head">
-          <h2>Verdacht & Übergabe</h2>
-          <span>Arbeitsdiagnose und Zielübergabe</span>
+          <h2>Abschluss & SINNHAFT-Übergabe</h2>
+          <span>Arbeitsdiagnose, Ziel und strukturierte Klinikübergabe</span>
         </div>
-        <div className="assessment-grid">
+        <div className="handover-layout">
           <fieldset>
-            <legend>Verdacht</legend>
+            <legend>Abschlussdaten</legend>
             <label>
               Arbeitsdiagnose
               <input value={amls.arbeitsdiagnose || ''} onChange={(event) => updateAmls('arbeitsdiagnose', event.target.value)} />
             </label>
-          </fieldset>
-          <fieldset>
-            <legend>Übergabe</legend>
             <label>
               Ziel / Empfänger
               <input value={uebergabe.ziel || ''} onChange={(event) => updateUebergabe('ziel', event.target.value)} />
             </label>
             <label>
-              Übergabetext
-              <textarea value={uebergabe.text || ''} onChange={(event) => updateUebergabe('text', event.target.value)} rows={6} />
+              Übergabetext frei
+              <textarea value={uebergabe.text || ''} onChange={(event) => updateUebergabe('text', event.target.value)} rows={5} />
             </label>
           </fieldset>
+          <fieldset>
+            <legend>SINNHAFT</legend>
+            <div className="sinnhaft-grid">
+              {sinnhaftFields.map(([key, label, placeholder]) => (
+                <label key={key}>
+                  {label}
+                  <textarea
+                    value={uebergabe[key] || ''}
+                    onChange={(event) => updateUebergabe(key, event.target.value)}
+                    placeholder={placeholder}
+                    rows={3}
+                  />
+                </label>
+              ))}
+            </div>
+          </fieldset>
+          <aside className="handover-preview">
+            <h3>SINNHAFT-Vorschlag</h3>
+            {sinnhaftPreviewRows.map(([label, value]) => (
+              <p key={label}>
+                <strong>{label}</strong>
+                <span>{hasValue(value) ? value : 'noch offen'}</span>
+              </p>
+            ))}
+          </aside>
         </div>
       </section>}
 

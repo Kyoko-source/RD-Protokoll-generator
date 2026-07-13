@@ -17,12 +17,14 @@ from interfaces import build_fhir_bundle, build_nana_case_export, parse_corpuls_
 from storage import (
     anonymize_finished_case,
     delete_finished_case,
+    delete_expired_finished_cases,
     encrypt_existing_patient_data,
     encryption_status,
     get_finished_case,
     get_app_setting,
     init_database,
     list_audit_events,
+    list_expired_finished_cases,
     list_finished_cases,
     load_case_draft_store,
     load_employee_store,
@@ -161,6 +163,17 @@ def add_lines(title, rows):
     return text + "\n"
 
 
+def compact_join(values, separator=", "):
+    return separator.join(str(value).strip() for value in values if valid(value))
+
+
+def add_paragraph(title, sentences):
+    documented = [str(sentence).strip() for sentence in sentences if valid(sentence)]
+    if not documented:
+        return ""
+    return f"{title}\n" + ("=" * 50) + "\n" + " ".join(documented) + "\n\n"
+
+
 def format_observation(value, status_value="", unit=""):
     value_text = str(value).strip() if valid(value) else ""
     status_text = str(status_value).strip() if valid(status_value) else ""
@@ -261,6 +274,159 @@ def build_case_summary(patient):
     elif valid(samplers.get("symptome")):
         parts.append(str(samplers.get("symptome"))[:80])
     return " · ".join(parts) if parts else "Einsatz ohne Kurzangaben"
+
+
+def format_patient_identity(vital):
+    parts = []
+    if valid(vital.get("geschlecht")):
+        parts.append(str(vital.get("geschlecht")))
+    if valid(vital.get("alter")):
+        parts.append(f"{vital.get('alter')} Jahre")
+    return compact_join(parts, ", ") or "Patientendaten nicht vollständig dokumentiert"
+
+
+def format_symptom_summary(vital, samplers, opqrst):
+    if valid(vital.get("kurzbericht")):
+        return vital.get("kurzbericht")
+    if valid(samplers.get("symptome")):
+        return samplers.get("symptome")
+    pain_parts = compact_join([
+        opqrst.get("region"),
+        opqrst.get("quality"),
+        f"NRS {opqrst.get('nrs')}/10" if valid(opqrst.get("nrs")) else "",
+    ])
+    return pain_parts
+
+
+def format_action_lines(measures):
+    lines = []
+    for item in measures.get("timeline", []) if isinstance(measures.get("timeline"), list) else []:
+        if isinstance(item, dict):
+            line = compact_join([item.get("zeit"), item.get("massnahme")], " - ")
+        else:
+            line = str(item) if valid(item) else ""
+        if valid(line):
+            lines.append(line)
+    for item in measures.get("medikation", []) if isinstance(measures.get("medikation"), list) else []:
+        if isinstance(item, dict):
+            line = compact_join([
+                item.get("zeit"),
+                compact_join([item.get("medikament"), item.get("dosis"), item.get("weg")]),
+            ], " - ")
+        else:
+            line = str(item) if valid(item) else ""
+        if valid(line):
+            lines.append(line)
+    return lines
+
+
+def build_sinnhaft_rows(patient):
+    vital = patient.get("vitalwerte", {}) or {}
+    x = patient.get("xabcde", {}) or {}
+    s = patient.get("samplers", {}) or {}
+    o = patient.get("opqrst", {}) or {}
+    amls = patient.get("amls", {}) or {}
+    measures = patient.get("massnahmen", {}) or {}
+    handover = patient.get("uebergabe", {}) or {}
+
+    priority = compact_join([
+        f"RR {format_blood_pressure(vital)}" if valid(format_blood_pressure(vital)) else "",
+        f"Puls {format_observation(vital.get('puls'), effective_vital_status(vital, 'puls_status'), '/min')}" if valid(format_observation(vital.get("puls"), effective_vital_status(vital, "puls_status"), "/min")) else "",
+        f"SpO2 {format_observation(vital.get('spo2'), effective_vital_status(vital, 'spo2_status'), '%')}" if valid(format_observation(vital.get("spo2"), effective_vital_status(vital, "spo2_status"), "%")) else "",
+        f"GCS {format_observation(vital.get('gcs'), effective_vital_status(vital, 'gcs_status'), '/15')}" if valid(format_observation(vital.get("gcs"), effective_vital_status(vital, "gcs_status"), "/15")) else "",
+        f"Atemweg {x.get('atemweg')}" if valid(x.get("atemweg")) else "",
+        f"Atmung {x.get('atmung')}" if valid(x.get("atmung")) else "",
+        f"Kreislauf {x.get('haut')}" if valid(x.get("haut")) else "",
+        f"AVPU {x.get('avpu')}" if valid(x.get("avpu")) else "",
+    ])
+    action_lines = format_action_lines(measures)
+    anamnesis = compact_join([
+        f"Allergien: {format_selected_allergies(s)}" if valid(format_selected_allergies(s)) else "",
+        f"Medikation: {format_selected_medication(s)}" if valid(format_selected_medication(s)) else "",
+        f"Vorgeschichte: {s.get('vorgeschichte')}" if valid(s.get("vorgeschichte")) else "",
+        f"Letzte Mahlzeit: {format_last_meal(s)}" if valid(format_last_meal(s)) else "",
+        f"Risiken: {format_risk_factors(s)}" if valid(format_risk_factors(s)) else "",
+    ], "; ")
+
+    return [
+        ("S Start", handover.get("sinnhaft_start") or "Ruhe herstellen, Face-to-Face-Übergabe, Manipulationen am Patienten möglichst pausieren."),
+        ("I Identifikation", handover.get("sinnhaft_identifikation") or format_patient_identity(vital)),
+        ("N Notfallereignis", handover.get("sinnhaft_notfallereignis") or compact_join([format_symptom_summary(vital, s, o), s.get("ereignis")], "; ")),
+        ("N Notfallpriorität", handover.get("sinnhaft_notfallprioritaet") or priority),
+        ("H Handlung", handover.get("sinnhaft_handlung") or "; ".join(action_lines)),
+        ("A Anamnese", handover.get("sinnhaft_anamnese") or anamnesis),
+        ("F Fazit", handover.get("sinnhaft_fazit") or compact_join([amls.get("arbeitsdiagnose"), handover.get("ziel")], " -> ")),
+        ("T Teamfragen", handover.get("sinnhaft_teamfragen")),
+    ]
+
+
+def build_narrative_report(patient):
+    vital = patient.get("vitalwerte", {}) or {}
+    x = patient.get("xabcde", {}) or {}
+    s = patient.get("samplers", {}) or {}
+    o = patient.get("opqrst", {}) or {}
+    amls = patient.get("amls", {}) or {}
+    measures = patient.get("massnahmen", {}) or {}
+    handover = patient.get("uebergabe", {}) or {}
+
+    primary = []
+    identity = format_patient_identity(vital)
+    symptom = format_symptom_summary(vital, s, o)
+    if valid(symptom):
+        primary.append(f"Bei {identity} wurde praeklinisch folgendes Hauptproblem dokumentiert: {symptom}.")
+    else:
+        primary.append(f"Bei {identity} wurde ein Rettungsdiensteinsatz dokumentiert; ein Kurzbericht ist noch nicht hinterlegt.")
+    if valid(amls.get("arbeitsdiagnose")):
+        primary.append(f"Als Arbeitsdiagnose/Verdacht wurde {amls.get('arbeitsdiagnose')} festgehalten.")
+
+    assessment = []
+    assessment.append(compact_join([
+        f"RR {format_blood_pressure(vital)}" if valid(format_blood_pressure(vital)) else "",
+        f"Puls {format_observation(vital.get('puls'), effective_vital_status(vital, 'puls_status'), '/min')}" if valid(format_observation(vital.get("puls"), effective_vital_status(vital, "puls_status"), "/min")) else "",
+        f"SpO2 {format_observation(vital.get('spo2'), effective_vital_status(vital, 'spo2_status'), '%')}" if valid(format_observation(vital.get("spo2"), effective_vital_status(vital, "spo2_status"), "%")) else "",
+        f"AF {format_observation(vital.get('af'), effective_vital_status(vital, 'af_status'), '/min')}" if valid(format_observation(vital.get("af"), effective_vital_status(vital, "af_status"), "/min")) else "",
+        f"GCS {format_observation(vital.get('gcs'), effective_vital_status(vital, 'gcs_status'), '/15')}" if valid(format_observation(vital.get("gcs"), effective_vital_status(vital, "gcs_status"), "/15")) else "",
+    ]))
+    assessment.append(compact_join([
+        f"xABCDE: X {x.get('blutung')}" if valid(x.get("blutung")) else "",
+        f"A {x.get('atemweg')}" if valid(x.get("atemweg")) else "",
+        f"B {x.get('atmung')}" if valid(x.get("atmung")) else "",
+        f"C {x.get('haut')}" if valid(x.get("haut")) else "",
+        f"D AVPU {x.get('avpu')}" if valid(x.get("avpu")) else "",
+        f"E {x.get('bodycheck')}" if valid(x.get("bodycheck")) else "",
+    ]))
+
+    history = []
+    history.append(compact_join([
+        f"Symptome: {s.get('symptome')}" if valid(s.get("symptome")) else "",
+        f"Allergien: {format_selected_allergies(s)}" if valid(format_selected_allergies(s)) else "",
+        f"Medikation: {format_selected_medication(s)}" if valid(format_selected_medication(s)) else "",
+        f"Vorgeschichte: {s.get('vorgeschichte')}" if valid(s.get("vorgeschichte")) else "",
+    ], "; "))
+    if o.get("schmerz_vorhanden") == "Ja":
+        history.append(compact_join([
+            "Schmerzassessment:",
+            o.get("onset"),
+            o.get("quality"),
+            o.get("region"),
+            f"Ausstrahlung {o.get('radiation')}" if valid(o.get("radiation")) else "",
+            f"NRS {o.get('nrs')}/10" if valid(o.get("nrs")) else "",
+            o.get("zeitverlauf"),
+        ], " "))
+
+    actions = format_action_lines(measures)
+    handover_sentence = compact_join([
+        f"Ziel/Empfaenger: {handover.get('ziel')}" if valid(handover.get("ziel")) else "",
+        handover.get("text"),
+    ], " ")
+
+    text = ""
+    text += add_paragraph("EINSATZBERICHT", primary)
+    text += add_paragraph("ERSTBEFUND UND VERLAUF", [item for item in assessment if valid(item)])
+    text += add_paragraph("ANAMNESE UND SCHMERZASSESSMENT", [item for item in history if valid(item)])
+    text += add_paragraph("MASSNAHMEN UND WIRKUNG", ["; ".join(actions) if actions else "Keine Maßnahmen/Medikationen dokumentiert."])
+    text += add_paragraph("UEBERGABE-KURZFAZIT", [handover_sentence])
+    return text
 
 
 QUALITY_RULES = [
@@ -631,7 +797,19 @@ def assess_protocol_quality(patient):
         "Zielklinik ist ausgewählt." if valid(transport.get("hospital_name")) else "Zielklinik fehlt.",
     ))
 
-    handover_ok = valid(handover.get("ziel")) or valid(handover.get("text"))
+    handover_ok = valid(handover.get("ziel")) or valid(handover.get("text")) or any(
+        valid(handover.get(key))
+        for key in (
+            "sinnhaft_start",
+            "sinnhaft_identifikation",
+            "sinnhaft_notfallereignis",
+            "sinnhaft_notfallprioritaet",
+            "sinnhaft_handlung",
+            "sinnhaft_anamnese",
+            "sinnhaft_fazit",
+            "sinnhaft_teamfragen",
+        )
+    )
     items.append(quality_item(
         "handover",
         "ok" if handover_ok else "warning",
@@ -710,6 +888,7 @@ def generate_protocol_text(patient):
     text += "=" * 50 + "\n"
     text += f"Erstellt am {datetime.now().strftime('%d.%m.%Y um %H:%M:%S')} Uhr\n"
     text += "Enthaelt ausschliesslich dokumentierte Angaben; vor Verwendung vollstaendig pruefen.\n\n"
+    text += build_narrative_report(patient)
 
     text += add_lines("VITALWERTE & DEMOGRAPHIE", [
         ("Alter", vital.get("alter")),
@@ -803,7 +982,8 @@ def generate_protocol_text(patient):
                 text += f"- {line}\n"
             text += "\n"
 
-    text += add_lines("UEBERGABE", [
+    text += add_lines("SINNHAFT-UEBERGABE", build_sinnhaft_rows(patient))
+    text += add_lines("UEBERGABE FREITEXT", [
         ("Uebergabe Ziel", handover.get("ziel")),
         ("Uebergabe Text", handover.get("text")),
     ])
@@ -1537,11 +1717,26 @@ def admin_export_case(case_id: str, export_format: str, employee=Depends(require
 
 @app.get("/api/admin/privacy")
 def admin_privacy(employee=Depends(require_admin)):
+    today = datetime.now().date().isoformat()
+    expired_cases = list_expired_finished_cases(today)
+    retention_days = int(get_app_setting("retention_days", 3650) or 3650)
+    audit_count = len(list_audit_events(limit=500))
+    encryption = encryption_status()
     return {
-        "encryption": encryption_status(),
-        "retention_days": int(get_app_setting("retention_days", 3650) or 3650),
+        "encryption": encryption,
+        "retention_days": retention_days,
         "session_minutes": SESSION_MINUTES,
-        "audit_events": len(list_audit_events(limit=500)),
+        "audit_events": audit_count,
+        "expired_cases": len(expired_cases),
+        "checklist": [
+            {"label": "Verschluesselung Patientendaten", "status": "ok" if encryption.get("enabled") else "warning", "detail": encryption.get("provider", "")},
+            {"label": "Externer Datenschluessel", "status": "ok" if encryption.get("key_source") == "environment" else "warning", "detail": encryption.get("production_hint", "")},
+            {"label": "Rollenbasierter Admin-Zugriff", "status": "ok", "detail": "Admin-Endpunkte sind rollenbeschraenkt."},
+            {"label": "Sitzungssperre", "status": "ok", "detail": f"Backend {SESSION_MINUTES} Minuten, Oberflaeche 20 Minuten."},
+            {"label": "Aufbewahrungsfrist", "status": "ok" if retention_days <= 3650 else "warning", "detail": f"{retention_days} Tage konfiguriert."},
+            {"label": "Faellige Loeschungen", "status": "ok" if not expired_cases else "warning", "detail": f"{len(expired_cases)} Einsatz/Einsaetze abgelaufen."},
+            {"label": "Audit-Trail", "status": "ok" if audit_count else "info", "detail": f"{audit_count} Ereignisse einsehbar."},
+        ],
     }
 
 
@@ -1551,6 +1746,20 @@ def update_privacy(payload: RetentionRequest, employee=Depends(require_admin)):
     set_app_setting("retention_days", days)
     audit("api_privacy_settings_updated", employee=employee, details={"retention_days": days})
     return {"status": "saved", "retention_days": days}
+
+
+@app.post("/api/admin/privacy/purge-expired")
+def purge_expired_cases(employee=Depends(require_admin)):
+    today = datetime.now().date().isoformat()
+    timestamp = datetime.now().isoformat(timespec="seconds")
+    expired = delete_expired_finished_cases(today, timestamp)
+    audit(
+        "api_expired_cases_purged",
+        employee=employee,
+        entity_type="finished_case",
+        details={"count": len(expired), "date": today},
+    )
+    return {"status": "purged", "count": len(expired), "case_ids": [item["id"] for item in expired]}
 
 
 @app.get("/api/admin/employees")
