@@ -1,5 +1,6 @@
 import secrets
 import json
+import os
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -40,6 +41,22 @@ SESSION_MINUTES = 30
 PASSWORD_CHANGE_MINUTES = 10
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
+NANA_ENV = os.getenv("NANA_ENV", "development").strip().lower()
+
+
+def production_mode():
+    return NANA_ENV in {"production", "prod"}
+
+
+def configured_cors_origins():
+    configured = os.getenv("NANA_ALLOWED_ORIGINS", "").strip()
+    if configured:
+        return [origin.strip() for origin in configured.split(",") if origin.strip()]
+    return ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+if production_mode() and not os.getenv("NANA_DATA_KEY", "").strip():
+    raise RuntimeError("NANA_DATA_KEY muss im Produktionsbetrieb gesetzt sein.")
 
 sessions = {}
 password_change_tokens = {}
@@ -47,8 +64,8 @@ password_change_tokens = {}
 app = FastAPI(title="NANA API", version="0.1.0")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_origin_regex=r"http://(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):5173",
+    allow_origins=configured_cors_origins(),
+    allow_origin_regex=None if production_mode() else r"http://(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):5173",
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

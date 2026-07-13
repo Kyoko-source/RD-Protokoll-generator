@@ -27,6 +27,7 @@ import './styles.css';
 function resolveApiBase() {
   const configured = import.meta.env.VITE_API_BASE;
   if (configured !== undefined) return configured;
+  if (import.meta.env.PROD) return '';
   if (window.location.port === '8000') return '';
   const host = window.location.hostname || '127.0.0.1';
   return `${window.location.protocol}//${host}:8000`;
