@@ -1112,34 +1112,19 @@ def write_pdf_metadata(pdf, metadata):
     if not documented_metadata:
         return
 
-    pdf.ln(1)
-    pdf.set_draw_color(210, 220, 232)
+    pdf.ln(2)
     for label, value in documented_metadata:
         if pdf.get_y() > 250:
             pdf.add_page()
 
-        x = pdf.l_margin
         width = pdf.w - pdf.l_margin - pdf.r_margin
-        value_text = pdf_safe(str(value))
-        line_height = 5
-        value_lines = max(1, len(pdf.multi_cell(width - 4, line_height, value_text, split_only=True)))
-        row_height = 5 + (value_lines * line_height) + 2
-
-        y = pdf.get_y()
-        pdf.set_fill_color(246, 249, 252)
-        pdf.rect(x, y, width, row_height, style="DF")
-
-        pdf.set_xy(x + 2, y + 1)
-        pdf.set_font("Helvetica", "B", 7.5)
+        pdf.set_font("Helvetica", "B", 8)
         pdf.set_text_color(68, 82, 98)
-        pdf.cell(width - 4, 4, pdf_safe(label), ln=True)
+        pdf.cell(31, 4.8, pdf_safe(f"{label}:"))
 
-        pdf.set_x(x + 2)
-        pdf.set_font("Helvetica", "", 8.2)
+        pdf.set_font("Helvetica", "", 8)
         pdf.set_text_color(20, 31, 48)
-        pdf.multi_cell(width - 4, line_height, value_text)
-
-        pdf.set_y(y + row_height)
+        pdf.multi_cell(width - 31, 4.8, pdf_safe(str(value)))
 
 
 def build_pdf_bytes(title, protocol_text, metadata=None):

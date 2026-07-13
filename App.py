@@ -807,6 +807,86 @@ st.set_page_config(
     layout="wide"
 )
 
+
+def show_migration_notice():
+    st.markdown(
+        """
+        <style>
+        .migration-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 999999;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(3, 8, 18, 0.78);
+            backdrop-filter: blur(10px);
+        }
+        .migration-card {
+            width: min(560px, 92vw);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            border-radius: 18px;
+            background: linear-gradient(145deg, #0b1730 0%, #07111f 100%);
+            box-shadow: 0 28px 80px rgba(0, 0, 0, 0.45);
+            color: #eef5ff;
+            padding: 34px;
+            text-align: center;
+            font-family: "Aptos", "Segoe UI Variable", "Segoe UI", sans-serif;
+        }
+        .migration-card h1 {
+            margin: 0 0 12px;
+            font-size: 2rem;
+            line-height: 1.16;
+            color: #ffffff;
+        }
+        .migration-card p {
+            margin: 0 auto 24px;
+            max-width: 440px;
+            color: #b8c7dc;
+            font-size: 1.02rem;
+            line-height: 1.55;
+        }
+        .migration-card a {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 46px;
+            padding: 0 22px;
+            border-radius: 999px;
+            background: #5ea8ff;
+            color: #07111f !important;
+            font-weight: 800;
+            text-decoration: none !important;
+            box-shadow: 0 16px 38px rgba(94, 168, 255, 0.30);
+        }
+        .migration-card small {
+            display: block;
+            margin-top: 18px;
+            color: #8497b5;
+            word-break: break-word;
+        }
+        </style>
+        <div class="migration-overlay">
+            <div class="migration-card">
+                <h1>Sorry, aber wir sind umgezogen</h1>
+                <p>
+                    Diese alte Streamlit-Seite wird nicht mehr verwendet.
+                    NANA läuft jetzt auf dem neuen sicheren Server.
+                </p>
+                <a href="https://protocolnana.de" target="_blank" rel="noopener noreferrer">
+                    Zum richtigen NANA-Server
+                </a>
+                <small>https://protocolnana.de</small>
+            </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+show_migration_notice()
+
 # --- Custom styling (Dark Mode, centered navigation) -----------------
 st.markdown(
         """
