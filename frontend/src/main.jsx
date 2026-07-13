@@ -3134,14 +3134,25 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         </section>
         {qualityResult && (
           <div className={`quality-box quality-${qualityResult.level}`}>
-            <div className="quality-score">
-              <strong>{qualityResult.score}</strong>
-              <span>QS-Punkte</span>
-            </div>
-            <div className="quality-summary">
-              <span>{qualityResult.ok_count} erfüllt</span>
-              <span>{qualityResult.warning_count} Warnungen</span>
-              <span>{qualityResult.critical_count} kritisch</span>
+            <div className="quality-overview">
+              <div className="quality-score">
+                <strong>{qualityResult.score}</strong>
+                <span>QS-Punkte</span>
+              </div>
+              <div className="quality-summary">
+                <div>
+                  <strong>{qualityResult.ok_count}</strong>
+                  <span>erfüllt</span>
+                </div>
+                <div>
+                  <strong>{qualityResult.warning_count}</strong>
+                  <span>Warnungen</span>
+                </div>
+                <div>
+                  <strong>{qualityResult.critical_count}</strong>
+                  <span>kritisch</span>
+                </div>
+              </div>
             </div>
             <div className="quality-list">
               {(qualityResult.items || []).filter((item) => item.status !== 'ok').map((item) => (

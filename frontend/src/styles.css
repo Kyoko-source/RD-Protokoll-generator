@@ -155,11 +155,10 @@ form button,
 
 .quality-box {
   display: grid;
-  grid-template-columns: 130px minmax(0, 1fr);
-  gap: 14px;
+  gap: 12px;
   margin-bottom: 14px;
-  padding: 14px;
-  border-radius: 14px;
+  padding: 16px;
+  border-radius: 16px;
   background: rgba(4, 12, 24, 0.36);
   border: 1px solid rgba(255, 255, 255, 0.10);
 }
@@ -176,52 +175,90 @@ form button,
   border-color: rgba(228, 61, 93, 0.48);
 }
 
+.quality-overview {
+  display: grid;
+  grid-template-columns: 140px minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+}
+
 .quality-score {
   display: grid;
   place-items: center;
-  min-height: 112px;
+  min-height: 96px;
+  padding: 12px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.07);
+  text-align: center;
 }
 
 .quality-score strong {
-  font-size: 2.4rem;
+  font-size: 2.15rem;
   line-height: 1;
 }
 
 .quality-score span,
-.quality-summary span,
 .quality-item span {
   color: rgba(235, 244, 255, 0.66);
 }
 
 .quality-summary {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 10px;
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.quality-summary div {
+  display: grid;
+  align-content: center;
+  gap: 4px;
+  min-height: 96px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.quality-summary strong {
+  color: #f8fbff;
+  font-size: 1.7rem;
+  line-height: 1;
 }
 
 .quality-summary span {
-  padding: 6px 9px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.08);
+  color: rgba(235, 244, 255, 0.66);
   font-weight: 820;
 }
 
 .quality-list {
   display: grid;
-  gap: 8px;
+  gap: 10px;
 }
 
 .quality-item {
   display: grid;
-  grid-template-columns: 22px minmax(0, 1fr);
-  gap: 8px;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 10px;
   align-items: start;
-  padding: 10px;
+  padding: 12px;
   border-radius: 12px;
   background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.quality-item strong,
+.quality-item span {
+  display: block;
+  line-height: 1.35;
+}
+
+.quality-item strong {
+  margin-bottom: 3px;
+  overflow-wrap: anywhere;
+}
+
+.quality-item span {
+  overflow-wrap: anywhere;
 }
 
 .quality-item-warning {
@@ -1654,6 +1691,8 @@ legend {
   .status-band,
   .tile-grid,
   .quality-box,
+  .quality-overview,
+  .quality-summary,
   .rules-grid,
   .form-grid,
   .vital-pair-grid,
