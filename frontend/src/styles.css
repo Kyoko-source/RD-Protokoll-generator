@@ -1504,7 +1504,7 @@ form button,
 
 .admin-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) 150px 110px 92px;
+  grid-template-columns: minmax(180px, 1fr) 150px 110px 92px 112px;
   gap: 10px;
   align-items: center;
   padding: 12px;

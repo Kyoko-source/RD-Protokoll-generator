@@ -60,6 +60,7 @@ if production_mode() and not os.getenv("NANA_DATA_KEY", "").strip():
 
 sessions = {}
 password_change_tokens = {}
+EMPLOYEE_ROLES = {"employee", "admin", "bufdi", "azubi"}
 
 app = FastAPI(title="NANA API", version="0.1.0")
 app.add_middleware(
@@ -1343,6 +1344,10 @@ def require_admin(employee=Depends(current_employee)):
     return employee
 
 
+def normalize_employee_role(role):
+    return role if role in EMPLOYEE_ROLES else "employee"
+
+
 @app.on_event("startup")
 def startup():
     init_database()
@@ -1862,7 +1867,7 @@ def admin_employees(employee=Depends(require_admin)):
 @app.post("/api/admin/employees")
 def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_admin)):
     name = payload.name.strip()
-    role = payload.role if payload.role in ["employee", "admin"] else "employee"
+    role = normalize_employee_role(payload.role)
     if not name:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name fehlt.")
 
@@ -1904,8 +1909,8 @@ def update_employee(employee_id: str, payload: EmployeeUpdateRequest, employee=D
 
     if payload.name is not None and payload.name.strip():
         target["name"] = payload.name.strip()
-    if payload.role in ["employee", "admin"]:
-        target["role"] = payload.role
+    if payload.role is not None:
+        target["role"] = normalize_employee_role(payload.role)
     if payload.active is not None:
         if target.get("id") == employee.get("id") and payload.active is False:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Eigenes Admin-Profil kann nicht deaktiviert werden.")
@@ -1931,6 +1936,36 @@ def update_employee(employee_id: str, payload: EmployeeUpdateRequest, employee=D
     if temp_password:
         response["temporary_password"] = temp_password
     return response
+
+
+@app.delete("/api/admin/employees/{employee_id}")
+def delete_employee(employee_id: str, employee=Depends(require_admin)):
+    if employee_id == employee.get("id"):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Eigenes Admin-Profil kann nicht gelöscht werden.")
+
+    store = load_employee_store()
+    employees = store.get("employees", [])
+    target = next((item for item in employees if item.get("id") == employee_id), None)
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mitarbeiter nicht gefunden.")
+
+    remaining_admins = [
+        item for item in employees
+        if item.get("id") != employee_id and item.get("role") == "admin" and item.get("active", True)
+    ]
+    if target.get("role") == "admin" and not remaining_admins:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Der letzte aktive Admin kann nicht gelöscht werden.")
+
+    store["employees"] = [item for item in employees if item.get("id") != employee_id]
+    save_employee_store(store)
+    audit(
+        "api_employee_deleted",
+        employee=employee,
+        entity_type="employee",
+        entity_id=employee_id,
+        details={"name": target.get("name", ""), "role": target.get("role", "")},
+    )
+    return {"status": "deleted", "employee_id": employee_id}
 
 
 @app.post("/api/admin/cases/{case_id}/anonymize")

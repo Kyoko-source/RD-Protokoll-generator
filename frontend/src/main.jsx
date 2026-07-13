@@ -35,6 +35,16 @@ function resolveApiBase() {
 
 const API_BASE = resolveApiBase();
 const SESSION_TIMEOUT_MS = 20 * 60 * 1000;
+const EMPLOYEE_ROLE_OPTIONS = [
+  { value: 'employee', label: 'Mitarbeiter' },
+  { value: 'bufdi', label: 'BuFDi' },
+  { value: 'azubi', label: 'Azubi' },
+  { value: 'admin', label: 'Admin' }
+];
+
+function roleLabel(role) {
+  return EMPLOYEE_ROLE_OPTIONS.find((item) => item.value === role)?.label || 'Mitarbeiter';
+}
 
 function localDraftKey(employeeId) {
   return `nana_local_draft_${employeeId || 'unknown'}`;
@@ -653,7 +663,7 @@ function Login({ onLogin }) {
               <select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
                 {employees.map((employee) => (
                   <option key={employee.id} value={employee.id}>
-                    {employee.name} · {employee.role === 'admin' ? 'Admin' : 'Mitarbeiter'}
+                    {employee.name} · {roleLabel(employee.role)}
                   </option>
                 ))}
               </select>
@@ -876,7 +886,7 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
       <section className="status-band">
         <div>
           <ShieldCheck size={20} />
-          <span>{employee?.role === 'admin' ? 'Admin-Profil' : 'Mitarbeiter-Profil'}</span>
+          <span>{employee?.role === 'admin' ? 'Admin-Profil' : `${roleLabel(employee?.role)}-Profil`}</span>
         </div>
         <div>
           <Activity size={20} />
@@ -1599,6 +1609,26 @@ function AdminView({ session, employee, onBack, onLogout }) {
     }
   }
 
+  async function deleteEmployee(item) {
+    if (item.id === employee?.id) {
+      setError('Eigenes Admin-Profil kann nicht gelöscht werden.');
+      return;
+    }
+    if (!window.confirm(`${item.name} wirklich löschen? Der aktuelle Entwurf dieses Profils wird entfernt.`)) {
+      return;
+    }
+    setError('');
+    setStatusText('');
+    setTemporaryPassword('');
+    try {
+      await api(`/api/admin/employees/${item.id}`, { method: 'DELETE' }, session.token);
+      setStatusText('Mitarbeiterprofil wurde gelöscht.');
+      await loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   async function saveRetention() {
     setError('');
     setStatusText('');
@@ -1688,8 +1718,9 @@ function AdminView({ session, employee, onBack, onLogout }) {
           <form className="inline-form" onSubmit={createEmployee}>
             <input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Name" />
             <select value={newRole} onChange={(event) => setNewRole(event.target.value)}>
-              <option value="employee">Mitarbeiter</option>
-              <option value="admin">Admin</option>
+              {EMPLOYEE_ROLE_OPTIONS.map((role) => (
+                <option key={role.value} value={role.value}>{role.label}</option>
+              ))}
             </select>
             <button type="submit"><UserPlus size={17} /> Anlegen</button>
           </form>
@@ -1698,17 +1729,21 @@ function AdminView({ session, employee, onBack, onLogout }) {
               <div className="admin-row" key={item.id}>
                 <div>
                   <strong>{item.name}</strong>
-                  <span>{item.role === 'admin' ? 'Admin' : 'Mitarbeiter'} · {item.active ? 'aktiv' : 'gesperrt'}</span>
+                  <span>{roleLabel(item.role)} · {item.active ? 'aktiv' : 'gesperrt'}</span>
                 </div>
                 <select value={item.role} onChange={(event) => updateEmployee(item, { role: event.target.value })}>
-                  <option value="employee">Mitarbeiter</option>
-                  <option value="admin">Admin</option>
+                  {EMPLOYEE_ROLE_OPTIONS.map((role) => (
+                    <option key={role.value} value={role.value}>{role.label}</option>
+                  ))}
                 </select>
                 <button type="button" onClick={() => updateEmployee(item, { active: !item.active })}>
                   {item.active ? 'Sperren' : 'Aktivieren'}
                 </button>
                 <button type="button" onClick={() => updateEmployee(item, { reset_password: true })}>
                   <RotateCcw size={16} /> OTP
+                </button>
+                <button type="button" className="danger-button" onClick={() => deleteEmployee(item)}>
+                  <Trash2 size={16} /> Löschen
                 </button>
               </div>
             ))}
