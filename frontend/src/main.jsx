@@ -1561,7 +1561,6 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const [forceFinish, setForceFinish] = useState(false);
   const [localDraft, setLocalDraft] = useState(() => loadLocalDraft(employee?.id));
   const [draftReady, setDraftReady] = useState(false);
-  const [suspicionResult, setSuspicionResult] = useState(null);
   const [amlsSuggestions, setAmlsSuggestions] = useState([]);
   const [calculator, setCalculator] = useState({ sop: 'Anaphylaxie (SOPKB0105)', age: '30', weight: '70', pregnant: 'Nein', bz: '55', rr_sys: '160', nrs: '7' });
   const [calculatorResult, setCalculatorResult] = useState(null);
@@ -2321,21 +2320,6 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     });
   }
 
-  async function runSuspicionAssessment() {
-    setError('');
-    setStatusText('');
-    try {
-      const result = await api('/api/protocol/suspicion', {
-        method: 'POST',
-        body: JSON.stringify({ patient })
-      }, session.token);
-      setSuspicionResult(result);
-      setStatusText('Verdacht wurde aus den dokumentierten Daten aktualisiert.');
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
   async function loadAmlsSuggestions() {
     setError('');
     setStatusText('');
@@ -2636,13 +2620,6 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         </button>
         <button
           type="button"
-          className={protocolSection === 'verdacht' ? 'active' : ''}
-          onClick={() => setProtocolSection('verdacht')}
-        >
-          Verdacht
-        </button>
-        <button
-          type="button"
           className={protocolSection === 'amls' ? 'active' : ''}
           onClick={() => setProtocolSection('amls')}
         >
@@ -2842,41 +2819,6 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             <p>{hasValue(opqrst.nrs) ? `NRS: ${opqrst.nrs}/10` : 'NRS noch offen'}</p>
           </aside>
         </div>
-      </section>}
-
-      {protocolSection === 'verdacht' && <section className="work-panel">
-        <div className="section-head">
-          <h2>Verdacht & Handlungshilfe</h2>
-          <span>aus Vitalwerten, xABCDE, SAMPLERS und OPQRST</span>
-        </div>
-        <div className="protocol-toolbar compact-toolbar">
-          <button type="button" onClick={runSuspicionAssessment}>Verdacht aktualisieren</button>
-          <button type="button" onClick={() => setProtocolSection('amls')}>Weiter zu AMLS</button>
-        </div>
-        {suspicionResult ? (
-          <div className="support-grid">
-            <article>
-              <h3>Mögliche Verdachtsdiagnosen</h3>
-              {(suspicionResult.suspicions || []).map((item, index) => (
-                <div className="support-row" key={`suspicion-${index}`}>
-                  <strong>{index + 1}</strong>
-                  <span>{item}</span>
-                </div>
-              ))}
-            </article>
-            <article>
-              <h3>Empfohlene nächste Schritte</h3>
-              {(suspicionResult.recommendations || []).map((item, index) => (
-                <div className="support-row" key={`recommendation-${index}`}>
-                  <strong>{index + 1}</strong>
-                  <span>{item}</span>
-                </div>
-              ))}
-            </article>
-          </div>
-        ) : (
-          <p className="muted">Noch keine Auswertung gestartet.</p>
-        )}
       </section>}
 
       {protocolSection === 'amls' && <section className="work-panel">
