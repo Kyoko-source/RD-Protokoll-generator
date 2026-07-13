@@ -836,6 +836,7 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
       <InterfacesView
         session={session}
         employee={employee}
+        connectivity={connectivity}
         onBack={() => setView('home')}
         onOpenProtocol={() => setView('protocol')}
         onLogout={logout}
@@ -942,7 +943,7 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
   );
 }
 
-function InterfacesView({ session, employee, onBack, onOpenProtocol, onLogout }) {
+function InterfacesView({ session, employee, connectivity, onBack, onOpenProtocol, onLogout }) {
   const [cases, setCases] = useState([]);
   const [source, setSource] = useState('dispatch');
   const [payload, setPayload] = useState('');
