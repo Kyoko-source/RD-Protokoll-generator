@@ -694,25 +694,61 @@ function LoginTransition({ session, onComplete }) {
         </div>
         <div className="ambulance-wrap" aria-hidden="true">
           <div className="ambulance">
-            <div className="ambulance-light ambulance-light-blue" />
-            <div className="ambulance-light ambulance-light-red" />
-            <div className="ambulance-body-shadow" />
-            <div className="ambulance-cabin">
-              <span />
-              <i />
-            </div>
-            <div className="ambulance-box">
-              <strong>RTW</strong>
-              <i />
-              <em />
-            </div>
-            <div className="ambulance-front" />
-            <div className="ambulance-stripe" />
-            <div className="ambulance-bumper" />
-            <div className="ambulance-headlight" />
-            <div className="ambulance-taillight" />
-            <div className="ambulance-wheel wheel-left" />
-            <div className="ambulance-wheel wheel-right" />
+            <svg className="ambulance-svg" viewBox="0 0 520 230" role="img" aria-label="Rettungswagen">
+              <defs>
+                <linearGradient id="rtwBody" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ffffff" />
+                  <stop offset="72%" stopColor="#edf5fb" />
+                  <stop offset="100%" stopColor="#d9e5ee" />
+                </linearGradient>
+                <linearGradient id="rtwGlass" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#dff5ff" />
+                  <stop offset="100%" stopColor="#72b8ff" />
+                </linearGradient>
+                <filter id="rtwShadow" x="-20%" y="-20%" width="140%" height="150%">
+                  <feDropShadow dx="0" dy="18" stdDeviation="12" floodColor="#000814" floodOpacity="0.42" />
+                </filter>
+              </defs>
+              <ellipse cx="268" cy="197" rx="212" ry="20" fill="rgba(0,0,0,0.26)" />
+              <g filter="url(#rtwShadow)">
+                <path d="M179 66 H414 C439 66 458 85 458 110 V161 H165 V84 C165 74 169 66 179 66 Z" fill="url(#rtwBody)" stroke="#c9d6e2" strokeWidth="4" />
+                <path d="M70 111 C81 87 106 72 136 72 H184 V161 H52 V140 C52 127 59 116 70 111 Z" fill="url(#rtwBody)" stroke="#c9d6e2" strokeWidth="4" />
+                <path d="M76 113 C88 91 108 83 136 83 H162 V119 H66 C68 117 72 114 76 113 Z" fill="url(#rtwGlass)" stroke="#5f748b" strokeWidth="3" />
+                <path d="M169 83 H183 V124 H151 Z" fill="#cfeeff" stroke="#5f748b" strokeWidth="3" />
+                <path d="M205 84 H267 V119 H205 Z" fill="url(#rtwGlass)" stroke="#5f748b" strokeWidth="3" />
+                <path d="M284 84 H346 V119 H284 Z" fill="url(#rtwGlass)" stroke="#5f748b" strokeWidth="3" />
+                <path d="M363 84 H423 V119 H363 Z" fill="url(#rtwGlass)" stroke="#5f748b" strokeWidth="3" />
+                <path d="M53 135 H459 V154 H53 Z" fill="#e51f3f" />
+                <path d="M92 135 L130 135 L108 154 H70 Z" fill="#ffffff" opacity="0.88" />
+                <path d="M184 67 V161" stroke="#c9d6e2" strokeWidth="3" />
+                <path d="M224 129 H272 V176 H224 Z" fill="#f7fbff" stroke="#c9d6e2" strokeWidth="3" />
+                <path d="M252 133 V172" stroke="#d5e0eb" strokeWidth="2" />
+                <path d="M382 94 H430 V145 H382 Z" fill="#f7fbff" stroke="#c9d6e2" strokeWidth="3" />
+                <path d="M406 103 V136 M390 119 H422" stroke="#e51f3f" strokeWidth="10" strokeLinecap="round" />
+                <path d="M71 143 H121" stroke="#18283b" strokeWidth="5" strokeLinecap="round" />
+                <path d="M69 153 H116" stroke="#18283b" strokeWidth="5" strokeLinecap="round" />
+                <path d="M137 125 L153 121 L154 133 L137 137 Z" fill="#20344c" opacity="0.75" />
+                <text x="293" y="151" fill="#19314d" fontSize="34" fontWeight="900" letterSpacing="3">RTW</text>
+                <path d="M46 150 H86 V169 H47 C42 169 38 164 40 158 L42 154 C43 151 45 150 46 150 Z" fill="#1f2d3d" />
+                <path d="M445 150 H468 C474 150 478 155 478 161 V169 H445 Z" fill="#1f2d3d" />
+                <g className="ambulance-svg-wheel">
+                  <circle cx="119" cy="166" r="31" fill="#07111f" />
+                  <circle cx="119" cy="166" r="18" fill="#32475d" />
+                  <path d="M119 148 V184 M101 166 H137 M106 153 L132 179 M132 153 L106 179" stroke="#dfeaf4" strokeWidth="3" strokeLinecap="round" />
+                  <circle cx="119" cy="166" r="6" fill="#f6fbff" />
+                </g>
+                <g className="ambulance-svg-wheel">
+                  <circle cx="386" cy="166" r="31" fill="#07111f" />
+                  <circle cx="386" cy="166" r="18" fill="#32475d" />
+                  <path d="M386 148 V184 M368 166 H404 M373 153 L399 179 M399 153 L373 179" stroke="#dfeaf4" strokeWidth="3" strokeLinecap="round" />
+                  <circle cx="386" cy="166" r="6" fill="#f6fbff" />
+                </g>
+                <circle cx="57" cy="130" r="8" fill="#fff0a3" className="ambulance-headbeam" />
+                <rect x="455" y="123" width="12" height="24" rx="5" fill="#ff3c5d" />
+                <rect x="224" y="52" width="36" height="17" rx="7" fill="#2d7cff" className="ambulance-svg-light ambulance-svg-blue" />
+                <rect x="268" y="52" width="36" height="17" rx="7" fill="#ff3c5d" className="ambulance-svg-light ambulance-svg-red" />
+              </g>
+            </svg>
           </div>
         </div>
         <div className="final-logo-lockup">
