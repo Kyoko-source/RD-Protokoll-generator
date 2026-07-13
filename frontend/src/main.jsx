@@ -678,24 +678,42 @@ function Login({ onLogin }) {
 
 function LoginTransition({ session, onComplete }) {
   useEffect(() => {
-    const timer = window.setTimeout(onComplete, 2300);
+    const timer = window.setTimeout(onComplete, 4200);
     return () => window.clearTimeout(timer);
   }, [onComplete]);
 
-  const name = session?.employee?.name || 'NANA';
-
   return (
     <main className="login-transition-shell" aria-live="polite">
-      <div className="login-transition-card">
-        <div className="morph-logo" aria-label="NANA">
-          {['N', 'A', 'N', 'A'].map((letter, index) => (
-            <span key={`${letter}-${index}`} style={{ '--delay': `${index * 0.13}s` }}>
+      <div className="ambulance-scene">
+        <div className="letter-shower" aria-hidden="true">
+          {['N', 'A', 'N', 'Ü', 'N', 'A', 'N', 'A'].map((letter, index) => (
+            <span key={`${letter}-${index}`} style={{ '--letter-delay': `${0.2 + index * 0.1}s`, '--fall-x': `${(index - 3.5) * 18}px` }}>
               {letter}
             </span>
           ))}
         </div>
-        <div className="morph-lightbar" />
-        <p>{name}</p>
+        <div className="ambulance-wrap" aria-hidden="true">
+          <div className="ambulance">
+            <div className="ambulance-light ambulance-light-blue" />
+            <div className="ambulance-light ambulance-light-red" />
+            <div className="ambulance-cabin">
+              <span />
+            </div>
+            <div className="ambulance-box">
+              <strong>RTW</strong>
+              <i />
+            </div>
+            <div className="ambulance-stripe" />
+            <div className="ambulance-wheel wheel-left" />
+            <div className="ambulance-wheel wheel-right" />
+          </div>
+        </div>
+        <div className="final-logo-lockup">
+          <div className="final-nana" aria-label="NANA">
+            {['N', 'A', 'N', 'A'].map((letter, index) => <span key={index}>{letter}</span>)}
+          </div>
+          <p>Notfall-Aufzeichnungs- und Nachbearbeitungs-Assistent</p>
+        </div>
       </div>
     </main>
   );
