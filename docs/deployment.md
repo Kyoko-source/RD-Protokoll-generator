@@ -10,6 +10,8 @@ Diese Dateien sind der Startpunkt fuer den Betrieb ueber eine eigene HTTPS-Domai
 - Die SQLite-Datenbank liegt in einem persistenten Volume.
 - `NANA_DATA_KEY` liegt nur als Server-Secret vor und nie in Git.
 
+Eine konkrete Server-Schrittfolge liegt in `docs/server_setup.md`.
+
 ## Produktionsvariablen
 
 Pflicht:
@@ -29,6 +31,12 @@ Auf dem Server:
 4. `deploy/caddy/Caddyfile.example` nach `deploy/caddy/Caddyfile` kopieren.
 5. Domain und E-Mail-Adresse in der Caddyfile ersetzen.
 
+Alternativ erstellt dieses Skript beide Dateien:
+
+```powershell
+powershell ./deploy/scripts/render_production_config.ps1 -Domain nana.example.de -Email admin@example.de
+```
+
 `NANA_DATA_KEY` erzeugen:
 
 ```powershell
@@ -47,6 +55,12 @@ NANA plus Caddy/HTTPS auf demselben Server:
 
 ```powershell
 docker compose -f deploy/docker-compose.https.example.yml up --build -d
+```
+
+Oder mit Pruefung der benoetigten Dateien:
+
+```bash
+bash deploy/scripts/deploy_server.sh
 ```
 
 Danach laeuft NANA lokal auf dem Server unter:

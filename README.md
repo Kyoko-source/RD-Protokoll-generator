@@ -40,5 +40,6 @@ Die Grundlage fuer einen sicheren Serverbetrieb liegt in:
 - `deploy/caddy/Caddyfile.example`
 - `deploy/env.production.example`
 - `docs/deployment.md`
+- `docs/server_setup.md`
 
 Fuer echte Nutzung mit Patientendaten nur mit HTTPS, EU-Hosting, externem `NANA_DATA_KEY`, Backups und AV-Vertrag betreiben.
