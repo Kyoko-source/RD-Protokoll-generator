@@ -675,10 +675,10 @@ function Login({ onLogin }) {
   );
 }
 
-function Dashboard({ session, onLogout, connectivity, onSync }) {
+function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvailable, onInstallApp }) {
   const [dashboard, setDashboard] = useState(null);
   const [cases, setCases] = useState([]);
-  const [view, setView] = useState('home');
+  const [view, setView] = useState(() => getInitialDashboardView());
   const [error, setError] = useState('');
   const [statusText, setStatusText] = useState('');
 
@@ -770,6 +770,12 @@ function Dashboard({ session, onLogout, connectivity, onSync }) {
         </div>
         <div className="user-area">
           <span>{employee?.name}</span>
+          {installPromptAvailable && (
+            <button className="header-button install-button" type="button" onClick={onInstallApp}>
+              <Download size={16} />
+              App installieren
+            </button>
+          )}
           <button className="icon-button" onClick={logout} aria-label="Abmelden">
             <LogOut size={18} />
           </button>
@@ -3363,6 +3369,8 @@ function App() {
   const [online, setOnline] = useState(() => navigator.onLine);
   const [backendOnline, setBackendOnline] = useState(true);
   const [lastSync, setLastSync] = useState('');
+  const [installPrompt, setInstallPrompt] = useState(null);
+  const [standalone, setStandalone] = useState(() => isStandaloneApp());
 
   function handleLogin(result) {
     const nextSession = { token: result.token, employee: result.employee, lastActivity: Date.now() };
@@ -3428,11 +3436,56 @@ function App() {
     };
   }, []);
 
+  useEffect(() => {
+    function handleBeforeInstallPrompt(event) {
+      event.preventDefault();
+      setInstallPrompt(event);
+    }
+
+    function handleInstalled() {
+      setInstallPrompt(null);
+      setStandalone(true);
+    }
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+    window.addEventListener('appinstalled', handleInstalled);
+    return () => {
+      window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
+      window.removeEventListener('appinstalled', handleInstalled);
+    };
+  }, []);
+
+  async function handleInstallApp() {
+    if (!installPrompt) return;
+    installPrompt.prompt();
+    await installPrompt.userChoice.catch(() => null);
+    setInstallPrompt(null);
+    setStandalone(isStandaloneApp());
+  }
+
   const connectivity = { online, backendOnline, lastSync };
 
   return session
-    ? <Dashboard session={session} onLogout={handleLogout} connectivity={connectivity} onSync={setLastSync} />
+    ? (
+      <Dashboard
+        session={session}
+        onLogout={handleLogout}
+        connectivity={connectivity}
+        onSync={setLastSync}
+        installPromptAvailable={Boolean(installPrompt) && !standalone}
+        onInstallApp={handleInstallApp}
+      />
+    )
     : <Login onLogin={handleLogin} />;
+}
+
+function isStandaloneApp() {
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+
+function getInitialDashboardView() {
+  const view = new URLSearchParams(window.location.search).get('view');
+  return ['protocol', 'hospital', 'icd10', 'devices'].includes(view) ? view : 'home';
 }
 
 function isLocalDevHost() {

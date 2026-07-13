@@ -2,15 +2,49 @@
   "name": "NANA",
   "short_name": "NANA",
   "description": "Notfall-Aufzeichnungs- und Nachbearbeitungs-Assistent",
-  "start_url": "/",
+  "id": "/",
+  "lang": "de-DE",
+  "start_url": "/?source=pwa",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
+  "orientation": "portrait-primary",
   "background_color": "#06111f",
   "theme_color": "#06111f",
+  "categories": ["medical", "productivity", "utilities"],
   "icons": [
     {
       "src": "/nana-icon.svg",
       "sizes": "any",
-      "type": "image/svg+xml"
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/nana-icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/nana-icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Protokoll",
+      "short_name": "Protokoll",
+      "description": "Direkt zur Einsatzdokumentation",
+      "url": "/?view=protocol",
+      "icons": [
+        {
+          "src": "/nana-icon-192.png",
+          "sizes": "192x192",
+          "type": "image/png"
+        }
+      ]
     }
   ]
 }

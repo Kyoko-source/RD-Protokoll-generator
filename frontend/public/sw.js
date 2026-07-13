@@ -1,8 +1,11 @@
-const CACHE_NAME = 'nana-app-shell-v3';
+const CACHE_NAME = 'nana-app-shell-v4';
 const APP_SHELL = [
   '/',
   '/manifest.webmanifest',
-  '/nana-icon.svg'
+  '/nana-icon.svg',
+  '/nana-icon-180.png',
+  '/nana-icon-192.png',
+  '/nana-icon-512.png'
 ];
 
 self.addEventListener('install', (event) => {
