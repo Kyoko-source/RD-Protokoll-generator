@@ -397,9 +397,79 @@ form button,
   cursor: pointer;
 }
 
-.protocol-toolbar button:last-child {
+.protocol-toolbar:not(.protocol-actionbar) > button:last-child {
   background: linear-gradient(135deg, #e43d5d 0%, #f08a30 100%);
   border-color: transparent;
+}
+
+.protocol-actionbar {
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 18px;
+  background:
+    linear-gradient(135deg, rgba(45, 124, 255, 0.08), rgba(228, 61, 93, 0.06)),
+    rgba(4, 12, 24, 0.30);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.18);
+}
+
+.toolbar-group {
+  display: inline-flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.toolbar-group-main {
+  justify-content: center;
+  flex: 1 1 520px;
+}
+
+.toolbar-group-end {
+  justify-content: flex-end;
+}
+
+.protocol-toolbar .toolbar-button {
+  min-height: 40px;
+  padding: 0 13px;
+  border-radius: 11px;
+  color: rgba(245, 250, 255, 0.90);
+  background: rgba(255, 255, 255, 0.065);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.08);
+}
+
+.protocol-toolbar .toolbar-button:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.105);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+.protocol-toolbar .toolbar-button.ghost {
+  color: rgba(235, 244, 255, 0.76);
+  background: rgba(255, 255, 255, 0.035);
+}
+
+.protocol-toolbar .toolbar-button.primary {
+  color: #061625;
+  background: linear-gradient(135deg, #63e6be 0%, #74b9ff 100%);
+  border-color: transparent;
+  box-shadow: 0 12px 24px rgba(18, 198, 178, 0.18);
+}
+
+.protocol-toolbar .toolbar-button.save {
+  color: #eafff8;
+  background: rgba(18, 198, 178, 0.14);
+  border-color: rgba(18, 198, 178, 0.28);
+}
+
+.protocol-toolbar .toolbar-button.danger {
+  color: #fff;
+  background: linear-gradient(135deg, #e43d5d 0%, #f08a30 100%);
+  border-color: transparent;
+  box-shadow: 0 12px 24px rgba(228, 61, 93, 0.18);
 }
 
 .protocol-tabs {
@@ -1605,6 +1675,19 @@ legend {
 
   .opqrst-nav {
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .protocol-actionbar,
+  .toolbar-group,
+  .toolbar-group-main,
+  .toolbar-group-end {
+    align-items: stretch;
+    width: 100%;
+  }
+
+  .toolbar-group {
+    display: grid;
+    grid-template-columns: 1fr;
   }
 
   .login-shell {

@@ -9,10 +9,12 @@ import {
   Download,
   FileText,
   HeartPulse,
+  Home,
   Lock,
   LogOut,
   Printer,
   RotateCcw,
+  Save,
   ShieldCheck,
   Stethoscope,
   Trash2,
@@ -2566,14 +2568,34 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         </div>
       </header>
 
-      <section className="protocol-toolbar">
-        <button type="button" onClick={onBack}>Zurück zum Hauptmenü</button>
-        <button type="button" onClick={checkQuality}><CheckCircle2 size={16} /> QS prüfen</button>
-        <button type="button" onClick={generateProtocol}>Protokoll generieren</button>
-        <button type="button" onClick={exportDraftPdf}><Download size={16} /> PDF</button>
-        <button type="button" onClick={printDraftPdf}><Printer size={16} /> Drucken</button>
-        <button type="button" onClick={saveDraft}>Entwurf speichern</button>
-        <button type="button" onClick={finishCase}>{forceFinish ? 'Mit Warnungen beenden' : 'Einsatz beenden'}</button>
+      <section className="protocol-toolbar protocol-actionbar">
+        <div className="toolbar-group toolbar-group-back">
+          <button type="button" className="toolbar-button ghost" onClick={onBack}>
+            <Home size={16} /> Hauptmenü
+          </button>
+        </div>
+        <div className="toolbar-group toolbar-group-main">
+          <button type="button" className="toolbar-button" onClick={checkQuality}>
+            <CheckCircle2 size={16} /> QS prüfen
+          </button>
+          <button type="button" className="toolbar-button primary" onClick={generateProtocol}>
+            <FileText size={16} /> Protokoll generieren
+          </button>
+          <button type="button" className="toolbar-button icon-label" onClick={exportDraftPdf}>
+            <Download size={16} /> PDF
+          </button>
+          <button type="button" className="toolbar-button icon-label" onClick={printDraftPdf}>
+            <Printer size={16} /> Drucken
+          </button>
+        </div>
+        <div className="toolbar-group toolbar-group-end">
+          <button type="button" className="toolbar-button save" onClick={saveDraft}>
+            <Save size={16} /> Entwurf speichern
+          </button>
+          <button type="button" className="toolbar-button danger" onClick={finishCase}>
+            {forceFinish ? 'Mit Warnungen beenden' : 'Einsatz beenden'}
+          </button>
+        </div>
       </section>
 
       {error && <div className="error-box">{error}</div>}
