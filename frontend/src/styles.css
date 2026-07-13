@@ -143,6 +143,155 @@ form button,
   color: #ffd9df;
 }
 
+.login-transition-shell {
+  min-height: 100vh;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  background:
+    linear-gradient(135deg, rgba(8, 20, 38, 0.98), rgba(16, 9, 30, 0.98)),
+    #06111f;
+  animation: transitionShellFade 2.3s ease forwards;
+}
+
+.login-transition-card {
+  position: relative;
+  display: grid;
+  justify-items: center;
+  gap: 18px;
+  padding: 32px;
+}
+
+.morph-logo {
+  position: relative;
+  display: flex;
+  gap: clamp(8px, 2.4vw, 18px);
+  align-items: center;
+  padding: 12px 4px;
+  isolation: isolate;
+}
+
+.morph-logo::before {
+  content: "";
+  position: absolute;
+  inset: -18px -28px;
+  z-index: -1;
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, transparent, rgba(45, 124, 255, 0.48), rgba(255, 60, 93, 0.48), transparent);
+  filter: blur(18px);
+  transform: translateX(-35%);
+  animation: morphSweep 1.55s ease-in-out infinite;
+}
+
+.morph-logo span {
+  display: inline-grid;
+  place-items: center;
+  width: clamp(54px, 11vw, 112px);
+  aspect-ratio: 1;
+  color: #eef8ff;
+  font-size: clamp(3.2rem, 10vw, 7.8rem);
+  font-weight: 1000;
+  line-height: 1;
+  border-radius: 30% 70% 62% 38% / 42% 34% 66% 58%;
+  background:
+    linear-gradient(145deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.02)),
+    rgba(4, 12, 24, 0.52);
+  border: 1px solid rgba(255, 255, 255, 0.13);
+  text-shadow:
+    0 0 12px rgba(93, 218, 255, 0.45),
+    0 0 24px rgba(255, 60, 93, 0.22);
+  animation: letterMorph 1.35s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+  animation-delay: var(--delay);
+}
+
+.morph-lightbar {
+  width: min(540px, 72vw);
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.morph-lightbar::before {
+  content: "";
+  display: block;
+  width: 42%;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #2d7cff, #63e6be, #ff3c5d);
+  animation: lightbarRun 1.2s ease-in-out infinite;
+}
+
+.login-transition-card p {
+  margin: 0;
+  color: rgba(235, 244, 255, 0.72);
+  font-weight: 900;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  animation: welcomeFade 2.1s ease forwards;
+}
+
+@keyframes letterMorph {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0deg) scale(1);
+    border-radius: 30% 70% 62% 38% / 42% 34% 66% 58%;
+  }
+  42% {
+    transform: translateY(-12px) rotate(-4deg) scale(1.07);
+    border-radius: 68% 32% 38% 62% / 30% 58% 42% 70%;
+  }
+  72% {
+    transform: translateY(4px) rotate(3deg) scale(0.98);
+    border-radius: 42% 58% 70% 30% / 62% 36% 64% 38%;
+  }
+}
+
+@keyframes morphSweep {
+  0%,
+  100% {
+    transform: translateX(-35%);
+    opacity: 0.42;
+  }
+  50% {
+    transform: translateX(35%);
+    opacity: 0.88;
+  }
+}
+
+@keyframes lightbarRun {
+  0% {
+    transform: translateX(-105%);
+  }
+  100% {
+    transform: translateX(245%);
+  }
+}
+
+@keyframes welcomeFade {
+  0%,
+  25% {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  45%,
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes transitionShellFade {
+  0%,
+  78% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+
 .success-box {
   margin: 0 0 16px;
   padding: 12px 14px;

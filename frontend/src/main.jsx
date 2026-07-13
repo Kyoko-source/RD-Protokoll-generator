@@ -676,6 +676,31 @@ function Login({ onLogin }) {
   );
 }
 
+function LoginTransition({ session, onComplete }) {
+  useEffect(() => {
+    const timer = window.setTimeout(onComplete, 2300);
+    return () => window.clearTimeout(timer);
+  }, [onComplete]);
+
+  const name = session?.employee?.name || 'NANA';
+
+  return (
+    <main className="login-transition-shell" aria-live="polite">
+      <div className="login-transition-card">
+        <div className="morph-logo" aria-label="NANA">
+          {['N', 'A', 'N', 'A'].map((letter, index) => (
+            <span key={`${letter}-${index}`} style={{ '--delay': `${index * 0.13}s` }}>
+              {letter}
+            </span>
+          ))}
+        </div>
+        <div className="morph-lightbar" />
+        <p>{name}</p>
+      </div>
+    </main>
+  );
+}
+
 function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvailable, onInstallApp }) {
   const [dashboard, setDashboard] = useState(null);
   const [cases, setCases] = useState([]);
@@ -3465,6 +3490,7 @@ function App() {
     const raw = localStorage.getItem('nana_session');
     return raw ? JSON.parse(raw) : null;
   });
+  const [pendingSession, setPendingSession] = useState(null);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [backendOnline, setBackendOnline] = useState(true);
   const [lastSync, setLastSync] = useState('');
@@ -3474,12 +3500,19 @@ function App() {
   function handleLogin(result) {
     const nextSession = { token: result.token, employee: result.employee, lastActivity: Date.now() };
     localStorage.setItem('nana_session', JSON.stringify(nextSession));
-    setSession(nextSession);
+    setPendingSession(nextSession);
   }
 
   function handleLogout() {
     localStorage.removeItem('nana_session');
+    setPendingSession(null);
     setSession(null);
+  }
+
+  function completeLoginTransition() {
+    if (!pendingSession) return;
+    setSession(pendingSession);
+    setPendingSession(null);
   }
 
   useEffect(() => {
@@ -3563,6 +3596,10 @@ function App() {
   }
 
   const connectivity = { online, backendOnline, lastSync };
+
+  if (pendingSession) {
+    return <LoginTransition session={pendingSession} onComplete={completeLoginTransition} />;
+  }
 
   return session
     ? (
