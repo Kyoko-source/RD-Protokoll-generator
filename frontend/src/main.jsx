@@ -3,6 +3,7 @@ import { createRoot } from 'react-dom/client';
 import {
   Activity,
   AlertTriangle,
+  ArrowLeft,
   Building2,
   Cable,
   CheckCircle2,
@@ -3109,6 +3110,11 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <span>Vorschau und Abschluss</span>
         </div>
         <section className="protocol-toolbar protocol-actionbar protocol-actionbar-panel">
+          <div className="toolbar-group toolbar-group-back">
+            <button type="button" className="toolbar-button ghost" onClick={() => setProtocolSection('abschluss')}>
+              <ArrowLeft size={16} /> Zurück
+            </button>
+          </div>
           <div className="toolbar-group toolbar-group-main">
             <button type="button" className="toolbar-button" onClick={checkQuality}>
               <CheckCircle2 size={16} /> QS prüfen
