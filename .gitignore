@@ -8,6 +8,8 @@ employees.json
 case_drafts.json
 nana.db
 nana.db-*
+backups/
+deploy/env.production
 frontend/node_modules/
 frontend/dist/
 backend/__pycache__/

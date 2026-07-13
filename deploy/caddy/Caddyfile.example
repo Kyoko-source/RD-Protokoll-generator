@@ -1,3 +1,7 @@
+{
+    email admin@example.de
+}
+
 nana.example.de {
     encode zstd gzip
 
@@ -8,5 +12,5 @@ nana.example.de {
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
     }
 
-    reverse_proxy 127.0.0.1:8000
+    reverse_proxy nana:8000
 }
