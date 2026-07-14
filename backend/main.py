@@ -401,7 +401,7 @@ def build_narrative_report(patient):
     identity = format_patient_identity(vital)
     symptom = format_symptom_summary(vital, s, o)
     if valid(symptom):
-        primary.append(f"Bei {identity} wurde praeklinisch folgendes Hauptproblem dokumentiert: {symptom}.")
+        primary.append(f"Bei {identity} wurde präklinisch folgendes Hauptproblem dokumentiert: {symptom}.")
     else:
         primary.append(f"Bei {identity} wurde ein Rettungsdiensteinsatz dokumentiert; ein Kurzbericht ist noch nicht hinterlegt.")
     if valid(amls.get("arbeitsdiagnose")):
@@ -444,7 +444,7 @@ def build_narrative_report(patient):
 
     actions = format_action_lines(measures)
     handover_sentence = compact_join([
-        f"Ziel/Empfaenger: {handover.get('ziel')}" if valid(handover.get("ziel")) else "",
+        f"Ziel/Empfänger: {handover.get('ziel')}" if valid(handover.get("ziel")) else "",
         handover.get("text"),
     ], " ")
 
@@ -452,8 +452,8 @@ def build_narrative_report(patient):
     text += add_paragraph("EINSATZBERICHT", primary)
     text += add_paragraph("ERSTBEFUND UND VERLAUF", [item for item in assessment if valid(item)])
     text += add_paragraph("ANAMNESE UND SCHMERZASSESSMENT", [item for item in history if valid(item)])
-    text += add_paragraph("MASSNAHMEN UND WIRKUNG", ["; ".join(actions) if actions else "Keine Maßnahmen/Medikationen dokumentiert."])
-    text += add_paragraph("UEBERGABE-KURZFAZIT", [handover_sentence])
+    text += add_paragraph("MAßNAHMEN UND WIRKUNG", ["; ".join(actions) if actions else "Keine Maßnahmen/Medikationen dokumentiert."])
+    text += add_paragraph("ÜBERGABE-KURZFAZIT", [handover_sentence])
     return text
 
 
@@ -512,41 +512,41 @@ def build_suspicion_assessment(patient):
     if any(term in text for term in ["atemnot", "dyspnoe", "luftnot"]) or xabcde.get("atmung") in ["Dyspnoe", "Tachypnoe", "Apnoe"] or (spo2 is not None and spo2 < 90):
         add(
             "Respiratorische Insuffizienz / akute Dyspnoe",
-            "Atemweg sichern und Atemarbeit engmaschig ueberwachen",
-            "Sauerstofftherapie titriert fortfuehren",
-            "Fruehe Zielklinikmeldung bei persistierender Hypoxie",
+            "Atemweg sichern und Atemarbeit engmaschig überwachen",
+            "Sauerstofftherapie titriert fortführen",
+            "Frühe Zielklinikmeldung bei persistierender Hypoxie",
         )
     if any(term in text for term in ["brust", "thorax", "retrosternal", "druck"]):
         add(
             "Akutes Koronarsyndrom (ACS) als Differenzialdiagnose",
             "12-Kanal-EKG und Verlaufskontrolle",
             "Schmerz- und Kreislaufmonitoring",
-            "Zeitkritischen Transport erwaegen",
+            "Zeitkritischen Transport erwägen",
         )
     if xabcde.get("avpu") in ["P", "U", "Pain", "Unresponsive"] or (gcs is not None and gcs <= 8):
         add(
-            "Schwere neurologische Beeintraechtigung",
+            "Schwere neurologische Beeinträchtigung",
             "Atemwegsschutz priorisieren",
             "Neurologischen Verlauf wiederholt dokumentieren",
             "Zielklinik mit neurologischer Versorgung bevorzugen",
         )
     if any(term in text for term in ["sturz", "unfall", "trauma", "kollision"]) or str(xabcde.get("bodycheck", "")).lower() == "auffällig":
         add(
-            "Traumatische Genese / relevante Verletzung moeglich",
-            "Vollstaendigen Bodycheck und Blutungskontrolle sichern",
-            "Immobilisationsbedarf pruefen",
+            "Traumatische Genese / relevante Verletzung möglich",
+            "Vollständigen Bodycheck und Blutungskontrolle sichern",
+            "Immobilisationsbedarf prüfen",
             "Traumazentrum-Indikation evaluieren",
         )
     if bz is not None and bz < 70:
-        add("Hypoglykaemie", "Sofortige Glukosegabe gemaess SOP", "Blutzucker nach Intervention kontrollieren")
+        add("Hypoglykämie", "Sofortige Glukosegabe gemäß SOP", "Blutzucker nach Intervention kontrollieren")
     elif bz is not None and bz > 250:
-        add("Hyperglykaeme Stoffwechsellage", "Hydratationsstatus und Vigilanz eng ueberwachen", "Zeitnahe klinische Abklaerung veranlassen")
+        add("Hyperglykäme Stoffwechsellage", "Hydratationsstatus und Vigilanz eng überwachen", "Zeitnahe klinische Abklärung veranlassen")
     if nrs is not None and nrs >= 7:
         add("Akutes Schmerzsyndrom", "Analgesiekonzept dokumentieren und Wirkung nachkontrollieren", "Schmerzverlauf seriell erfassen")
 
     if not suspicions:
-        suspicions.append("Aktuell keine klare Verdachtsdiagnose aus den verfuegbaren Angaben ableitbar")
-        recommendations.append("Datensatz vervollstaendigen und Verlauf engmaschig re-evaluieren")
+        suspicions.append("Aktuell keine klare Verdachtsdiagnose aus den verfügbaren Angaben ableitbar")
+        recommendations.append("Datensatz vervollständigen und Verlauf engmaschig re-evaluieren")
     return suspicions, recommendations
 
 
@@ -579,12 +579,12 @@ def build_amls_candidates(patient):
 
     if af is not None and af > 20:
         add("Lungenarterienembolie", "Kardiopulmonal", f"Tachypnoe mit AF {af:g}/min")
-        add("Sepsis / schwere Infektion", "Infektioes", f"Tachypnoe mit AF {af:g}/min")
+        add("Sepsis / schwere Infektion", "Infektiös", f"Tachypnoe mit AF {af:g}/min")
         add("Schock", "Kreislauf", f"Tachypnoe mit AF {af:g}/min als Kompensationszeichen")
     if spo2 is not None and spo2 < 95:
         add("Respiratorische Insuffizienz", "Respiratorisch", f"SpO2 {spo2:g} %")
-        add("Pneumonie", "Infektioes", f"SpO2 {spo2:g} %")
-        add("Kardiales Lungenoedem", "Kardiopulmonal", f"SpO2 {spo2:g} %")
+        add("Pneumonie", "Infektiös", f"SpO2 {spo2:g} %")
+        add("Kardiales Lungenödem", "Kardiopulmonal", f"SpO2 {spo2:g} %")
     if pulse is not None and pulse > 100:
         add("Tachyarrhythmie", "Kardial", f"Puls {pulse:g}/min")
         add("Schmerz-/Stressreaktion", "Sonstige", f"Puls {pulse:g}/min")
@@ -592,29 +592,29 @@ def build_amls_candidates(patient):
         add("Schock", "Kreislauf", f"Hypotonie mit RR syst. {rr_sys:g} mmHg")
         add("Blutung / Volumenmangel", "Kreislauf", f"Hypotonie mit RR syst. {rr_sys:g} mmHg")
     if temp is not None and temp >= 38:
-        add("Sepsis / schwere Infektion", "Infektioes", f"Fieber mit {temp:g} Grad C")
+        add("Sepsis / schwere Infektion", "Infektiös", f"Fieber mit {temp:g} Grad C")
     if gcs is not None and gcs < 15:
         add("Intrakranielle Ursache", "Neurologisch", f"GCS {gcs:g}")
         add("Intoxikation", "Toxikologisch", f"GCS {gcs:g}")
     if bz is not None and bz < 70:
-        add("Hypoglykaemie", "Metabolisch", f"BZ {bz:g} mg/dL")
+        add("Hypoglykämie", "Metabolisch", f"BZ {bz:g} mg/dL")
     if any(term in text for term in ["brust", "thorax", "retrosternal"]):
         add("Akutes Koronarsyndrom", "Kardial", "Thoraxbeschwerden dokumentiert")
-        add("Aortensyndrom / Aortendissektion", "Vaskulaer", "Zeitkritische Ursache bei Thoraxschmerz")
+        add("Aortensyndrom / Aortendissektion", "Vaskulär", "Zeitkritische Ursache bei Thoraxschmerz")
         add("Pneumothorax", "Respiratorisch", "Thoraxschmerz kann pleuropulmonal bedingt sein")
     if any(term in text for term in ["atemnot", "dyspnoe", "luftnot"]):
         add("Asthma/COPD-Exazerbation", "Respiratorisch", "Dyspnoe dokumentiert")
     if any(term in text for term in ["bauch", "abdomen", "kolik", "flanke"]):
         add("Akutes Abdomen", "Abdominell", "Abdominelle Beschwerden dokumentiert")
-        add("Atypisches akutes Koronarsyndrom", "Kardial", "Oberbauchbeschwerden koennen kardial bedingt sein")
+        add("Atypisches akutes Koronarsyndrom", "Kardial", "Oberbauchbeschwerden können kardial bedingt sein")
 
     if len(candidates) < 4:
         for name, category in [
-            ("Kardiale Ursache / Rhythmusstoerung", "Kardial"),
+            ("Kardiale Ursache / Rhythmusstörung", "Kardial"),
             ("Respiratorische Ursache", "Respiratorisch"),
             ("Neurologische Ursache", "Neurologisch"),
             ("Metabolische Entgleisung", "Metabolisch"),
-            ("Infektion / Sepsis", "Infektioes"),
+            ("Infektion / Sepsis", "Infektiös"),
             ("Intoxikation", "Toxikologisch"),
         ]:
             add(name, category, "Breiter AMLS-Sicherheitscheck bei unspezifischer Datenlage")
@@ -622,7 +622,7 @@ def build_amls_candidates(patient):
     for item in amls.get("custom_candidates", []):
         name = item.get("diagnose") if isinstance(item, dict) else item
         if valid(name):
-            add(str(name), "Eigene Ergaenzung", "Manuell zum Trichter hinzugefuegt")
+            add(str(name), "Eigene Ergänzung", "Manuell zum Trichter hinzugefügt")
 
     excluded_names = {
         str(item.get("diagnose") or item.get("name") or "").strip() if isinstance(item, dict) else str(item).strip()
@@ -630,7 +630,7 @@ def build_amls_candidates(patient):
         if valid(item)
     }
     for item in candidates:
-        conflicts = [] if item["category"] == "Eigene Ergaenzung" else amls_candidate_conflicts(item["name"], patient)
+        conflicts = [] if item["category"] == "Eigene Ergänzung" else amls_candidate_conflicts(item["name"], patient)
         item["conflicts"] = conflicts
         item["excluded"] = item["name"] in excluded_names
         item["status"] = "excluded" if item["excluded"] else "check" if conflicts else "matching"
@@ -649,20 +649,20 @@ def amls_candidate_conflicts(candidate_name, patient):
     gcs = as_number(vital.get("gcs"))
     bz = as_number(vital.get("bz"))
 
-    if any(term in name for term in ["pneumonie", "respirator", "asthma", "copd", "lungenembolie", "lungenoedem", "pneumothorax"]):
+    if any(term in name for term in ["pneumonie", "respirator", "asthma", "copd", "lungenembolie", "lungenödem", "lungenoedem", "pneumothorax"]):
         if spo2 is not None and spo2 >= 95 and str(xabcde.get("atmung", "")).lower() in ["unauffällig", "frei"]:
-            conflicts.append("SpO2/Atmung bislang unauffaellig dokumentiert")
+            conflicts.append("SpO2/Atmung bislang unauffällig dokumentiert")
     if any(term in name for term in ["schock", "blutung", "volumenmangel", "sepsis"]):
         if rr_sys is not None and rr_sys >= 100 and pulse is not None and pulse <= 100:
-            conflicts.append("RR/Puls sprechen aktuell nicht fuer Schock")
+            conflicts.append("RR/Puls sprechen aktuell nicht für Schock")
     if "sepsis" in name or "infektion" in name:
         if temp is not None and temp < 38:
             conflicts.append("Kein Fieber dokumentiert")
     if any(term in name for term in ["intrakraniell", "neurolog", "schlaganfall", "tia"]):
         if gcs is not None and gcs == 15 and xabcde.get("avpu") in ["Alert", "A", ""]:
-            conflicts.append("Vigilanz aktuell unauffaellig")
+            conflicts.append("Vigilanz aktuell unauffällig")
     if "hypogly" in name and bz is not None and bz >= 70:
-        conflicts.append("BZ nicht im hypoglykaemen Bereich")
+        conflicts.append("BZ nicht im hypoglykämischen Bereich")
     return conflicts
 
 
@@ -702,11 +702,11 @@ def calculate_medication(payload):
         else:
             meds.extend(["Salbutamol 2,5 mg vernebelt", "Ipratropiumbromid 500 mcg vernebelt"])
         meds.append("Prednisolon 100 mg i.v." if age > 12 else f"Prednisolon {round(2 * weight, 1)} mg i.v.")
-        actions.extend(["Oberkoerper hoch, beruhigen, Sauerstoff titrieren", "Nach 5 Minuten Wirkung re-evaluieren"])
-    elif sop == "Hypoglykaemie" or sop == "Hypoglykämie":
+        actions.extend(["Oberkörper hoch, beruhigen, Sauerstoff titrieren", "Nach 5 Minuten Wirkung re-evaluieren"])
+    elif sop == "Hypoglykämie":
         bz = float(inputs.get("bz", 55) or 55)
         if bz < 60:
-            meds.append("Glucose bis zu 16 g i.v. bei Bewusstseinsstoerung, sonst oral")
+            meds.append("Glucose bis zu 16 g i.v. bei Bewusstseinsstörung, sonst oral")
         else:
             notes.append("Aktueller BZ liegt nicht unter dem Standard-Schwellenwert 60 mg/dl")
         actions.append("BZ nach Intervention kontrollieren")
@@ -722,14 +722,14 @@ def calculate_medication(payload):
         elif rr > 220:
             meds.append("Urapidil 5-15 mg langsam i.v., titrierend")
         else:
-            notes.append("Keine primaere RR-Senkung im Standardfenster 120-220 mmHg")
+            notes.append("Keine primäre RR-Senkung im Standardfenster 120-220 mmHg")
         actions.extend(["Last-Seen-Well sichern", "Stroke-Unit-Voranmeldung priorisieren"])
-    elif sop == "Kardiales Lungenoedem" or sop == "Kardiales Lungenödem":
+    elif sop == "Kardiales Lungenödem":
         rr = float(inputs.get("rr_sys", 160) or 160)
         if rr > 120:
             meds.append("Glyceroltrinitrat 0,4-0,8 mg s.l.")
         meds.append("Furosemid 20 mg i.v. langsam, ggf. einmalige Repetition")
-        actions.append("CPAP/NIV fruehzeitig erwaegen")
+        actions.append("CPAP/NIV frühzeitig erwägen")
     elif sop == "Starke Schmerzen":
         nrs = float(inputs.get("nrs", 7) or 7)
         if nrs >= 3:
@@ -741,7 +741,7 @@ def calculate_medication(payload):
         notes.append("Dieser SOP-Pfad ist als Kurzreferenz angelegt; Detailrechner wird schrittweise erweitert.")
 
     if payload.pregnant == "Ja":
-        notes.append("Schwangerschaft: fruehe aerztliche Ruecksprache einplanen.")
+        notes.append("Schwangerschaft: frühe ärztliche Rücksprache einplanen.")
     return {"sop": sop, "medications": meds, "actions": actions, "notes": notes}
 
 
@@ -915,7 +915,7 @@ def generate_protocol_text(patient):
     text = "RD-PROTOKOLL - DOKUMENTATIONSENTWURF\n"
     text += "=" * 50 + "\n"
     text += f"Erstellt am {datetime.now().strftime('%d.%m.%Y um %H:%M:%S')} Uhr\n"
-    text += "Enthaelt ausschliesslich dokumentierte Angaben; vor Verwendung vollstaendig pruefen.\n\n"
+    text += "Enthält ausschließlich dokumentierte Angaben; vor Verwendung vollständig prüfen.\n\n"
     text += build_narrative_report(patient)
 
     text += add_lines("VITALWERTE & DEMOGRAPHIE", [
@@ -936,11 +936,11 @@ def generate_protocol_text(patient):
         ("A Atemweg", x.get("atemweg")),
         ("HWS", x.get("hws")),
         ("B Atmung", x.get("atmung")),
-        ("Atemgeraeusche", x.get("atemgeraeusche")),
+        ("Atemgeräusche", x.get("atemgeraeusche")),
         ("Sauerstoff", x.get("sauerstoff")),
         ("C Hautzeichen", x.get("haut")),
         ("Rekap", x.get("rekap")),
-        ("Pulsqualitaet", x.get("pulsqualitaet")),
+        ("Pulsqualität", x.get("pulsqualitaet")),
         ("D AVPU", x.get("avpu")),
         ("Pupillen", x.get("pupillen")),
         ("BE-FAST Balance", x.get("befast_balance")),
@@ -950,8 +950,8 @@ def generate_protocol_text(patient):
         ("BE-FAST Speech", x.get("befast_speech")),
         ("BE-FAST Time", x.get("befast_time")),
         ("E Bodycheck", x.get("bodycheck")),
-        ("Bodycheck Auffaelligkeiten", x.get("bodycheck_text")),
-        ("Unterkuehlung", "Ja" if x.get("unterkuehlung") else ""),
+        ("Bodycheck Auffälligkeiten", x.get("bodycheck_text")),
+        ("Unterkühlung", "Ja" if x.get("unterkuehlung") else ""),
         ("Verbrennung", "Ja" if x.get("verbrennung") else ""),
     ])
     text += add_lines("SAMPLERS", [
@@ -987,7 +987,7 @@ def generate_protocol_text(patient):
     text += add_lines("AMLS / VERDACHTSDIAGNOSTIK", [
         ("Leitsymptom", amls.get("leitsymptom")),
         ("Arbeitsdiagnose", amls.get("arbeitsdiagnose")),
-        ("Notizen / Begruendung", amls.get("notizen")),
+        ("Notizen / Begründung", amls.get("notizen")),
     ])
 
     candidates = amls.get("custom_candidates", [])
@@ -1005,20 +1005,20 @@ def generate_protocol_text(patient):
         lines = [amls_item_text(item, "begruendung") for item in excluded]
         lines = [line for line in lines if valid(line)]
         if lines:
-            text += "AMLS-Ausschluesse / zurueckgestellte Diagnosen\n" + ("=" * 50) + "\n"
+            text += "AMLS-Ausschlüsse / zurückgestellte Diagnosen\n" + ("=" * 50) + "\n"
             for line in lines:
                 text += f"- {line}\n"
             text += "\n"
 
-    text += add_lines("SINNHAFT-UEBERGABE", build_sinnhaft_rows(patient))
-    text += add_lines("UEBERGABE FREITEXT", [
-        ("Uebergabe Ziel", handover.get("ziel")),
-        ("Uebergabe Text", handover.get("text")),
+    text += add_lines("SINNHAFT-ÜBERGABE", build_sinnhaft_rows(patient))
+    text += add_lines("ÜBERGABE FREITEXT", [
+        ("Übergabe Ziel", handover.get("ziel")),
+        ("Übergabe Text", handover.get("text")),
     ])
 
     timeline = measures.get("timeline", [])
     if isinstance(timeline, list) and timeline:
-        text += "MASSNAHMEN\n" + ("=" * 50) + "\n"
+        text += "MAßNAHMEN\n" + ("=" * 50) + "\n"
         for item in timeline:
             if isinstance(item, dict):
                 text += f"{item.get('zeit', '')} - {item.get('massnahme', '')}\n"
@@ -1169,7 +1169,7 @@ def build_pdf_bytes(title, protocol_text, metadata=None):
     pdf.multi_cell(
         0,
         5,
-        pdf_safe("Hinweis: Dokumentationsentwurf. Vor medizinischer, rechtlicher oder abrechnungsrelevanter Weitergabe fachlich pruefen."),
+        pdf_safe("Hinweis: Dokumentationsentwurf. Vor medizinischer, rechtlicher oder abrechnungsrelevanter Weitergabe fachlich prüfen."),
     )
     data = pdf.output(dest="S")
     if isinstance(data, str):
@@ -1197,11 +1197,11 @@ def json_attachment(filename, payload):
 ICD10_BFARM_BASE_URL = "https://klassifikationen.bfarm.de/icd-10-gm/kode-suche/htmlgm2026/"
 ICD10_CATALOG_CACHE = {"loaded_at": None, "entries": [], "source": "Fallback", "error": ""}
 ICD10_FALLBACK_ENTRIES = [
-    {"code": "A00-B99", "diagnosis": "Bestimmte infektioese und parasitaere Krankheiten"},
+    {"code": "A00-B99", "diagnosis": "Bestimmte infektiöse und parasitäre Krankheiten"},
     {"code": "C00-D48", "diagnosis": "Neubildungen"},
-    {"code": "D50-D90", "diagnosis": "Krankheiten des Blutes und der blutbildenden Organe sowie Immunstoerungen"},
-    {"code": "E00-E90", "diagnosis": "Endokrine, Ernaehrungs- und Stoffwechselkrankheiten"},
-    {"code": "F00-F99", "diagnosis": "Psychische und Verhaltensstoerungen"},
+    {"code": "D50-D90", "diagnosis": "Krankheiten des Blutes und der blutbildenden Organe sowie Immunstörungen"},
+    {"code": "E00-E90", "diagnosis": "Endokrine, Ernährungs- und Stoffwechselkrankheiten"},
+    {"code": "F00-F99", "diagnosis": "Psychische und Verhaltensstörungen"},
     {"code": "G00-G99", "diagnosis": "Krankheiten des Nervensystems"},
     {"code": "H00-H59", "diagnosis": "Krankheiten des Auges und der Augenanhangsgebilde"},
     {"code": "H60-H95", "diagnosis": "Krankheiten des Ohres und des Warzenfortsatzes"},
@@ -1212,12 +1212,12 @@ ICD10_FALLBACK_ENTRIES = [
     {"code": "M00-M99", "diagnosis": "Krankheiten des Muskel-Skelett-Systems und des Bindegewebes"},
     {"code": "N00-N99", "diagnosis": "Krankheiten des Urogenitalsystems"},
     {"code": "O00-O99", "diagnosis": "Schwangerschaft, Geburt und Wochenbett"},
-    {"code": "P00-P96", "diagnosis": "Bestimmte Zustaende mit Ursprung in der Perinatalperiode"},
-    {"code": "Q00-Q99", "diagnosis": "Angeborene Fehlbildungen, Deformitaeten und Chromosomenanomalien"},
+    {"code": "P00-P96", "diagnosis": "Bestimmte Zustände mit Ursprung in der Perinatalperiode"},
+    {"code": "Q00-Q99", "diagnosis": "Angeborene Fehlbildungen, Deformitäten und Chromosomenanomalien"},
     {"code": "R00-R99", "diagnosis": "Symptome und abnorme klinische und Laborbefunde"},
-    {"code": "S00-T98", "diagnosis": "Verletzungen, Vergiftungen und andere Folgen aeusserer Ursachen"},
-    {"code": "U00-U99", "diagnosis": "Schluesselnummern fuer besondere Zwecke"},
-    {"code": "V01-Y84", "diagnosis": "Aeußere Ursachen von Morbiditaet und Mortalitaet"},
+    {"code": "S00-T98", "diagnosis": "Verletzungen, Vergiftungen und andere Folgen äußerer Ursachen"},
+    {"code": "U00-U99", "diagnosis": "Schlüsselnummern für besondere Zwecke"},
+    {"code": "V01-Y84", "diagnosis": "Äußere Ursachen von Morbidität und Mortalität"},
     {"code": "Z00-Z99", "diagnosis": "Faktoren, die den Gesundheitszustand beeinflussen"},
 ]
 ICD10_LOCAL = {
@@ -1459,7 +1459,7 @@ def current_employee(authorization: str | None = Header(default=None)):
 def require_admin(employee=Depends(current_employee)):
     if employee.get("role") != "admin":
         audit("api_admin_access_denied", employee=employee)
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Nur fuer Admins freigegeben.")
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Nur für Admins freigegeben.")
     return employee
 
 
@@ -1596,7 +1596,7 @@ def dashboard(employee=Depends(current_employee)):
         {"id": "refusal", "label": "Verweigerung", "subtitle": "Behandlungs-/Transportablehnung"},
         {"id": "hospital", "label": "Krankenhaus Finder", "subtitle": "Geeignete Zielklinik"},
         {"id": "icd10", "label": "ICD10 Code", "subtitle": "Code dekodieren"},
-        {"id": "devices", "label": "Geraete", "subtitle": "Kurzreferenzen"},
+        {"id": "devices", "label": "Geräte", "subtitle": "Kurzreferenzen"},
     ]
     if employee.get("role") == "admin":
         tiles.append({"id": "interfaces", "label": "Schnittstellen", "subtitle": "Import und Export"})
@@ -1959,12 +1959,12 @@ def admin_privacy(employee=Depends(require_admin)):
         "audit_events": audit_count,
         "expired_cases": len(expired_cases),
         "checklist": [
-            {"label": "Verschluesselung Patientendaten", "status": "ok" if encryption.get("enabled") else "warning", "detail": encryption.get("provider", "")},
-            {"label": "Externer Datenschluessel", "status": "ok" if encryption.get("key_source") == "environment" else "warning", "detail": encryption.get("production_hint", "")},
-            {"label": "Rollenbasierter Admin-Zugriff", "status": "ok", "detail": "Admin-Endpunkte sind rollenbeschraenkt."},
-            {"label": "Sitzungssperre", "status": "ok", "detail": f"Backend {SESSION_MINUTES} Minuten, Oberflaeche 20 Minuten."},
+            {"label": "Verschlüsselung Patientendaten", "status": "ok" if encryption.get("enabled") else "warning", "detail": encryption.get("provider", "")},
+            {"label": "Externer Datenschlüssel", "status": "ok" if encryption.get("key_source") == "environment" else "warning", "detail": encryption.get("production_hint", "")},
+            {"label": "Rollenbasierter Admin-Zugriff", "status": "ok", "detail": "Admin-Endpunkte sind rollenbeschränkt."},
+            {"label": "Sitzungssperre", "status": "ok", "detail": f"Backend {SESSION_MINUTES} Minuten, Oberfläche 20 Minuten."},
             {"label": "Aufbewahrungsfrist", "status": "ok" if retention_days <= 3650 else "warning", "detail": f"{retention_days} Tage konfiguriert."},
-            {"label": "Faellige Loeschungen", "status": "ok" if not expired_cases else "warning", "detail": f"{len(expired_cases)} Einsatz/Einsaetze abgelaufen."},
+            {"label": "Fällige Löschungen", "status": "ok" if not expired_cases else "warning", "detail": f"{len(expired_cases)} Einsatz/Einsätze abgelaufen."},
             {"label": "Audit-Trail", "status": "ok" if audit_count else "info", "detail": f"{audit_count} Ereignisse einsehbar."},
         ],
     }
@@ -2135,9 +2135,9 @@ def serve_frontend(full_path: str = ""):
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="API-Endpunkt nicht gefunden.")
     if not FRONTEND_DIST.exists():
         return HTMLResponse(
-            "<h1>NANA Backend laeuft</h1>"
-            "<p>Das Frontend wurde noch nicht gebaut. Bitte im Ordner frontend <code>npm run build</code> ausfuehren "
-            "oder die App ueber <code>http://127.0.0.1:5173</code> starten.</p>",
+            "<h1>NANA Backend läuft</h1>"
+            "<p>Das Frontend wurde noch nicht gebaut. Bitte im Ordner frontend <code>npm run build</code> ausführen "
+            "oder die App über <code>http://127.0.0.1:5173</code> starten.</p>",
             status_code=200,
         )
     requested = (FRONTEND_DIST / full_path).resolve()

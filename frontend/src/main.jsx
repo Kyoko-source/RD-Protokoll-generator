@@ -9,7 +9,6 @@ import {
   CheckCircle2,
   Download,
   FileText,
-  HeartPulse,
   Home,
   Lock,
   LogOut,
@@ -337,11 +336,11 @@ function generateLocalProtocolText(patient) {
   let text = 'RD-PROTOKOLL - DOKUMENTATIONSENTWURF\n';
   text += '==================================================\n';
   text += `Lokal erzeugt am ${new Date().toLocaleString('de-DE')}\n`;
-  text += 'Enthaelt ausschliesslich dokumentierte Angaben; vor Verwendung vollstaendig pruefen.\n\n';
+  text += 'Enthält ausschließlich dokumentierte Angaben; vor Verwendung vollständig prüfen.\n\n';
   const symptom = symptomSummary(vital, s, o);
   text += addProtocolParagraph('EINSATZBERICHT', [
     hasValue(symptom)
-      ? `Bei ${patientIdentity(vital)} wurde praeklinisch folgendes Hauptproblem dokumentiert: ${symptom}.`
+      ? `Bei ${patientIdentity(vital)} wurde präklinisch folgendes Hauptproblem dokumentiert: ${symptom}.`
       : `Bei ${patientIdentity(vital)} wurde ein Rettungsdiensteinsatz dokumentiert; ein Kurzbericht ist noch nicht hinterlegt.`,
     hasValue(amls.arbeitsdiagnose) ? `Als Arbeitsdiagnose/Verdacht wurde ${amls.arbeitsdiagnose} festgehalten.` : ''
   ]);
@@ -361,7 +360,7 @@ function generateLocalProtocolText(patient) {
       hasValue(x.bodycheck) ? `E ${x.bodycheck}` : ''
     ])
   ]);
-  text += addProtocolParagraph('MASSNAHMEN UND WIRKUNG', [actionLines(measures).join('; ') || 'Keine Maßnahmen/Medikationen dokumentiert.']);
+  text += addProtocolParagraph('MAßNAHMEN UND WIRKUNG', [actionLines(measures).join('; ') || 'Keine Maßnahmen/Medikationen dokumentiert.']);
   text += addProtocolBlock('VITALWERTE & DEMOGRAPHIE', [
     ['Alter', vital.alter],
     ['Geschlecht', vital.geschlecht],
@@ -388,7 +387,7 @@ function generateLocalProtocolText(patient) {
     ['D AVPU', x.avpu],
     ['Pupillen', x.pupillen],
     ['E Bodycheck', x.bodycheck],
-    ['Auffaelligkeiten', x.bodycheck_text],
+    ['Auffälligkeiten', x.bodycheck_text],
     ['Unterkühlung', x.unterkuehlung ? 'Ja' : ''],
     ['Verbrennung', x.verbrennung ? 'Ja' : ''],
     ['BE-FAST Balance', x.befast_balance],
@@ -431,20 +430,20 @@ function generateLocalProtocolText(patient) {
   text += addProtocolBlock('AMLS / VERDACHTSDIAGNOSTIK', [
     ['Leitsymptom', amls.leitsymptom],
     ['Arbeitsdiagnose', amls.arbeitsdiagnose],
-    ['Notizen/Begruendung', amls.notizen],
+    ['Notizen/Begründung', amls.notizen],
   ]);
   text += renderListBlock('Differenzialdiagnosen / Kandidaten', amls.custom_candidates, (item) => {
     const candidate = typeof item === 'string' ? { diagnose: item } : item || {};
     return [candidate.diagnose || candidate.name, candidate.hinweis || candidate.rationale].filter(hasValue).join(': ');
   });
-  text += renderListBlock('AMLS-Ausschluesse / zurueckgestellt', amls.excluded, (item) => {
+  text += renderListBlock('AMLS-Ausschlüsse / zurückgestellt', amls.excluded, (item) => {
     const excluded = typeof item === 'string' ? { diagnose: item } : item || {};
     return [excluded.diagnose || excluded.name, excluded.begruendung || excluded.rationale].filter(hasValue).join(': ');
   });
-  text += renderListBlock('MASSNAHMEN', measures.timeline, (item) => `${item.zeit || ''} - ${item.massnahme || ''}`.trim());
+  text += renderListBlock('MAßNAHMEN', measures.timeline, (item) => `${item.zeit || ''} - ${item.massnahme || ''}`.trim());
   text += renderListBlock('MEDIKATION', measures.medikation, (item) => `${item.zeit || ''} - ${item.medikament || ''} ${item.dosis || ''} ${item.weg || ''}`.trim());
-  text += addProtocolBlock('SINNHAFT-UEBERGABE', sinnhaftRows(patient));
-  text += addProtocolBlock('UEBERGABE', [
+  text += addProtocolBlock('SINNHAFT-ÜBERGABE', sinnhaftRows(patient));
+  text += addProtocolBlock('ÜBERGABE', [
     ['Ziel', handover.ziel],
     ['Text', handover.text],
   ]);
@@ -559,6 +558,40 @@ function printBlob(blob) {
     printWindow.addEventListener('load', () => printWindow.print(), { once: true });
   }
   window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+}
+
+function printTextDocument(title, text) {
+  const printWindow = window.open('', '_blank', 'noopener,noreferrer');
+  if (!printWindow) return false;
+  const escapedTitle = String(title || '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[char]));
+  const escapedText = String(text || '').replace(/[&<>"']/g, (char) => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[char]));
+  printWindow.document.write(`
+    <!doctype html>
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>${escapedTitle}</title>
+        <style>
+          @page { margin: 14mm; }
+          body { font-family: Arial, Helvetica, sans-serif; color: #111; line-height: 1.35; font-size: 11pt; }
+          h1 { font-size: 16pt; margin: 0 0 12px; }
+          pre { white-space: pre-wrap; font-family: Arial, Helvetica, sans-serif; margin: 0; }
+        </style>
+      </head>
+      <body>
+        <h1>${escapedTitle}</h1>
+        <pre>${escapedText}</pre>
+      </body>
+    </html>
+  `);
+  printWindow.document.close();
+  printWindow.focus();
+  window.setTimeout(() => printWindow.print(), 150);
+  return true;
 }
 
 function SystemStatus({ online, backendOnline, lastSync }) {
@@ -938,10 +971,6 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
         <div>
           <Activity size={20} />
           <span>{activeCases.length} archivierte Einsätze sichtbar</span>
-        </div>
-        <div>
-          <HeartPulse size={20} />
-          <span>Streamlit-Prototyp bleibt parallel verfügbar</span>
         </div>
       </section>
 
@@ -2935,6 +2964,11 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     setStatusText('Patientenverweigerung wurde als TXT vorbereitet.');
   }
 
+  function printRefusalText() {
+    const opened = printTextDocument('Patientenverweigerung', refusalText);
+    setStatusText(opened ? 'Druckfenster wurde geöffnet.' : 'Druckfenster konnte nicht geöffnet werden.');
+  }
+
   async function generateProtocol() {
     setError('');
     setStatusText('');
@@ -3139,13 +3173,6 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           onClick={() => setProtocolSection('protokoll')}
         >
           Dokumentation
-        </button>
-        <button
-          type="button"
-          className={protocolSection === 'verweigerung' ? 'active' : ''}
-          onClick={() => setProtocolSection('verweigerung')}
-        >
-          Verweigerung
         </button>
       </section>
 
@@ -3464,7 +3491,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       {protocolSection === 'rechner' && <section className="work-panel">
         <div className="section-head">
           <h2>Medikamentenrechner</h2>
-          <span>SOP-Unterstützung aus dem Streamlit-Prototyp</span>
+          <span>SOP-Unterstützung</span>
         </div>
         <div className="form-grid">
           <label>
@@ -3636,7 +3663,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
       {protocolSection === 'verweigerung' && <section className="work-panel refusal-panel">
         <div className="section-head">
-          <h2>Patienten Verweigerung</h2>
+          <h2>Patientenverweigerung</h2>
           <span>Textbaustein zum Kopieren</span>
         </div>
         <div className="form-grid">
@@ -3679,6 +3706,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         </div>
         <div className="protocol-toolbar compact-toolbar">
           <button type="button" onClick={downloadRefusalText}>TXT herunterladen</button>
+          <button type="button" onClick={printRefusalText}>Drucken</button>
         </div>
         <textarea
           className="protocol-preview refusal-preview"
