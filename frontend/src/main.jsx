@@ -2894,7 +2894,8 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     }));
   }
 
-  function toggleUebergabeOption(key, option) {
+  function addUebergabeOption(key, option) {
+    if (!option) return;
     setPatient((current) => {
       const currentText = String((current.uebergabe || {})[key] || '');
       const values = currentText
@@ -2902,9 +2903,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         .map((value) => value.trim())
         .filter(Boolean);
       const exists = values.some((value) => value.toLowerCase() === option.toLowerCase());
-      const nextValues = exists
-        ? values.filter((value) => value.toLowerCase() !== option.toLowerCase())
-        : [...values, option];
+      const nextValues = exists ? values : [...values, option];
       return {
         ...current,
         uebergabe: {
@@ -2913,13 +2912,6 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         }
       };
     });
-  }
-
-  function handoverOptionSelected(key, option) {
-    return String(uebergabe[key] || '')
-      .split(',')
-      .map((value) => value.trim().toLowerCase())
-      .includes(option.toLowerCase());
   }
 
   function addMeasure() {
@@ -3979,18 +3971,10 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             <div className="form-grid handover-extra-grid">
               <div className="choice-field full-span">
                 <span>Lagerung / Transfertechnik</span>
-                <div className="option-chip-grid">
-                  {handoverQuickOptions.lagerung.map((option) => (
-                    <button
-                      type="button"
-                      key={`lagerung-${option}`}
-                      className={handoverOptionSelected('lagerung', option) ? 'option-chip active' : 'option-chip'}
-                      onClick={() => toggleUebergabeOption('lagerung', option)}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
+                <select value="" onChange={(event) => addUebergabeOption('lagerung', event.target.value)}>
+                  <option value="">Auswahl hinzufügen</option>
+                  {handoverQuickOptions.lagerung.map((option) => <option key={`lagerung-${option}`} value={option}>{option}</option>)}
+                </select>
                 <textarea value={uebergabe.lagerung || ''} onChange={(event) => updateUebergabe('lagerung', event.target.value)} rows={2} placeholder="Weitere Lagerung/Transfertechnik ergänzen" />
               </div>
               <label>
@@ -4006,34 +3990,18 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
               </label>
               <div className="choice-field full-span">
                 <span>Wertsachen / Eigentum</span>
-                <div className="option-chip-grid">
-                  {handoverQuickOptions.wertsachen.map((option) => (
-                    <button
-                      type="button"
-                      key={`wertsachen-${option}`}
-                      className={handoverOptionSelected('wertsachen', option) ? 'option-chip active' : 'option-chip'}
-                      onClick={() => toggleUebergabeOption('wertsachen', option)}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
+                <select value="" onChange={(event) => addUebergabeOption('wertsachen', event.target.value)}>
+                  <option value="">Auswahl hinzufügen</option>
+                  {handoverQuickOptions.wertsachen.map((option) => <option key={`wertsachen-${option}`} value={option}>{option}</option>)}
+                </select>
                 <textarea value={uebergabe.wertsachen || ''} onChange={(event) => updateUebergabe('wertsachen', event.target.value)} rows={2} placeholder="Weitere Wertsachen oder Übergabeort ergänzen" />
               </div>
               <div className="choice-field full-span">
                 <span>Patientenunterlagen / Medikamente</span>
-                <div className="option-chip-grid">
-                  {handoverQuickOptions.unterlagen.map((option) => (
-                    <button
-                      type="button"
-                      key={`unterlagen-${option}`}
-                      className={handoverOptionSelected('unterlagen', option) ? 'option-chip active' : 'option-chip'}
-                      onClick={() => toggleUebergabeOption('unterlagen', option)}
-                    >
-                      {option}
-                    </button>
-                  ))}
-                </div>
+                <select value="" onChange={(event) => addUebergabeOption('unterlagen', event.target.value)}>
+                  <option value="">Auswahl hinzufügen</option>
+                  {handoverQuickOptions.unterlagen.map((option) => <option key={`unterlagen-${option}`} value={option}>{option}</option>)}
+                </select>
                 <textarea value={uebergabe.unterlagen || ''} onChange={(event) => updateUebergabe('unterlagen', event.target.value)} rows={2} placeholder="Weitere Unterlagen oder Medikamente ergänzen" />
               </div>
               <label>

@@ -1702,33 +1702,6 @@ form button,
   color: rgba(226, 232, 240, 0.88);
 }
 
-.option-chip-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
-}
-
-.option-chip {
-  min-height: 48px;
-  padding: 10px 12px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.11);
-  background: rgba(255, 255, 255, 0.055);
-  color: rgba(239, 248, 255, 0.9);
-  font-weight: 830;
-  text-align: center;
-  cursor: pointer;
-  user-select: none;
-  touch-action: manipulation;
-}
-
-.option-chip.active {
-  color: #f8fffd;
-  background: linear-gradient(135deg, rgba(15, 118, 110, 0.78), rgba(45, 212, 191, 0.40));
-  border-color: rgba(99, 230, 190, 0.58);
-  box-shadow: 0 0 0 1px rgba(99, 230, 190, 0.08), 0 14px 28px rgba(0, 0, 0, 0.18);
-}
-
 .handover-preview {
   display: grid;
   gap: 9px;
