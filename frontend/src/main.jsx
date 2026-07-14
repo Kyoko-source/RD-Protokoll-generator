@@ -451,6 +451,44 @@ function generateLocalProtocolText(patient) {
   return text.trim();
 }
 
+function valueOrBlank(value, blank = '__________') {
+  return hasValue(value) ? String(value).trim() : blank;
+}
+
+function buildPatientRefusalText(patient, refusal) {
+  const vital = patient?.vitalwerte || {};
+  const einsatz = patient?.einsatz || {};
+  const identityParts = [];
+  if (hasValue(vital.geschlecht)) identityParts.push(vital.geschlecht);
+  if (hasValue(vital.alter)) identityParts.push(`${vital.alter} Jahre`);
+  const identity = identityParts.length ? ` (${identityParts.join(', ')})` : '';
+  const patientName = valueOrBlank(refusal.patient_name);
+  const presentedTo = valueOrBlank(refusal.presented_to);
+  const caseNumber = valueOrBlank(refusal.case_number || einsatz.einsatznummer);
+  const dateText = valueOrBlank(refusal.date);
+  const timeText = valueOrBlank(refusal.time);
+  const scope = valueOrBlank(refusal.scope, 'eine weitere rettungsdienstliche Versorgung / der Transport');
+  const reason = valueOrBlank(refusal.reason);
+  const risks = valueOrBlank(refusal.risks, 'mögliche gesundheitliche Risiken und Folgen');
+  const witness = valueOrBlank(refusal.witness);
+
+  return [
+    'Patientenverweigerung',
+    '',
+    `Der/Die Patient/in ${patientName}${identity} wurde heute, am ${dateText} um ${timeText} Uhr, dem ${presentedTo} durch den Rettungsdienst mit der Einsatznummer ${caseNumber} vorgestellt.`,
+    '',
+    `Nach Untersuchung, Aufklärung und Beratung verweigert der/die Patient/in ${scope}. Als Grund wurde angegeben: ${reason}.`,
+    '',
+    `Der/Die Patient/in wurde über ${risks} aufgeklärt. Insbesondere wurde darauf hingewiesen, dass sich der Gesundheitszustand verschlechtern kann und bei erneuten oder zunehmenden Beschwerden unverzüglich erneut der Rettungsdienst bzw. ärztliche Hilfe zu verständigen ist.`,
+    '',
+    'Der/Die Patient/in war zum Zeitpunkt der Aufklärung wach, orientiert und nach Einschätzung des Rettungsdienstpersonals einwilligungsfähig, sofern nicht anders dokumentiert. Die Verweigerung erfolgte gegen den ausdrücklichen Rat des Rettungsdienstes.',
+    '',
+    `Zeuge/Zeugin: ${witness}`,
+    'Unterschrift Patient/in: __________',
+    'Unterschrift Rettungsdienst: __________'
+  ].join('\n');
+}
+
 function api(path, options = {}, token = '') {
   const headers = {
     'Content-Type': 'application/json',
@@ -1300,6 +1338,8 @@ function HospitalView({ session, employee, onBack, onOpenProtocol, onLogout }) {
 function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
   const [code, setCode] = useState('');
   const [result, setResult] = useState(null);
+  const [catalogQuery, setCatalogQuery] = useState('');
+  const [catalogResult, setCatalogResult] = useState({ entries: [], source: '', catalog_size: 0 });
   const [patient, setPatient] = useState(emptyPatient);
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
@@ -1309,6 +1349,21 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
       .then((data) => setPatient({ ...emptyPatient, ...(data.patient || {}) }))
       .catch((err) => setError(err.message));
   }, [session.token]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(async () => {
+      try {
+        const data = await api('/api/icd10/search', {
+          method: 'POST',
+          body: JSON.stringify({ query: catalogQuery, limit: 80 })
+        }, session.token);
+        setCatalogResult(data);
+      } catch (err) {
+        setError(err.message);
+      }
+    }, 250);
+    return () => window.clearTimeout(timer);
+  }, [catalogQuery, session.token]);
 
   async function lookup() {
     setError('');
@@ -1324,14 +1379,15 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
     }
   }
 
-  async function applyIcd() {
-    if (!result) return;
+  async function applyIcdEntry(entry) {
+    if (!entry) return;
     const nextPatient = {
       ...patient,
       einweisung: {
         ...(patient.einweisung || {}),
-        icd_code: result.code,
-        diagnose: result.diagnosis
+        icd_code: entry.code,
+        diagnose: entry.diagnosis,
+        source_url: entry.source_url || ''
       }
     };
     try {
@@ -1344,6 +1400,11 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  async function applyIcd() {
+    if (!result) return;
+    await applyIcdEntry(result);
   }
 
   return (
@@ -1367,7 +1428,27 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
       <section className="work-panel icd-panel">
         <div className="section-head">
           <h2>ICD10 suchen</h2>
-          <span>lokaler Grundkatalog</span>
+          <span>{catalogResult.source || 'ICD-10-GM-Katalog'}</span>
+        </div>
+        <div className="icd-catalog-meta">
+          <strong>{catalogResult.catalog_size || 0}</strong>
+          <span>hinterlegte ICD10-Einträge</span>
+        </div>
+        <label className="full-span">
+          ICD10-Katalog durchsuchen
+          <input
+            value={catalogQuery}
+            onChange={(event) => setCatalogQuery(event.target.value)}
+            placeholder="Code oder Diagnose, z.B. J45, Asthma, Schlaganfall"
+          />
+        </label>
+        <div className="icd-results-list">
+          {(catalogResult.entries || []).map((entry) => (
+            <button type="button" key={`${entry.code}-${entry.diagnosis}`} onClick={() => applyIcdEntry(entry)}>
+              <strong>{entry.code}</strong>
+              <span>{entry.diagnosis}</span>
+            </button>
+          ))}
         </div>
         <div className="icd-search">
           <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="z.B. I21.9, I63, R55" />
@@ -1901,6 +1982,20 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const [amlsSuggestions, setAmlsSuggestions] = useState([]);
   const [calculator, setCalculator] = useState({ sop: 'Anaphylaxie (SOPKB0105)', age: '30', weight: '70', pregnant: 'Nein', bz: '55', rr_sys: '160', nrs: '7' });
   const [calculatorResult, setCalculatorResult] = useState(null);
+  const [refusal, setRefusal] = useState(() => {
+    const now = new Date();
+    return {
+      patient_name: '',
+      presented_to: '',
+      case_number: '',
+      date: now.toLocaleDateString('de-DE'),
+      time: now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
+      scope: 'eine weitere rettungsdienstliche Versorgung / der Transport',
+      reason: '',
+      risks: 'mögliche Verschlechterung, verzögerte Diagnostik/Therapie, bleibende Schäden bis hin zu Lebensgefahr',
+      witness: ''
+    };
+  });
   const vitalwerte = patient.vitalwerte || {};
   const xabcde = patient.xabcde || {};
   const samplers = patient.samplers || {};
@@ -1927,6 +2022,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const amlsMatchingCount = amlsVisibleCandidates.filter((item) => !amlsExcludedNames.has(item.name) && !(item.conflicts || []).length).length;
   const amlsCheckCount = amlsVisibleCandidates.filter((item) => !amlsExcludedNames.has(item.name) && (item.conflicts || []).length).length;
   const sinnhaftPreviewRows = sinnhaftRows(patient);
+  const refusalText = buildPatientRefusalText(patient, refusal);
   const xabcdeCompletedCount = xabcdeSections.filter((section) => xabcdeSectionComplete(section.key)).length;
   const xabcdeOpenSections = xabcdeSections.filter((section) => !xabcdeSectionComplete(section.key)).map((section) => section.key);
   const samplersCompletedCount = samplersSections.filter((section) => samplersSectionComplete(section.key)).length;
@@ -2800,6 +2896,15 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     }
   }
 
+  function updateRefusal(key, value) {
+    setRefusal((current) => ({ ...current, [key]: value }));
+  }
+
+  function downloadRefusalText() {
+    downloadBlob(new Blob([refusalText], { type: 'text/plain;charset=utf-8' }), 'Patientenverweigerung.txt');
+    setStatusText('Patientenverweigerung wurde als TXT vorbereitet.');
+  }
+
   async function generateProtocol() {
     setError('');
     setStatusText('');
@@ -3004,6 +3109,13 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           onClick={() => setProtocolSection('protokoll')}
         >
           Protokoll
+        </button>
+        <button
+          type="button"
+          className={protocolSection === 'verweigerung' ? 'active' : ''}
+          onClick={() => setProtocolSection('verweigerung')}
+        >
+          Verweigerung
         </button>
       </section>
 
@@ -3490,6 +3602,60 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             ))}
           </aside>
         </div>
+      </section>}
+
+      {protocolSection === 'verweigerung' && <section className="work-panel refusal-panel">
+        <div className="section-head">
+          <h2>Patienten Verweigerung</h2>
+          <span>Textbaustein zum Kopieren</span>
+        </div>
+        <div className="form-grid">
+          <label>
+            Patient/in
+            <input value={refusal.patient_name} onChange={(event) => updateRefusal('patient_name', event.target.value)} placeholder="Name oder frei lassen" />
+          </label>
+          <label>
+            Vorgestellt dem/der
+            <input value={refusal.presented_to} onChange={(event) => updateRefusal('presented_to', event.target.value)} placeholder="z.B. Notarzt / Ärztin / Rettungsdienst" />
+          </label>
+          <label>
+            Einsatznummer
+            <input value={refusal.case_number || patient.einsatz?.einsatznummer || ''} onChange={(event) => updateRefusal('case_number', event.target.value)} placeholder="wird aus Einsatzdaten übernommen" />
+          </label>
+          <label>
+            Datum
+            <input value={refusal.date} onChange={(event) => updateRefusal('date', event.target.value)} />
+          </label>
+          <label>
+            Uhrzeit
+            <input value={refusal.time} onChange={(event) => updateRefusal('time', event.target.value)} />
+          </label>
+          <label>
+            Zeuge/Zeugin
+            <input value={refusal.witness} onChange={(event) => updateRefusal('witness', event.target.value)} placeholder="optional" />
+          </label>
+          <label className="full-span">
+            Verweigert wird
+            <input value={refusal.scope} onChange={(event) => updateRefusal('scope', event.target.value)} />
+          </label>
+          <label className="full-span">
+            Angegebener Grund
+            <textarea value={refusal.reason} onChange={(event) => updateRefusal('reason', event.target.value)} rows={3} placeholder="z.B. möchte zu Hause verbleiben / lehnt Transport ab" />
+          </label>
+          <label className="full-span">
+            Aufklärung über Risiken
+            <textarea value={refusal.risks} onChange={(event) => updateRefusal('risks', event.target.value)} rows={3} />
+          </label>
+        </div>
+        <div className="protocol-toolbar compact-toolbar">
+          <button type="button" onClick={downloadRefusalText}>TXT herunterladen</button>
+        </div>
+        <textarea
+          className="protocol-preview refusal-preview"
+          value={refusalText}
+          readOnly
+          rows={16}
+        />
       </section>}
 
       {protocolSection === 'protokoll' && <section className="work-panel">

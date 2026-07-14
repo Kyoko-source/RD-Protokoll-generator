@@ -1208,6 +1208,47 @@ form button,
   gap: 10px;
 }
 
+.icd-catalog-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  margin-bottom: 14px;
+  padding: 8px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(235, 244, 255, 0.78);
+  font-weight: 800;
+}
+
+.icd-results-list {
+  display: grid;
+  gap: 8px;
+  max-height: 430px;
+  overflow: auto;
+  margin: 12px 0 18px;
+}
+
+.icd-results-list button {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 48px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  color: #f7fbff;
+  background: rgba(4, 12, 24, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  text-align: left;
+  cursor: pointer;
+}
+
+.icd-results-list button:hover {
+  border-color: rgba(80, 210, 185, 0.45);
+  background: rgba(11, 37, 55, 0.64);
+}
+
 .icd-result {
   display: grid;
   gap: 8px;
@@ -1590,6 +1631,10 @@ form button,
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+}
+
+.full-span {
+  grid-column: 1 / -1;
 }
 
 .vital-pair {
@@ -2311,6 +2356,14 @@ legend {
   min-height: 520px;
   font-family: "Cascadia Mono", "Consolas", monospace;
   line-height: 1.45;
+}
+
+.refusal-panel .protocol-toolbar {
+  margin-top: 16px;
+}
+
+.refusal-preview {
+  min-height: 390px;
 }
 
 .case-row {

@@ -1,6 +1,10 @@
 import secrets
 import json
 import os
+import html
+import re
+import urllib.error
+import urllib.request
 from pathlib import Path
 from datetime import datetime, timedelta
 
@@ -117,6 +121,11 @@ class InterfaceImportRequest(BaseModel):
 
 class IcdLookupRequest(BaseModel):
     code: str
+
+
+class IcdSearchRequest(BaseModel):
+    query: str = ""
+    limit: int = 80
 
 
 class HospitalSaveRequest(BaseModel):
@@ -1185,6 +1194,32 @@ def json_attachment(filename, payload):
     )
 
 
+ICD10_BFARM_BASE_URL = "https://klassifikationen.bfarm.de/icd-10-gm/kode-suche/htmlgm2026/"
+ICD10_CATALOG_CACHE = {"loaded_at": None, "entries": [], "source": "Fallback", "error": ""}
+ICD10_FALLBACK_ENTRIES = [
+    {"code": "A00-B99", "diagnosis": "Bestimmte infektioese und parasitaere Krankheiten"},
+    {"code": "C00-D48", "diagnosis": "Neubildungen"},
+    {"code": "D50-D90", "diagnosis": "Krankheiten des Blutes und der blutbildenden Organe sowie Immunstoerungen"},
+    {"code": "E00-E90", "diagnosis": "Endokrine, Ernaehrungs- und Stoffwechselkrankheiten"},
+    {"code": "F00-F99", "diagnosis": "Psychische und Verhaltensstoerungen"},
+    {"code": "G00-G99", "diagnosis": "Krankheiten des Nervensystems"},
+    {"code": "H00-H59", "diagnosis": "Krankheiten des Auges und der Augenanhangsgebilde"},
+    {"code": "H60-H95", "diagnosis": "Krankheiten des Ohres und des Warzenfortsatzes"},
+    {"code": "I00-I99", "diagnosis": "Krankheiten des Kreislaufsystems"},
+    {"code": "J00-J99", "diagnosis": "Krankheiten des Atmungssystems"},
+    {"code": "K00-K93", "diagnosis": "Krankheiten des Verdauungssystems"},
+    {"code": "L00-L99", "diagnosis": "Krankheiten der Haut und der Unterhaut"},
+    {"code": "M00-M99", "diagnosis": "Krankheiten des Muskel-Skelett-Systems und des Bindegewebes"},
+    {"code": "N00-N99", "diagnosis": "Krankheiten des Urogenitalsystems"},
+    {"code": "O00-O99", "diagnosis": "Schwangerschaft, Geburt und Wochenbett"},
+    {"code": "P00-P96", "diagnosis": "Bestimmte Zustaende mit Ursprung in der Perinatalperiode"},
+    {"code": "Q00-Q99", "diagnosis": "Angeborene Fehlbildungen, Deformitaeten und Chromosomenanomalien"},
+    {"code": "R00-R99", "diagnosis": "Symptome und abnorme klinische und Laborbefunde"},
+    {"code": "S00-T98", "diagnosis": "Verletzungen, Vergiftungen und andere Folgen aeusserer Ursachen"},
+    {"code": "U00-U99", "diagnosis": "Schluesselnummern fuer besondere Zwecke"},
+    {"code": "V01-Y84", "diagnosis": "Aeußere Ursachen von Morbiditaet und Mortalitaet"},
+    {"code": "Z00-Z99", "diagnosis": "Faktoren, die den Gesundheitszustand beeinflussen"},
+]
 ICD10_LOCAL = {
     "I21": "Akuter Myokardinfarkt",
     "I20": "Angina pectoris",
@@ -1204,21 +1239,104 @@ ICD10_LOCAL = {
 
 
 def normalize_icd_code(value):
-    return str(value or "").strip().upper().replace(" ", "")
+    code = re.sub(r"\s+", "", str(value or "")).upper()
+    return code.rstrip("!+*#")
+
+
+def clean_icd_title(value):
+    text = html.unescape(re.sub(r"<[^>]+>", " ", str(value or "")))
+    return re.sub(r"\s+", " ", text).strip()
+
+
+def load_icd10_catalog(force=False):
+    now = datetime.utcnow()
+    loaded_at = ICD10_CATALOG_CACHE.get("loaded_at")
+    if (
+        not force
+        and loaded_at
+        and ICD10_CATALOG_CACHE.get("entries")
+        and now - loaded_at < timedelta(days=7)
+    ):
+        return ICD10_CATALOG_CACHE
+
+    try:
+        request = urllib.request.Request(ICD10_BFARM_BASE_URL, headers={"User-Agent": "NANA-RD-Protokoll/1.0"})
+        with urllib.request.urlopen(request, timeout=12) as response:
+            index_page = response.read().decode("utf-8", errors="replace")
+        block_files = sorted(set(re.findall(r'href="(block-[a-z0-9-]+\.htm)"', index_page, flags=re.IGNORECASE)))
+        entries_by_code = {}
+        for block_file in block_files:
+            block_url = ICD10_BFARM_BASE_URL + block_file
+            block_request = urllib.request.Request(block_url, headers={"User-Agent": "NANA-RD-Protokoll/1.0"})
+            with urllib.request.urlopen(block_request, timeout=12) as response:
+                block_page = response.read().decode("utf-8", errors="replace")
+            for match in re.finditer(
+                r"<h[4-6][^>]*>\s*([A-Z][0-9]{2}(?:\.[0-9A-Z]{1,2})?-?)\s+(.+?)</h[4-6]>",
+                block_page,
+                flags=re.IGNORECASE | re.DOTALL,
+            ):
+                code = normalize_icd_code(match.group(1))
+                diagnosis = clean_icd_title(match.group(2))
+                if code and diagnosis:
+                    entries_by_code[code] = {"code": code, "diagnosis": diagnosis, "source_url": block_url}
+        entries = sorted(entries_by_code.values(), key=lambda item: item["code"])
+        if entries:
+            ICD10_CATALOG_CACHE.update({"loaded_at": now, "entries": entries, "source": "BfArM ICD-10-GM 2026", "error": ""})
+            return ICD10_CATALOG_CACHE
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError) as exc:
+        ICD10_CATALOG_CACHE.update({"loaded_at": now, "entries": [], "source": "Fallback", "error": str(exc)})
+
+    fallback = [{"code": code, "diagnosis": diagnosis, "source_url": ""} for code, diagnosis in ICD10_LOCAL.items()]
+    ICD10_CATALOG_CACHE["entries"] = ICD10_FALLBACK_ENTRIES + fallback
+    return ICD10_CATALOG_CACHE
+
+
+def search_icd_catalog(query="", limit=80):
+    catalog = load_icd10_catalog()
+    entries = catalog.get("entries") or []
+    raw_query = str(query or "").strip()
+    if not raw_query:
+        return entries[:limit], catalog
+
+    normalized_query = normalize_icd_code(raw_query)
+    words = [word.casefold() for word in re.split(r"\s+", raw_query) if word]
+    results = []
+    for entry in entries:
+        code = entry.get("code", "")
+        diagnosis = entry.get("diagnosis", "")
+        haystack = f"{code} {diagnosis}".casefold()
+        if normalized_query and code.startswith(normalized_query):
+            results.append(entry)
+        elif words and all(word in haystack for word in words):
+            results.append(entry)
+        if len(results) >= limit:
+            break
+    return results, catalog
 
 
 def lookup_icd_local(code):
     normalized = normalize_icd_code(code)
     if not normalized:
         return {"code": "", "diagnosis": "", "found": False}
+    entries, catalog = search_icd_catalog(normalized, limit=200)
+    for entry in entries:
+        if entry.get("code") == normalized:
+            return {
+                "code": normalized,
+                "matched_code": entry.get("code"),
+                "diagnosis": entry.get("diagnosis", ""),
+                "found": True,
+                "source": catalog.get("source"),
+                "source_url": entry.get("source_url", ""),
+            }
     candidates = [normalized]
     if "." in normalized:
         candidates.append(normalized.split(".", 1)[0])
     candidates.append(normalized[:3])
     for candidate in candidates:
         if candidate in ICD10_LOCAL:
-            return {"code": normalized, "matched_code": candidate, "diagnosis": ICD10_LOCAL[candidate], "found": True}
-    return {"code": normalized, "matched_code": normalized[:3], "diagnosis": "Nicht im lokalen Grundkatalog gefunden", "found": False}
+            return {"code": normalized, "matched_code": candidate, "diagnosis": ICD10_LOCAL[candidate], "found": True, "source": "Fallback"}
+    return {"code": normalized, "matched_code": normalized[:3], "diagnosis": "Nicht im ICD10-Katalog gefunden", "found": False, "source": catalog.get("source")}
 
 
 def serialize_hospital(hospital):
@@ -1544,6 +1662,20 @@ def icd10_lookup(payload: IcdLookupRequest, employee=Depends(current_employee)):
     result = lookup_icd_local(payload.code)
     audit("api_icd10_lookup", employee=employee, details={"code": result.get("code"), "found": result.get("found")})
     return result
+
+
+@app.post("/api/icd10/search")
+def icd10_search(payload: IcdSearchRequest, employee=Depends(current_employee)):
+    limit = max(1, min(int(payload.limit or 80), 120))
+    entries, catalog = search_icd_catalog(payload.query, limit=limit)
+    audit("api_icd10_search", employee=employee, details={"query": payload.query, "count": len(entries), "source": catalog.get("source")})
+    return {
+        "entries": entries,
+        "source": catalog.get("source"),
+        "count": len(entries),
+        "catalog_size": len(catalog.get("entries") or []),
+        "error": catalog.get("error", ""),
+    }
 
 
 @app.get("/api/cases")
