@@ -7,6 +7,7 @@ import urllib.error
 import urllib.request
 from pathlib import Path
 from datetime import datetime, timedelta
+from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -39,6 +40,12 @@ from storage import (
     set_app_setting,
     write_audit_event,
 )
+
+APP_TIMEZONE = ZoneInfo(os.getenv("NANA_TIMEZONE", "Europe/Berlin"))
+
+
+def local_now():
+    return datetime.now(APP_TIMEZONE)
 
 
 SESSION_MINUTES = 30
@@ -914,7 +921,7 @@ def generate_protocol_text(patient):
 
     text = "RD-PROTOKOLL - DOKUMENTATIONSENTWURF\n"
     text += "=" * 50 + "\n"
-    text += f"Erstellt am {datetime.now().strftime('%d.%m.%Y um %H:%M:%S')} Uhr\n"
+    text += f"Erstellt am {local_now().strftime('%d.%m.%Y um %H:%M:%S')} Uhr\n"
     text += "Enthält ausschließlich dokumentierte Angaben; vor Verwendung vollständig prüfen.\n\n"
     text += build_narrative_report(patient)
 
@@ -1425,7 +1432,7 @@ def load_employee_patient_draft(employee):
 def save_employee_patient_draft(employee, patient):
     store = load_case_draft_store()
     store.setdefault("drafts", {})[employee["id"]] = {
-        "updated_at": datetime.now().isoformat(timespec="seconds"),
+        "updated_at": local_now().isoformat(timespec="seconds"),
         "patient": patient,
         "seite": "Schnittstellen",
         "visited_pages": ["Schnittstellen"],
@@ -1441,7 +1448,7 @@ def save_employee_patient_draft(employee, patient):
 def audit(action, employee=None, entity_type="", entity_id="", details=None):
     employee = employee or {}
     write_audit_event({
-        "timestamp": datetime.now().isoformat(timespec="seconds"),
+        "timestamp": local_now().isoformat(timespec="seconds"),
         "employee_id": employee.get("id", ""),
         "employee_name": employee.get("name", ""),
         "action": action,
@@ -1572,8 +1579,8 @@ def setup_first_admin(payload: FirstAdminRequest):
         "password_hash": password_hash(payload.password),
         "temp_password_hash": "",
         "must_change_password": False,
-        "created_at": datetime.now().isoformat(timespec="seconds"),
-        "password_changed_at": datetime.now().isoformat(timespec="seconds"),
+        "created_at": local_now().isoformat(timespec="seconds"),
+        "password_changed_at": local_now().isoformat(timespec="seconds"),
     }
     save_employee_store({"employees": [employee]})
 
@@ -1605,7 +1612,7 @@ def set_password(payload: PasswordChangeRequest):
     employee["password_hash"] = password_hash(payload.new_password)
     employee["temp_password_hash"] = ""
     employee["must_change_password"] = False
-    employee["password_changed_at"] = datetime.now().isoformat(timespec="seconds")
+    employee["password_changed_at"] = local_now().isoformat(timespec="seconds")
     save_employee_store(store)
     password_change_tokens.pop(payload.token, None)
 
@@ -1793,7 +1800,7 @@ def protocol_quality(payload: ProtocolRequest, employee=Depends(current_employee
 def protocol_pdf(payload: ProtocolRequest, employee=Depends(current_employee)):
     protocol_text = generate_protocol_text(payload.patient)
     summary = build_case_summary(payload.patient)
-    created_at = datetime.now().isoformat(timespec="seconds")
+    created_at = local_now().isoformat(timespec="seconds")
     pdf_bytes = build_pdf_bytes(
         "Laufender Einsatz",
         protocol_text,
@@ -1810,16 +1817,16 @@ def protocol_pdf(payload: ProtocolRequest, employee=Depends(current_employee)):
         entity_type="case_draft",
         details={"summary": summary, "format": "pdf"},
     )
-    return pdf_response(f"nana-entwurf-{datetime.now().strftime('%Y%m%d-%H%M%S')}.pdf", pdf_bytes)
+    return pdf_response(f"nana-entwurf-{local_now().strftime('%Y%m%d-%H%M%S')}.pdf", pdf_bytes)
 
 
 @app.post("/api/cases/finish")
 def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
     protocol_text = generate_protocol_text(payload.patient)
     quality = assess_protocol_quality(payload.patient)
-    completed_at = datetime.now().isoformat(timespec="seconds")
+    completed_at = local_now().isoformat(timespec="seconds")
     retention_days = int(get_app_setting("retention_days", 3650) or 3650)
-    retention_until = (datetime.now() + timedelta(days=max(1, retention_days))).date().isoformat()
+    retention_until = (local_now() + timedelta(days=max(1, retention_days))).date().isoformat()
     case_id = secrets.token_hex(10)
     save_finished_case({
         "id": case_id,
@@ -1987,7 +1994,7 @@ def admin_export_case(case_id: str, export_format: str, employee=Depends(require
 
 @app.get("/api/admin/privacy")
 def admin_privacy(employee=Depends(require_admin)):
-    today = datetime.now().date().isoformat()
+    today = local_now().date().isoformat()
     expired_cases = list_expired_finished_cases(today)
     retention_days = int(get_app_setting("retention_days", 3650) or 3650)
     audit_count = len(list_audit_events(limit=500))
@@ -2020,8 +2027,8 @@ def update_privacy(payload: RetentionRequest, employee=Depends(require_admin)):
 
 @app.post("/api/admin/privacy/purge-expired")
 def purge_expired_cases(employee=Depends(require_admin)):
-    today = datetime.now().date().isoformat()
-    timestamp = datetime.now().isoformat(timespec="seconds")
+    today = local_now().date().isoformat()
+    timestamp = local_now().isoformat(timespec="seconds")
     expired = delete_expired_finished_cases(today, timestamp)
     audit(
         "api_expired_cases_purged",
@@ -2055,7 +2062,7 @@ def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_adm
         "password_hash": "",
         "temp_password_hash": password_hash(temp_password),
         "must_change_password": True,
-        "created_at": datetime.now().isoformat(timespec="seconds"),
+        "created_at": local_now().isoformat(timespec="seconds"),
         "password_changed_at": "",
     }
     store.setdefault("employees", []).append(new_employee)
@@ -2147,7 +2154,7 @@ def admin_anonymize_case(case_id: str, employee=Depends(require_admin)):
     item = get_finished_case(case_id)
     if not item or item.get("status") == "deleted":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Einsatz nicht gefunden.")
-    timestamp = datetime.now().isoformat(timespec="seconds")
+    timestamp = local_now().isoformat(timespec="seconds")
     anonymize_finished_case(case_id, timestamp)
     audit("api_case_anonymized", employee=employee, entity_type="finished_case", entity_id=case_id)
     return {"status": "anonymized", "case_id": case_id}
@@ -2158,7 +2165,7 @@ def admin_delete_case(case_id: str, employee=Depends(require_admin)):
     item = get_finished_case(case_id)
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Einsatz nicht gefunden.")
-    timestamp = datetime.now().isoformat(timespec="seconds")
+    timestamp = local_now().isoformat(timespec="seconds")
     delete_finished_case(case_id, timestamp)
     audit("api_case_deleted", employee=employee, entity_type="finished_case", entity_id=case_id)
     return {"status": "deleted", "case_id": case_id}
