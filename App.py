@@ -1235,6 +1235,7 @@ st.markdown(
         border-radius: 16px !important;
     }
     .st-key-home_tile_protocol button,
+    .st-key-home_tile_refusal button,
     .st-key-home_tile_hospital button,
     .st-key-home_tile_icd10 button,
     .st-key-home_tile_devices button,
@@ -1254,6 +1255,7 @@ st.markdown(
         isolation:isolate;
     }
     .st-key-home_tile_protocol button:hover,
+    .st-key-home_tile_refusal button:hover,
     .st-key-home_tile_hospital button:hover,
     .st-key-home_tile_icd10 button:hover,
     .st-key-home_tile_devices button:hover,
@@ -1272,6 +1274,12 @@ st.markdown(
             radial-gradient(circle at 10% 18%, rgba(255,255,255,.18), transparent 20%),
             linear-gradient(135deg, rgba(0,144,125,.96) 0%, rgba(69,185,139,.90) 100%) !important;
         border-color:rgba(147,255,219,.36) !important;
+    }
+    .st-key-home_tile_refusal button {
+        background:
+            radial-gradient(circle at 10% 18%, rgba(255,255,255,.18), transparent 20%),
+            linear-gradient(135deg, rgba(15,118,110,.96) 0%, rgba(245,158,11,.90) 100%) !important;
+        border-color:rgba(255,220,143,.38) !important;
     }
     .st-key-home_tile_icd10 button {
         background:
@@ -3525,10 +3533,14 @@ seite = st.session_state['seite']
 # --------------------------------------------------
 
 if seite == HOME_PAGE:
-    tile_protocol, tile_hospital = st.columns(2, gap="large")
+    tile_protocol, tile_refusal, tile_hospital = st.columns(3, gap="large")
     with tile_protocol:
-        if st.button("📄 Protokoll\nEinsatzbericht schreiben", key="home_tile_protocol", use_container_width=True):
+        if st.button("📄 Dokumentation\nEinsatzbericht schreiben", key="home_tile_protocol", use_container_width=True):
             st.session_state["seite"] = PROTOCOL_START_PAGE
+            st.rerun()
+    with tile_refusal:
+        if st.button("🛡️ Verweigerung\nAblehnung dokumentieren", key="home_tile_refusal", use_container_width=True):
+            st.session_state["seite"] = "📄 Protokoll"
             st.rerun()
     with tile_hospital:
         if st.button("🏥 Krankenhaus Finder\nGeeignete Zielklinik", key="home_tile_hospital", use_container_width=True):

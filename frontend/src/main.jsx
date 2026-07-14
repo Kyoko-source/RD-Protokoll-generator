@@ -574,6 +574,7 @@ function SystemStatus({ online, backendOnline, lastSync }) {
 
 const tileIcons = {
   protocol: FileText,
+  refusal: ShieldCheck,
   hospital: Building2,
   icd10: Stethoscope,
   devices: Wrench,
@@ -871,6 +872,10 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
     return <ProtocolView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} onSync={onSync} />;
   }
 
+  if (view === 'refusal') {
+    return <ProtocolView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} onSync={onSync} initialSection="verweigerung" />;
+  }
+
   if (view === 'hospital') {
     return <HospitalView session={session} employee={employee} onBack={() => setView('home')} onOpenProtocol={() => setView('protocol')} onLogout={logout} />;
   }
@@ -949,6 +954,7 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
               key={tile.id}
               onClick={() => {
                 if (tile.id === 'protocol') setView('protocol');
+                if (tile.id === 'refusal') setView('refusal');
                 if (tile.id === 'hospital') setView('hospital');
                 if (tile.id === 'icd10') setView('icd10');
                 if (tile.id === 'devices') setView('devices');
@@ -1067,7 +1073,7 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
 
       <section className="protocol-toolbar">
         <button type="button" onClick={onBack}>Zurück zum Hauptmenü</button>
-        <button type="button" onClick={onOpenProtocol}>Zum Protokoll</button>
+        <button type="button" onClick={onOpenProtocol}>Zur Dokumentation</button>
       </section>
 
       {error && <div className="error-box">{error}</div>}
@@ -1096,7 +1102,7 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
                 rows={12}
               />
             </label>
-            <button type="button" onClick={importPayload}>Import ins Protokoll übernehmen</button>
+            <button type="button" onClick={importPayload}>Import in Dokumentation übernehmen</button>
           </div>
           {importResult && (
             <div className="import-result">
@@ -1222,7 +1228,7 @@ function HospitalView({ session, employee, onBack, onOpenProtocol, onLogout }) {
         body: JSON.stringify({ patient: nextPatient })
       }, session.token);
       setPatient(nextPatient);
-      setStatusText(`${hospital.name} wurde ins Protokoll übernommen.`);
+      setStatusText(`${hospital.name} wurde in die Dokumentation übernommen.`);
     } catch (err) {
       setError(err.message);
     }
@@ -1269,7 +1275,7 @@ function HospitalView({ session, employee, onBack, onOpenProtocol, onLogout }) {
 
       <section className="protocol-toolbar">
         <button type="button" onClick={onBack}>Zurück zum Hauptmenü</button>
-        <button type="button" onClick={onOpenProtocol}>Zum Protokoll</button>
+        <button type="button" onClick={onOpenProtocol}>Zur Dokumentation</button>
       </section>
 
       {error && <div className="error-box">{error}</div>}
@@ -1400,7 +1406,7 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
         body: JSON.stringify({ patient: nextPatient })
       }, session.token);
       setPatient(nextPatient);
-      setStatusText('ICD10 wurde ins Protokoll übernommen.');
+      setStatusText('ICD10 wurde in die Dokumentation übernommen.');
     } catch (err) {
       setError(err.message);
     }
@@ -1425,7 +1431,7 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
       </header>
       <section className="protocol-toolbar">
         <button type="button" onClick={onBack}>Zurück zum Hauptmenü</button>
-        <button type="button" onClick={onOpenProtocol}>Zum Protokoll</button>
+        <button type="button" onClick={onOpenProtocol}>Zur Dokumentation</button>
       </section>
       {error && <div className="error-box">{error}</div>}
       {statusText && <div className="success-box">{statusText}</div>}
@@ -1463,7 +1469,7 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
             <strong>{result.code}</strong>
             <span>{result.diagnosis}</span>
             <small>{result.found ? `Treffer über ${result.matched_code}` : 'Bitte fachlich prüfen und ggf. manuell ergänzen.'}</small>
-            <button type="button" onClick={applyIcd}>Ins Protokoll übernehmen</button>
+            <button type="button" onClick={applyIcd}>In Dokumentation übernehmen</button>
           </div>
         )}
       </section>
@@ -1970,9 +1976,9 @@ const emptyPatient = {
   uebergabe: {}
 };
 
-function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSync }) {
+function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSync, initialSection = 'vitalwerte' }) {
   const [patient, setPatient] = useState(emptyPatient);
-  const [protocolSection, setProtocolSection] = useState('vitalwerte');
+  const [protocolSection, setProtocolSection] = useState(initialSection);
   const [xabcdeSection, setXabcdeSection] = useState('A');
   const [samplersSection, setSamplersSection] = useState('S1');
   const [opqrstSection, setOpqrstSection] = useState('O');
@@ -2878,7 +2884,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         medikation: [...(((current.massnahmen || {}).medikation) || []), { zeit: '', medikament: text, dosis: '', weg: 'laut SOP-Rechner' }]
       }
     }));
-    setStatusText('Medikation wurde in das Protokoll übernommen.');
+    setStatusText('Medikation wurde in die Dokumentation übernommen.');
   }
 
   async function saveDraft() {
@@ -3024,7 +3030,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       <header className="topbar">
         <div>
           <div className="app-name">NANA</div>
-          <div className="app-subtitle">Protokoll · Vitalwerte & Demographie</div>
+          <div className="app-subtitle">Dokumentation · Vitalwerte & Demographie</div>
         </div>
         <div className="user-area">
           <button className="header-button" type="button" onClick={onBack}>
@@ -3112,7 +3118,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           className={protocolSection === 'protokoll' ? 'active' : ''}
           onClick={() => setProtocolSection('protokoll')}
         >
-          Protokoll
+          Dokumentation
         </button>
         <button
           type="button"
@@ -3664,7 +3670,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
       {protocolSection === 'protokoll' && <section className="work-panel">
         <div className="section-head">
-          <h2>Protokoll</h2>
+          <h2>Dokumentation</h2>
           <span>Vorschau und Abschluss</span>
         </div>
         <section className="protocol-toolbar protocol-actionbar protocol-actionbar-panel">
@@ -3888,7 +3894,7 @@ function isStandaloneApp() {
 
 function getInitialDashboardView() {
   const view = new URLSearchParams(window.location.search).get('view');
-  return ['protocol', 'hospital', 'icd10', 'devices'].includes(view) ? view : 'home';
+  return ['protocol', 'refusal', 'hospital', 'icd10', 'devices'].includes(view) ? view : 'home';
 }
 
 function isLocalDevHost() {

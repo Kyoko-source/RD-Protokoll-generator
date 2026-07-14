@@ -1591,7 +1591,8 @@ def me(employee=Depends(current_employee)):
 @app.get("/api/dashboard")
 def dashboard(employee=Depends(current_employee)):
     tiles = [
-        {"id": "protocol", "label": "Protokoll", "subtitle": "Einsatz dokumentieren"},
+        {"id": "protocol", "label": "Dokumentation", "subtitle": "Einsatz dokumentieren"},
+        {"id": "refusal", "label": "Verweigerung", "subtitle": "Behandlungs-/Transportablehnung"},
         {"id": "hospital", "label": "Krankenhaus Finder", "subtitle": "Geeignete Zielklinik"},
         {"id": "icd10", "label": "ICD10 Code", "subtitle": "Code dekodieren"},
         {"id": "devices", "label": "Geraete", "subtitle": "Kurzreferenzen"},

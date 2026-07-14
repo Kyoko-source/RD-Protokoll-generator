@@ -1058,6 +1058,7 @@ form button,
 }
 
 .tile-protocol { background: linear-gradient(135deg, #2f74ff 0%, #46badf 100%); }
+.tile-refusal { background: linear-gradient(135deg, #0f766e 0%, #f59e0b 100%); }
 .tile-hospital { background: linear-gradient(135deg, #00907d 0%, #45b98b 100%); }
 .tile-icd10 { background: linear-gradient(135deg, #8449d6 0%, #db5399 100%); }
 .tile-devices { background: linear-gradient(135deg, #e27820 0%, #dda440 100%); }
