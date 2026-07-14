@@ -173,9 +173,88 @@ def reset_patient_case():
 def normalize_icd10_code(value):
     code = re.sub(r"\s+", "", str(value or "")).upper()
     code = code.rstrip("!+*#")
-    if not re.fullmatch(r"[A-Z][0-9]{2}(?:\.[0-9A-Z]{1,2})?", code):
+    if not re.fullmatch(r"[A-Z][0-9]{2}(?:\.[0-9A-Z]{1,2})?-?", code):
         return None
     return code
+
+
+def _clean_icd10_title(value):
+    text = html.unescape(re.sub(r"<[^>]+>", " ", str(value or "")))
+    return re.sub(r"\s+", " ", text).strip()
+
+
+@st.cache_data(ttl=604800, show_spinner=False)
+def load_icd10_catalog():
+    try:
+        index_request = urllib.request.Request(
+            ICD10_BFARM_BASE_URL,
+            headers={"User-Agent": "RD-Protokoll-Generator/1.0"},
+        )
+        with urllib.request.urlopen(index_request, timeout=10) as response:
+            index_page = response.read().decode("utf-8", errors="replace")
+
+        block_files = sorted(set(re.findall(r'href="(block-[a-z0-9-]+\.htm)"', index_page, flags=re.IGNORECASE)))
+        entries_by_code = {}
+        for block_file in block_files:
+            block_url = ICD10_BFARM_BASE_URL + block_file
+            block_request = urllib.request.Request(
+                block_url,
+                headers={"User-Agent": "RD-Protokoll-Generator/1.0"},
+            )
+            with urllib.request.urlopen(block_request, timeout=10) as response:
+                block_page = response.read().decode("utf-8", errors="replace")
+
+            for match in re.finditer(
+                r"<h[4-6][^>]*>\s*([A-Z][0-9]{2}(?:\.[0-9A-Z]{1,2})?-?)\s+(.+?)</h[4-6]>",
+                block_page,
+                flags=re.IGNORECASE | re.DOTALL,
+            ):
+                code = normalize_icd10_code(match.group(1))
+                diagnosis = _clean_icd10_title(match.group(2))
+                if code and diagnosis:
+                    entries_by_code[code] = {
+                        "code": code,
+                        "diagnosis": diagnosis,
+                        "source_url": block_url,
+                    }
+
+        catalog = sorted(entries_by_code.values(), key=lambda entry: entry["code"])
+        return {
+            "ok": bool(catalog),
+            "entries": catalog or ICD10_FALLBACK_CODES,
+            "source": "BfArM ICD-10-GM 2026" if catalog else "Fallback",
+            "error": "",
+        }
+    except Exception as exc:
+        return {
+            "ok": False,
+            "entries": ICD10_FALLBACK_CODES,
+            "source": "Fallback",
+            "error": str(exc),
+        }
+
+
+def search_icd10_catalog(query, limit=80):
+    catalog_state = load_icd10_catalog()
+    entries = catalog_state.get("entries", [])
+    raw_query = str(query or "").strip()
+    if not raw_query:
+        return entries[:limit], catalog_state
+
+    query_words = [part.casefold() for part in re.split(r"\s+", raw_query) if part]
+    normalized_query = normalize_icd10_code(raw_query)
+    results = []
+    for entry in entries:
+        code = entry.get("code", "")
+        diagnosis = entry.get("diagnosis", "")
+        haystack = f"{code} {diagnosis}".casefold()
+        if normalized_query and code.startswith(normalized_query):
+            results.append(entry)
+        elif all(word in haystack for word in query_words):
+            results.append(entry)
+        if len(results) >= limit:
+            break
+    return results, catalog_state
 
 
 @st.cache_data(ttl=86400, show_spinner=False)
@@ -183,6 +262,16 @@ def lookup_icd10_diagnosis(code):
     normalized = normalize_icd10_code(code)
     if not normalized:
         return {"ok": False, "error": "Bitte einen gültigen Code eingeben, z. B. J45 oder I63.9."}
+
+    catalog_state = load_icd10_catalog()
+    for entry in catalog_state.get("entries", []):
+        if entry.get("code") == normalized:
+            return {
+                "ok": True,
+                "code": entry["code"],
+                "diagnosis": entry["diagnosis"],
+                "source_url": entry.get("source_url", ICD10_BFARM_BASE_URL),
+            }
 
     slug = normalized.lower().replace(".", "-")
     source_url = f"https://gesund.bund.de/icd-code-suche/{slug}"
@@ -425,6 +514,49 @@ def build_protocol_narrative(patient_data):
         paragraphs.append(f"Ergänzender Einsatzbericht: {clean(v.get('kurzbericht'))}.")
 
     return paragraphs
+
+
+def blank_or_value(value, blank="__________"):
+    return str(value).strip() if _is_valid_value(value) else blank
+
+
+def build_patient_refusal_text(patient_data, refusal_data):
+    vital = patient_data.get("vitalwerte", {})
+    einsatz = patient_data.get("einsatz", {})
+    patient_name = blank_or_value(refusal_data.get("patient_name"))
+    presented_to = blank_or_value(refusal_data.get("presented_to"))
+    case_number = blank_or_value(refusal_data.get("case_number") or einsatz.get("einsatznummer"))
+    date_text = blank_or_value(refusal_data.get("date"))
+    time_text = blank_or_value(refusal_data.get("time"))
+    refusal_scope = blank_or_value(refusal_data.get("scope"), "eine weitere rettungsdienstliche Versorgung / den Transport")
+    refusal_reason = blank_or_value(refusal_data.get("reason"))
+    risks = blank_or_value(refusal_data.get("risks"), "mögliche gesundheitliche Risiken und Folgen")
+    witness = blank_or_value(refusal_data.get("witness"))
+    signature = blank_or_value(refusal_data.get("signature"), "Unterschrift Patient/in")
+
+    identity_parts = []
+    if _is_valid_value(vital.get("geschlecht")):
+        identity_parts.append(str(vital.get("geschlecht")))
+    if _is_valid_value(vital.get("alter")):
+        identity_parts.append(f"{vital.get('alter')} Jahre")
+    identity = f" ({', '.join(identity_parts)})" if identity_parts else ""
+
+    return (
+        f"Patientenverweigerung\n\n"
+        f"Der/Die Patient/in {patient_name}{identity} wurde heute, am {date_text} um {time_text} Uhr, "
+        f"dem {presented_to} durch den Rettungsdienst mit der Einsatznummer {case_number} vorgestellt.\n\n"
+        f"Nach Untersuchung, Aufklärung und Beratung verweigert der/die Patient/in {refusal_scope}. "
+        f"Als Grund wurde angegeben: {refusal_reason}.\n\n"
+        f"Der/Die Patient/in wurde über {risks} aufgeklärt. Insbesondere wurde darauf hingewiesen, "
+        f"dass sich der Gesundheitszustand verschlechtern kann und bei erneuten oder zunehmenden Beschwerden "
+        f"unverzüglich erneut der Rettungsdienst bzw. ärztliche Hilfe zu verständigen ist.\n\n"
+        f"Der/Die Patient/in war zum Zeitpunkt der Aufklärung wach, orientiert und nach Einschätzung des "
+        f"Rettungsdienstpersonals einwilligungsfähig, sofern nicht anders dokumentiert. "
+        f"Die Verweigerung erfolgte gegen den ausdrücklichen Rat des Rettungsdienstes.\n\n"
+        f"Zeuge/Zeugin: {witness}\n"
+        f"Unterschrift Patient/in: {signature}\n"
+        f"Unterschrift Rettungsdienst: __________"
+    )
 
 
 def generate_protocol():
@@ -1600,6 +1732,40 @@ PROTOCOL_START_PAGE = "❤️ Vitalwerte"
 ICD10_PAGE = "🔤 ICD10 Code"
 ARCHIVE_PAGE = "🗂️ Archiv"
 INTERFACE_PAGE = "🔌 Schnittstellen"
+ICD10_BFARM_BASE_URL = "https://klassifikationen.bfarm.de/icd-10-gm/kode-suche/htmlgm2026/"
+ICD10_FALLBACK_CODES = [
+    {"code": "A00-B99", "diagnosis": "Bestimmte infektiöse und parasitäre Krankheiten"},
+    {"code": "C00-D48", "diagnosis": "Neubildungen"},
+    {"code": "D50-D90", "diagnosis": "Krankheiten des Blutes und der blutbildenden Organe sowie bestimmte Störungen mit Beteiligung des Immunsystems"},
+    {"code": "E00-E90", "diagnosis": "Endokrine, Ernährungs- und Stoffwechselkrankheiten"},
+    {"code": "F00-F99", "diagnosis": "Psychische und Verhaltensstörungen"},
+    {"code": "G00-G99", "diagnosis": "Krankheiten des Nervensystems"},
+    {"code": "H00-H59", "diagnosis": "Krankheiten des Auges und der Augenanhangsgebilde"},
+    {"code": "H60-H95", "diagnosis": "Krankheiten des Ohres und des Warzenfortsatzes"},
+    {"code": "I00-I99", "diagnosis": "Krankheiten des Kreislaufsystems"},
+    {"code": "J00-J99", "diagnosis": "Krankheiten des Atmungssystems"},
+    {"code": "K00-K93", "diagnosis": "Krankheiten des Verdauungssystems"},
+    {"code": "L00-L99", "diagnosis": "Krankheiten der Haut und der Unterhaut"},
+    {"code": "M00-M99", "diagnosis": "Krankheiten des Muskel-Skelett-Systems und des Bindegewebes"},
+    {"code": "N00-N99", "diagnosis": "Krankheiten des Urogenitalsystems"},
+    {"code": "O00-O99", "diagnosis": "Schwangerschaft, Geburt und Wochenbett"},
+    {"code": "P00-P96", "diagnosis": "Bestimmte Zustände, die ihren Ursprung in der Perinatalperiode haben"},
+    {"code": "Q00-Q99", "diagnosis": "Angeborene Fehlbildungen, Deformitäten und Chromosomenanomalien"},
+    {"code": "R00-R99", "diagnosis": "Symptome und abnorme klinische und Laborbefunde"},
+    {"code": "S00-T98", "diagnosis": "Verletzungen, Vergiftungen und bestimmte andere Folgen äußerer Ursachen"},
+    {"code": "U00-U99", "diagnosis": "Schlüsselnummern für besondere Zwecke"},
+    {"code": "V01-Y84", "diagnosis": "Äußere Ursachen von Morbidität und Mortalität"},
+    {"code": "Z00-Z99", "diagnosis": "Faktoren, die den Gesundheitszustand beeinflussen und zur Inanspruchnahme des Gesundheitswesens führen"},
+    {"code": "I21", "diagnosis": "Akuter Myokardinfarkt"},
+    {"code": "I63", "diagnosis": "Hirninfarkt"},
+    {"code": "I64", "diagnosis": "Schlaganfall, nicht als Blutung oder Infarkt bezeichnet"},
+    {"code": "J44", "diagnosis": "Sonstige chronische obstruktive Lungenkrankheit"},
+    {"code": "J45", "diagnosis": "Asthma bronchiale"},
+    {"code": "R07", "diagnosis": "Hals- und Brustschmerzen"},
+    {"code": "R10", "diagnosis": "Bauch- und Beckenschmerzen"},
+    {"code": "R55", "diagnosis": "Synkope und Kollaps"},
+    {"code": "S06", "diagnosis": "Intrakranielle Verletzung"},
+]
 ADMIN_SOP_FIELDS = {
     "Anaphylaxie (SOPKB0105)": [
         {"key": "ana_adult_age_threshold", "label": "Altersschwelle Erwachsene (Jahre)", "default": 12.0, "min": 0.0, "max": 21.0, "step": 1.0},
@@ -2624,6 +2790,43 @@ def render_icd10_decoder(form_key="icd_lookup_form", show_section_title=True):
         st.subheader("🏥 ICD-10-GM auf der ärztlichen Einweisung")
 
     einweisung = patient["einweisung"]
+    catalog_state = load_icd10_catalog()
+    catalog_count = len(catalog_state.get("entries", []))
+    if catalog_state.get("source") == "BfArM ICD-10-GM 2026":
+        st.caption(f"{catalog_count} ICD-10-GM-Einträge aus dem BfArM-Katalog 2026 geladen.")
+    else:
+        st.info(
+            "ICD-10-GM-Vollkatalog konnte gerade nicht online geladen werden. "
+            "Die App nutzt vorübergehend die hinterlegte Offline-Auswahl."
+        )
+
+    search_query = st.text_input(
+        "ICD-10-GM-Katalog durchsuchen",
+        placeholder="Code oder Diagnose suchen, z. B. J45, Asthma, Schlaganfall",
+        key=f"{form_key}_catalog_search",
+    )
+    catalog_matches, _ = search_icd10_catalog(search_query)
+    if catalog_matches:
+        option_labels = [
+            f"{entry['code']} - {entry['diagnosis']}"
+            for entry in catalog_matches
+        ]
+        selected_label = st.selectbox(
+            "Treffer",
+            option_labels,
+            key=f"{form_key}_catalog_result",
+            help="Die Liste filtert live nach Code oder Diagnosebezeichnung.",
+        )
+        selected_entry = catalog_matches[option_labels.index(selected_label)]
+        if st.button("Ausgewählten ICD-10-GM-Code übernehmen", key=f"{form_key}_catalog_apply", use_container_width=True):
+            einweisung["icd_code"] = selected_entry["code"]
+            einweisung["diagnose"] = selected_entry["diagnosis"]
+            einweisung["source_url"] = selected_entry.get("source_url", ICD10_BFARM_BASE_URL)
+            st.rerun()
+    elif search_query:
+        st.warning("Keine ICD-10-GM-Treffer gefunden. Alternativ kann der Code unten direkt übersetzt werden.")
+
+    st.markdown("**Direkte Code-Übersetzung**")
     with st.form(form_key, clear_on_submit=False):
         icd_input_col, icd_button_col = st.columns([4, 1])
         with icd_input_col:
@@ -6187,6 +6390,77 @@ elif seite == "🗣️ Übergabe":
 elif seite == "📄 Protokoll":
 
     st.header("📄 Fertiges Protokoll")
+
+    refusal_tab = st.tabs(["Patienten Verweigerung"])[0]
+    with refusal_tab:
+        refusal_defaults = st.session_state.setdefault("patient_refusal", {})
+        now = datetime.now()
+
+        r1, r2 = st.columns(2)
+        with r1:
+            refusal_defaults["patient_name"] = st.text_input(
+                "Patient/in",
+                value=refusal_defaults.get("patient_name", ""),
+                placeholder="Name oder frei lassen",
+                key="refusal_patient_name",
+            )
+            refusal_defaults["presented_to"] = st.text_input(
+                "Vorgestellt dem/der",
+                value=refusal_defaults.get("presented_to", ""),
+                placeholder="z. B. Notarzt / Ärztin / Rettungsdienst",
+                key="refusal_presented_to",
+            )
+            refusal_defaults["case_number"] = st.text_input(
+                "Einsatznummer",
+                value=str(refusal_defaults.get("case_number") or patient.get("einsatz", {}).get("einsatznummer", "")),
+                key="refusal_case_number",
+            )
+        with r2:
+            refusal_defaults["date"] = st.text_input(
+                "Datum",
+                value=refusal_defaults.get("date") or now.strftime("%d.%m.%Y"),
+                key="refusal_date",
+            )
+            refusal_defaults["time"] = st.text_input(
+                "Uhrzeit",
+                value=refusal_defaults.get("time") or now.strftime("%H:%M"),
+                key="refusal_time",
+            )
+            refusal_defaults["witness"] = st.text_input(
+                "Zeuge/Zeugin",
+                value=refusal_defaults.get("witness", ""),
+                key="refusal_witness",
+            )
+
+        refusal_defaults["scope"] = st.text_input(
+            "Verweigert wird",
+            value=refusal_defaults.get("scope", "eine weitere rettungsdienstliche Versorgung / der Transport"),
+            key="refusal_scope",
+        )
+        refusal_defaults["reason"] = st.text_area(
+            "Angegebener Grund",
+            value=refusal_defaults.get("reason", ""),
+            height=90,
+            placeholder="z. B. möchte zu Hause verbleiben / lehnt Transport ab",
+            key="refusal_reason",
+        )
+        refusal_defaults["risks"] = st.text_area(
+            "Aufklärung über Risiken",
+            value=refusal_defaults.get(
+                "risks",
+                "mögliche Verschlechterung, verzögerte Diagnostik/Therapie, bleibende Schäden bis hin zu Lebensgefahr",
+            ),
+            height=90,
+            key="refusal_risks",
+        )
+        refusal_text = build_patient_refusal_text(patient, refusal_defaults)
+        st.text_area("Patientenverweigerung", refusal_text, height=430, key="refusal_text_preview")
+        st.download_button(
+            "💾 Patientenverweigerung als TXT herunterladen",
+            refusal_text,
+            file_name="Patientenverweigerung.txt",
+            mime="text/plain",
+        )
 
     missing_documentation = collect_missing_documentation(patient)
     if missing_documentation:
