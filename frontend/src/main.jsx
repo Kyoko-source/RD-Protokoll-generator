@@ -371,6 +371,7 @@ function generateLocalProtocolText(patient) {
   const o = patient.opqrst || {};
   const amls = patient.amls || {};
   const measures = patient.massnahmen || {};
+  const reanimation = patient.reanimation || {};
   const handover = patient.uebergabe || {};
   let text = 'RD-PROTOKOLL - DOKUMENTATIONSENTWURF\n';
   text += '==================================================\n';
