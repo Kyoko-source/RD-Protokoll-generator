@@ -454,6 +454,16 @@ function valueOrBlank(value, blank = '__________') {
   return hasValue(value) ? String(value).trim() : blank;
 }
 
+function buildRefusalScope(refusal) {
+  if (hasValue(refusal.scope)) return String(refusal.scope).trim();
+  const scopes = [];
+  if (refusal.refuse_treatment) scopes.push('die weitere rettungsdienstliche Behandlung');
+  if (refusal.refuse_transport) scopes.push('den empfohlenen Transport');
+  if (scopes.length === 2) return `${scopes[0]} und ${scopes[1]}`;
+  if (scopes.length === 1) return scopes[0];
+  return valueOrBlank(refusal.scope, 'die weitere rettungsdienstliche Behandlung und/oder den empfohlenen Transport');
+}
+
 function buildPatientRefusalText(patient, refusal) {
   const vital = patient?.vitalwerte || {};
   const einsatz = patient?.einsatz || {};
@@ -466,10 +476,19 @@ function buildPatientRefusalText(patient, refusal) {
   const caseNumber = valueOrBlank(refusal.case_number || einsatz.einsatznummer);
   const dateText = valueOrBlank(refusal.date);
   const timeText = valueOrBlank(refusal.time);
-  const scope = valueOrBlank(refusal.scope, 'die weitere rettungsdienstliche Behandlung und/oder den empfohlenen Transport');
+  const scope = buildRefusalScope(refusal);
   const reason = valueOrBlank(refusal.reason);
   const risks = valueOrBlank(refusal.risks, 'Verschlechterung des Gesundheitszustands, verzögerte Diagnostik/Therapie, bleibende Gesundheitsschäden bis hin zu akuter Lebensgefahr');
   const witness = valueOrBlank(refusal.witness);
+  const capacityText = refusal.capacity_confirmed
+    ? 'Der/die Patient/in wirkte zum Zeitpunkt der Entscheidung, soweit rettungsdienstlich beurteilbar, wach, ansprechbar, orientiert, situationsadäquat und einwilligungsfähig.'
+    : 'Zur Einwilligungsfähigkeit bestanden Auffälligkeiten bzw. Einschränkungen; diese sind gesondert im Einsatzprotokoll zu dokumentieren.';
+  const adviceText = refusal.advised_against
+    ? 'Die Ablehnung erfolgte gegen den ausdrücklichen Rat des Rettungsdienstes.'
+    : 'Ein ausdrücklicher gegenteiliger Rat des Rettungsdienstes wurde nicht dokumentiert.';
+  const signatureText = refusal.signature_refused
+    ? 'Patient/in verweigert die Unterschrift; Vermerk und Zeuge/Zeugin siehe unten.'
+    : 'Patient/in wurde um Unterschrift gebeten.';
 
   return [
     'Dokumentation einer Behandlungs-/Transportverweigerung',
@@ -483,7 +502,9 @@ function buildPatientRefusalText(patient, refusal) {
     '',
     'Dem/der Patient/in wurde empfohlen, sich zeitnah ärztlich vorstellen zu lassen bzw. den empfohlenen Transport wahrzunehmen. Bei erneuten, anhaltenden oder zunehmenden Beschwerden, Verschlechterung des Allgemeinzustands, Schmerzen, Atemnot, neurologischen Auffälligkeiten, Bewusstseinsveränderung oder Unsicherheit soll unverzüglich erneut der Notruf 112 bzw. ärztliche Hilfe verständigt werden.',
     '',
-    'Der/die Patient/in wirkte zum Zeitpunkt der Entscheidung, soweit rettungsdienstlich beurteilbar, wach, ansprechbar, situationsadäquat und einwilligungsfähig. Abweichende Befunde oder Einschränkungen der Einwilligungsfähigkeit sind gesondert im Einsatzprotokoll zu dokumentieren. Die Entscheidung wurde nach erneuter Nachfrage aus freiem Willen geäußert; eine weitere Hilfeleistung bzw. ein Transport wurde erneut angeboten.',
+    `${capacityText} ${adviceText} Die Entscheidung wurde nach erneuter Nachfrage aus freiem Willen geäußert; eine weitere Hilfeleistung bzw. ein Transport wurde erneut angeboten.`,
+    '',
+    signatureText,
     '',
     `Zeuge/Zeugin: ${witness}`,
     'Unterschrift Patient/in: __________',
@@ -2055,6 +2076,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const [samplersSection, setSamplersSection] = useState('S1');
   const [opqrstSection, setOpqrstSection] = useState('O');
   const [statusText, setStatusText] = useState('');
+  const [actionFeedback, setActionFeedback] = useState(null);
   const [error, setError] = useState('');
   const [generatedProtocol, setGeneratedProtocol] = useState('');
   const [qualityResult, setQualityResult] = useState(null);
@@ -2073,7 +2095,12 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       case_number: '',
       date: now.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
       time: now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
-      scope: 'die weitere rettungsdienstliche Behandlung und/oder den empfohlenen Transport',
+      refuse_treatment: true,
+      refuse_transport: true,
+      capacity_confirmed: true,
+      advised_against: true,
+      signature_refused: false,
+      scope: '',
       reason: '',
       risks: 'Verschlechterung des Gesundheitszustands, verzögerte Diagnostik/Therapie, bleibende Gesundheitsschäden bis hin zu akuter Lebensgefahr',
       witness: ''
@@ -2943,7 +2970,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       }, session.token);
       setCalculatorResult(result);
       setAcceptedCalculatorMedication(null);
-      setStatusText('SOP-Rechner wurde aktualisiert.');
+      markActionFeedback('calculator-run', 'SOP-Rechner wurde aktualisiert.');
     } catch (err) {
       setError(err.message);
     }
@@ -2959,7 +2986,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       }
     }));
     setAcceptedCalculatorMedication({ index, text });
-    setStatusText('Medikation wurde in die Dokumentation übernommen.');
+    markActionFeedback(`calculator-med-${index}`, 'Medikation wurde in die Maßnahmen übernommen.');
   }
 
   async function saveDraft() {
@@ -2970,7 +2997,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         method: 'PUT',
         body: JSON.stringify({ patient })
       }, session.token);
-      setStatusText(`Entwurf gespeichert: ${result.updated_at}`);
+      markActionFeedback('save-draft', `Entwurf gespeichert: ${result.updated_at}`);
       onSync?.(result.updated_at);
       const saved = saveLocalDraft(employee?.id, patient);
       setLocalDraft(saved);
@@ -2985,14 +3012,22 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     setRefusal((current) => ({ ...current, [key]: value }));
   }
 
+  function markActionFeedback(key, message) {
+    setActionFeedback({ key, message });
+    setStatusText(message);
+    window.setTimeout(() => {
+      setActionFeedback((current) => (current?.key === key ? null : current));
+    }, 4200);
+  }
+
   function downloadRefusalText() {
     downloadBlob(new Blob([refusalText], { type: 'text/plain;charset=utf-8' }), 'Patientenverweigerung.txt');
-    setStatusText('Patientenverweigerung wurde als TXT vorbereitet.');
+    markActionFeedback('refusal-download', 'TXT wurde vorbereitet.');
   }
 
   function printRefusalText() {
     const opened = printTextDocument('Patientenverweigerung', refusalText);
-    setStatusText(opened ? 'Druckfenster wurde geöffnet.' : 'Druckfenster konnte nicht geöffnet werden.');
+    markActionFeedback('refusal-print', opened ? 'Druckfenster wurde geöffnet.' : 'Druckfenster konnte nicht geöffnet werden.');
   }
 
   async function generateProtocol() {
@@ -3008,7 +3043,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       const nextProtocol = protocolContainsVitalStatuses(protocolText, patient) ? protocolText : localProtocol;
       setGeneratedProtocol(nextProtocol);
       setProtocolSection('protokoll');
-      setStatusText(nextProtocol === protocolText ? 'Protokoll wurde erzeugt.' : 'Protokoll wurde aus den aktuellen Formularwerten erzeugt.');
+      markActionFeedback('generate-protocol', nextProtocol === protocolText ? 'Protokoll wurde erzeugt.' : 'Protokoll wurde aus den aktuellen Formularwerten erzeugt.');
     } catch (err) {
       if (localProtocol) {
         setGeneratedProtocol(localProtocol);
@@ -3032,7 +3067,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       setQualityResult(result);
       setForceFinish(false);
       setProtocolSection('protokoll');
-      setStatusText(`QS geprüft: ${result.score} Punkte.`);
+      markActionFeedback('quality-check', `QS geprüft: ${result.score} Punkte.`);
       return result;
     } catch (err) {
       setError(err.message);
@@ -3063,7 +3098,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       setProtocolSection('protokoll');
       setForceFinish(false);
       const warningText = result.quality?.warning_count || result.quality?.critical_count ? ' mit QS-Warnungen' : '';
-      setStatusText(`Einsatz${warningText} beendet und archiviert: ${result.case_id}`);
+      markActionFeedback('finish-case', `Einsatz${warningText} beendet und archiviert: ${result.case_id}`);
     } catch (err) {
       setError(err.message);
     }
@@ -3079,7 +3114,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         body: JSON.stringify({ patient })
       }, session.token);
       downloadBlob(file.blob, file.filename);
-      setStatusText('PDF wurde erstellt.');
+      markActionFeedback('export-pdf', 'PDF wurde erstellt.');
     } catch (err) {
       setError(err.message);
     }
@@ -3099,7 +3134,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         body: JSON.stringify({ source: 'draft' })
       }, session.token).catch(() => {});
       printBlob(file.blob);
-      setStatusText('Druckfenster wurde geöffnet.');
+      markActionFeedback('print-pdf', 'Druckfenster wurde geöffnet.');
     } catch (err) {
       setError(err.message);
     }
@@ -3568,7 +3603,9 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           </label>
         </div>
         <div className="protocol-toolbar compact-toolbar">
-          <button type="button" onClick={calculateMedication}>SOP berechnen</button>
+          <button type="button" className={actionFeedback?.key === 'calculator-run' ? 'action-confirmed' : ''} onClick={calculateMedication}>
+            {actionFeedback?.key === 'calculator-run' ? 'Berechnet' : 'SOP berechnen'}
+          </button>
         </div>
         {calculatorResult && (
           <div className="support-grid">
@@ -3582,7 +3619,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
                     <strong>{index + 1}</strong>
                     <span>{item}</span>
                     <button type="button" onClick={() => addCalculatedMedication(item, index)}>
-                      {wasAccepted ? 'Übernommen' : 'Übernehmen'}
+                      {wasAccepted || actionFeedback?.key === `calculator-med-${index}` ? 'Übernommen' : 'Übernehmen'}
                     </button>
                     {wasAccepted && <em aria-live="polite">In Maßnahmen übernommen</em>}
                   </div>
@@ -3723,9 +3760,32 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             Zeuge/Zeugin
             <input value={refusal.witness} onChange={(event) => updateRefusal('witness', event.target.value)} placeholder="optional" />
           </label>
+          <fieldset className="full-span refusal-checks">
+            <legend>Ablehnung</legend>
+            <label>
+              <input type="checkbox" checked={Boolean(refusal.refuse_treatment)} onChange={(event) => updateRefusal('refuse_treatment', event.target.checked)} />
+              Rettungsdienstliche Behandlung abgelehnt
+            </label>
+            <label>
+              <input type="checkbox" checked={Boolean(refusal.refuse_transport)} onChange={(event) => updateRefusal('refuse_transport', event.target.checked)} />
+              Empfohlenen Transport abgelehnt
+            </label>
+            <label>
+              <input type="checkbox" checked={Boolean(refusal.capacity_confirmed)} onChange={(event) => updateRefusal('capacity_confirmed', event.target.checked)} />
+              Wach, orientiert und einwilligungsfähig eingeschätzt
+            </label>
+            <label>
+              <input type="checkbox" checked={Boolean(refusal.advised_against)} onChange={(event) => updateRefusal('advised_against', event.target.checked)} />
+              Verweigerung gegen ausdrücklichen Rat
+            </label>
+            <label>
+              <input type="checkbox" checked={Boolean(refusal.signature_refused)} onChange={(event) => updateRefusal('signature_refused', event.target.checked)} />
+              Patient/in verweigert Unterschrift
+            </label>
+          </fieldset>
           <label className="full-span">
-            Verweigert wird
-            <input value={refusal.scope} onChange={(event) => updateRefusal('scope', event.target.value)} />
+            Freitext zur Verweigerung
+            <input value={refusal.scope} onChange={(event) => updateRefusal('scope', event.target.value)} placeholder={buildRefusalScope(refusal)} />
           </label>
           <label className="full-span">
             Angegebener Grund
@@ -3737,8 +3797,26 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           </label>
         </div>
         <div className="protocol-toolbar compact-toolbar">
-          <button type="button" onClick={downloadRefusalText}>TXT herunterladen</button>
-          <button type="button" onClick={printRefusalText}>Drucken</button>
+          <button type="button" className={actionFeedback?.key === 'refusal-download' ? 'action-confirmed' : ''} onClick={downloadRefusalText}>
+            {actionFeedback?.key === 'refusal-download' ? 'TXT vorbereitet' : 'TXT herunterladen'}
+          </button>
+          <button type="button" className={actionFeedback?.key === 'refusal-print' ? 'action-confirmed' : ''} onClick={printRefusalText}>
+            {actionFeedback?.key === 'refusal-print' ? 'Druck geöffnet' : 'Drucken'}
+          </button>
+        </div>
+        <div className="refusal-signature-grid">
+          <div>
+            <span>Patient/in</span>
+            <strong>Unterschrift</strong>
+          </div>
+          <div>
+            <span>Rettungsdienst</span>
+            <strong>Unterschrift</strong>
+          </div>
+          <div>
+            <span>Zeuge/Zeugin</span>
+            <strong>{hasValue(refusal.witness) ? refusal.witness : 'Name / Unterschrift'}</strong>
+          </div>
         </div>
         <textarea
           className="protocol-preview refusal-preview"
@@ -3760,25 +3838,25 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             </button>
           </div>
           <div className="toolbar-group toolbar-group-main">
-            <button type="button" className="toolbar-button" onClick={checkQuality}>
-              <CheckCircle2 size={16} /> QS prüfen
+            <button type="button" className={`toolbar-button${actionFeedback?.key === 'quality-check' ? ' action-confirmed' : ''}`} onClick={checkQuality}>
+              <CheckCircle2 size={16} /> {actionFeedback?.key === 'quality-check' ? 'QS geprüft' : 'QS prüfen'}
             </button>
-            <button type="button" className="toolbar-button primary" onClick={generateProtocol}>
-              <FileText size={16} /> Protokoll generieren
+            <button type="button" className={`toolbar-button primary${actionFeedback?.key === 'generate-protocol' ? ' action-confirmed' : ''}`} onClick={generateProtocol}>
+              <FileText size={16} /> {actionFeedback?.key === 'generate-protocol' ? 'Generiert' : 'Protokoll generieren'}
             </button>
-            <button type="button" className="toolbar-button icon-label" onClick={exportDraftPdf}>
-              <Download size={16} /> PDF
+            <button type="button" className={`toolbar-button icon-label${actionFeedback?.key === 'export-pdf' ? ' action-confirmed' : ''}`} onClick={exportDraftPdf}>
+              <Download size={16} /> {actionFeedback?.key === 'export-pdf' ? 'PDF erstellt' : 'PDF'}
             </button>
-            <button type="button" className="toolbar-button icon-label" onClick={printDraftPdf}>
-              <Printer size={16} /> Drucken
+            <button type="button" className={`toolbar-button icon-label${actionFeedback?.key === 'print-pdf' ? ' action-confirmed' : ''}`} onClick={printDraftPdf}>
+              <Printer size={16} /> {actionFeedback?.key === 'print-pdf' ? 'Druck geöffnet' : 'Drucken'}
             </button>
           </div>
           <div className="toolbar-group toolbar-group-end">
-            <button type="button" className="toolbar-button save" onClick={saveDraft}>
-              <Save size={16} /> Entwurf speichern
+            <button type="button" className={`toolbar-button save${actionFeedback?.key === 'save-draft' ? ' action-confirmed' : ''}`} onClick={saveDraft}>
+              <Save size={16} /> {actionFeedback?.key === 'save-draft' ? 'Gespeichert' : 'Entwurf speichern'}
             </button>
-            <button type="button" className="toolbar-button danger" onClick={finishCase}>
-              {forceFinish ? 'Mit Warnungen beenden' : 'Einsatz beenden'}
+            <button type="button" className={`toolbar-button danger${actionFeedback?.key === 'finish-case' ? ' action-confirmed' : ''}`} onClick={finishCase}>
+              {actionFeedback?.key === 'finish-case' ? 'Archiviert' : forceFinish ? 'Mit Warnungen beenden' : 'Einsatz beenden'}
             </button>
           </div>
         </section>
