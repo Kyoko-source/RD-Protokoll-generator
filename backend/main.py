@@ -507,6 +507,9 @@ def build_narrative_report(patient):
     handover_sentence = compact_join([
         f"Ziel/Empfänger: {handover.get('ziel')}" if valid(handover.get("ziel")) else "",
         handover.get("text"),
+        f"Lagerung/Transfer: {handover.get('lagerung')}" if valid(handover.get("lagerung")) else "",
+        f"Wertsachen/Eigentum: {handover.get('wertsachen')}" if valid(handover.get("wertsachen")) else "",
+        f"Krankenkassenkarte: {handover.get('krankenkassenkarte')}" if valid(handover.get("krankenkassenkarte")) else "",
     ], " ")
 
     text = ""
@@ -525,7 +528,7 @@ QUALITY_RULES = [
     {"id": "vital_core", "label": "Puls, SpO2, RR und GCS geprüft", "severity": "warning", "section": "Vitalwerte"},
     {"id": "short_report", "label": "Kurzbericht oder Leitsymptome vorhanden", "severity": "warning", "section": "Anamnese"},
     {"id": "xabcde", "label": "xABCDE Kernfelder dokumentiert", "severity": "warning", "section": "Erstbeurteilung"},
-    {"id": "diagnosis", "label": "Arbeitsdiagnose/Verdacht eingetragen", "severity": "warning", "section": "Abschluss"},
+    {"id": "diagnosis", "label": "Arbeitsdiagnose/Verdacht eingetragen", "severity": "warning", "section": "Übergabe"},
     {"id": "target", "label": "Zielklinik ausgewählt", "severity": "warning", "section": "Transport"},
     {"id": "handover", "label": "Übergabeziel oder Übergabetext vorhanden", "severity": "warning", "section": "Übergabe"},
     {"id": "measures", "label": "Maßnahmen/Medikation geprüft", "severity": "info", "section": "Maßnahmen"},
@@ -1079,6 +1082,12 @@ def generate_protocol_text(patient):
     text += add_lines("ÜBERGABE FREITEXT", [
         ("Übergabe Ziel", handover.get("ziel")),
         ("Übergabe Text", handover.get("text")),
+        ("Lagerung / Transfertechnik", handover.get("lagerung")),
+        ("Wertsachen / Eigentum", handover.get("wertsachen")),
+        ("Krankenkassenkarte", handover.get("krankenkassenkarte")),
+        ("Patientenunterlagen / Medikamente", handover.get("unterlagen")),
+        ("Begleitperson / Angehörige", handover.get("begleitperson")),
+        ("Besonderheiten bei Übergabe", handover.get("besonderheiten")),
     ])
 
     timeline = measures.get("timeline", [])

@@ -120,17 +120,6 @@ const opqrstSections = [
   { key: 'T', label: 'T', title: 'Time' }
 ];
 
-const sinnhaftFields = [
-  ['sinnhaft_start', 'S - Start', 'Ruhe herstellen, Face-to-Face-Übergabe, Manipulationen möglichst pausieren.'],
-  ['sinnhaft_identifikation', 'I - Identifikation', 'Geschlecht, Nachname/ID falls zulässig, Alter.'],
-  ['sinnhaft_notfallereignis', 'N - Notfallereignis', 'Was ist passiert, Leitsymptom, Ursache, Ort/Auffindesituation, Zeitpunkt.'],
-  ['sinnhaft_notfallprioritaet', 'N - Notfallpriorität', 'ABCDE-Befunde, kritische Vitalwerte, Dringlichkeit.'],
-  ['sinnhaft_handlung', 'H - Handlung', 'Maßnahmen, Dosis/Umfang/Zeitpunkt, Wirkung, bewusst unterlassene Maßnahmen.'],
-  ['sinnhaft_anamnese', 'A - Anamnese', 'Allergien, Medikamente, Vorerkrankungen, Infektion, Soziales, Besonderheiten.'],
-  ['sinnhaft_fazit', 'F - Fazit', 'Kernaussage, Verdacht, Übergabeziel, Bitte um Wiederholung.'],
-  ['sinnhaft_teamfragen', 'T - Teamfragen', 'Offene Fragen des aufnehmenden Teams, Rückfragen, Klärungsbedarf.']
-];
-
 const xabcdeOptions = {
   blutung: ['Keine Angabe', 'Keine starke Blutung', 'Starke Blutung kontrolliert', 'Starke Blutung unkontrolliert'],
   atemweg: ['Keine Angabe', 'Frei', 'Gefährdet', 'Verlegt'],
@@ -519,6 +508,12 @@ function generateLocalProtocolText(patient) {
   text += addProtocolBlock('ÜBERGABE', [
     ['Ziel', handover.ziel],
     ['Text', handover.text],
+    ['Lagerung / Transfertechnik', handover.lagerung],
+    ['Wertsachen / Eigentum', handover.wertsachen],
+    ['Krankenkassenkarte', handover.krankenkassenkarte],
+    ['Patientenunterlagen / Medikamente', handover.unterlagen],
+    ['Begleitperson / Angehörige', handover.begleitperson],
+    ['Besonderheiten bei Übergabe', handover.besonderheiten],
   ]);
   return text.trim();
 }
@@ -3351,7 +3346,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           className={protocolSection === 'abschluss' ? 'active' : ''}
           onClick={() => setProtocolSection('abschluss')}
         >
-          Abschluss
+          Übergabe
         </button>
         <button
           type="button"
@@ -3932,12 +3927,12 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
       {protocolSection === 'abschluss' && <section className="work-panel">
         <div className="section-head">
-          <h2>Abschluss & SINNHAFT-Übergabe</h2>
-          <span>Arbeitsdiagnose, Ziel und strukturierte Klinikübergabe</span>
+          <h2>Übergabe</h2>
+          <span>Ziel, Eigentum, Lagerung und SINNHAFT-Vorschlag</span>
         </div>
         <div className="handover-layout">
           <fieldset>
-            <legend>Abschlussdaten</legend>
+            <legend>Übergabedaten</legend>
             <label>
               Arbeitsdiagnose
               <input value={amls.arbeitsdiagnose || ''} onChange={(event) => updateAmls('arbeitsdiagnose', event.target.value)} />
@@ -3950,21 +3945,38 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
               Übergabetext frei
               <textarea value={uebergabe.text || ''} onChange={(event) => updateUebergabe('text', event.target.value)} rows={5} />
             </label>
-          </fieldset>
-          <fieldset>
-            <legend>SINNHAFT</legend>
-            <div className="sinnhaft-grid">
-              {sinnhaftFields.map(([key, label, placeholder]) => (
-                <label key={key}>
-                  {label}
-                  <textarea
-                    value={uebergabe[key] || ''}
-                    onChange={(event) => updateUebergabe(key, event.target.value)}
-                    placeholder={placeholder}
-                    rows={3}
-                  />
-                </label>
-              ))}
+            <div className="form-grid handover-extra-grid">
+              <label>
+                Lagerung / Transfertechnik
+                <input value={uebergabe.lagerung || ''} onChange={(event) => updateUebergabe('lagerung', event.target.value)} placeholder="z.B. Oberkörper hoch, Vakuummatratze, Tragestuhl" />
+              </label>
+              <label>
+                Krankenkassenkarte
+                <select value={uebergabe.krankenkassenkarte || ''} onChange={(event) => updateUebergabe('krankenkassenkarte', event.target.value)}>
+                  <option value="">Keine Angabe</option>
+                  <option value="mitgegeben">mitgegeben</option>
+                  <option value="bei Patient/in verblieben">bei Patient/in verblieben</option>
+                  <option value="an Klinik übergeben">an Klinik übergeben</option>
+                  <option value="nicht vorhanden">nicht vorhanden</option>
+                  <option value="bei Angehörigen">bei Angehörigen</option>
+                </select>
+              </label>
+              <label>
+                Wertsachen / Eigentum
+                <textarea value={uebergabe.wertsachen || ''} onChange={(event) => updateUebergabe('wertsachen', event.target.value)} rows={3} placeholder="z.B. Handy, Schlüssel, Geldbörse; bei wem verblieben/übergeben" />
+              </label>
+              <label>
+                Patientenunterlagen / Medikamente
+                <textarea value={uebergabe.unterlagen || ''} onChange={(event) => updateUebergabe('unterlagen', event.target.value)} rows={3} placeholder="z.B. Arztbriefe, Medikamentenplan, eigene Medikamente" />
+              </label>
+              <label>
+                Begleitperson / Angehörige
+                <input value={uebergabe.begleitperson || ''} onChange={(event) => updateUebergabe('begleitperson', event.target.value)} placeholder="z.B. Ehepartner fährt mit / informiert" />
+              </label>
+              <label>
+                Besonderheiten bei Übergabe
+                <input value={uebergabe.besonderheiten || ''} onChange={(event) => updateUebergabe('besonderheiten', event.target.value)} placeholder="z.B. Isolation, Sprache, Betreuung, Dokumente fehlen" />
+              </label>
             </div>
           </fieldset>
           <aside className="handover-preview">
@@ -4078,7 +4090,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       {protocolSection === 'protokoll' && <section className="work-panel">
         <div className="section-head">
           <h2>Dokumentation</h2>
-          <span>Vorschau und Abschluss</span>
+          <span>Vorschau, Qualitätssicherung und Export</span>
         </div>
         <section className="protocol-toolbar protocol-actionbar protocol-actionbar-panel">
           <div className="toolbar-group toolbar-group-back">

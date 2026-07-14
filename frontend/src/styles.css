@@ -1682,15 +1682,13 @@ form button,
 
 .handover-layout {
   display: grid;
-  grid-template-columns: minmax(260px, 0.7fr) minmax(0, 1.35fr) minmax(280px, 0.55fr);
+  grid-template-columns: minmax(320px, 1.2fr) minmax(280px, 0.8fr);
   gap: 14px;
   align-items: start;
 }
 
-.sinnhaft-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+.handover-extra-grid {
+  margin-top: 14px;
 }
 
 .handover-preview {
@@ -2566,7 +2564,6 @@ legend {
   .rules-grid,
   .form-grid,
   .handover-layout,
-  .sinnhaft-grid,
   .vital-pair-grid,
   .vital-bp-grid,
   .assessment-grid,
