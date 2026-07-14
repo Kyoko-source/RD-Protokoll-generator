@@ -906,7 +906,7 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
   }
 
   if (view === 'refusal') {
-    return <ProtocolView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} onSync={onSync} initialSection="verweigerung" />;
+    return <ProtocolView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} onSync={onSync} initialSection="verweigerung" standaloneRefusal />;
   }
 
   if (view === 'hospital') {
@@ -2042,7 +2042,7 @@ const emptyPatient = {
   uebergabe: {}
 };
 
-function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSync, initialSection = 'vitalwerte' }) {
+function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSync, initialSection = 'vitalwerte', standaloneRefusal = false }) {
   const [patient, setPatient] = useState(emptyPatient);
   const [protocolSection, setProtocolSection] = useState(initialSection);
   const [xabcdeSection, setXabcdeSection] = useState('A');
@@ -3104,7 +3104,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       <header className="topbar">
         <div>
           <div className="app-name">NANA</div>
-          <div className="app-subtitle">Dokumentation · Vitalwerte & Demographie</div>
+          <div className="app-subtitle">{standaloneRefusal ? 'Patientenverweigerung' : 'Dokumentation · Vitalwerte & Demographie'}</div>
         </div>
         <div className="user-area">
           <button className="header-button" type="button" onClick={onBack}>
@@ -3130,7 +3130,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         </section>
       )}
 
-      <section className="protocol-tabs">
+      {!standaloneRefusal && <section className="protocol-tabs">
         <button
           type="button"
           className={protocolSection === 'vitalwerte' ? 'active' : ''}
@@ -3194,7 +3194,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         >
           Dokumentation
         </button>
-      </section>
+      </section>}
 
       {protocolSection === 'vitalwerte' && <section className="work-panel">
         <div className="section-head">
