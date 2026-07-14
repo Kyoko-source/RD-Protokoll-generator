@@ -2388,20 +2388,37 @@ legend {
 }
 
 .checkbox-field {
-  min-height: 72px;
+  min-height: 76px;
   display: flex;
   flex-direction: row;
-  gap: 10px;
+  gap: 14px;
   align-items: center;
   justify-content: flex-start;
-  color: rgba(237, 244, 255, 0.9);
+  padding: 14px 16px;
+  border-radius: 12px;
+  color: rgba(237, 244, 255, 0.92);
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   font-weight: 850;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
 }
 
 .checkbox-field input {
-  width: 20px;
-  height: 20px;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
   accent-color: #37c8ab;
+  cursor: pointer;
+}
+
+.checkbox-field:has(input:checked) {
+  color: #f8fffd;
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.78), rgba(45, 212, 191, 0.40));
+  border-color: rgba(99, 230, 190, 0.58);
+  box-shadow: 0 0 0 1px rgba(99, 230, 190, 0.08), 0 14px 28px rgba(0, 0, 0, 0.18);
 }
 
 .reanimation-detail-grid {
@@ -2433,17 +2450,37 @@ legend {
 }
 
 .refusal-checks label {
-  min-height: 40px;
-  padding: 8px 10px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.045);
-  color: rgba(239, 248, 255, 0.86);
-  font-weight: 780;
+  min-height: 68px;
+  display: flex;
+  flex-direction: row;
+  gap: 14px;
+  align-items: center;
+  padding: 13px 15px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.055);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  color: rgba(239, 248, 255, 0.9);
+  font-weight: 820;
+  line-height: 1.25;
+  cursor: pointer;
+  user-select: none;
+  touch-action: manipulation;
 }
 
 .refusal-checks input {
-  width: auto;
-  min-height: auto;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  accent-color: #37c8ab;
+  cursor: pointer;
+}
+
+.refusal-checks label:has(input:checked) {
+  color: #f8fffd;
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.78), rgba(45, 212, 191, 0.40));
+  border-color: rgba(99, 230, 190, 0.58);
+  box-shadow: 0 0 0 1px rgba(99, 230, 190, 0.08), 0 14px 28px rgba(0, 0, 0, 0.18);
 }
 
 .refusal-signature-grid {
