@@ -1451,11 +1451,28 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
     setStatusText('');
     try {
       const normalizedQuery = query.replace(/\s+/g, '').toUpperCase();
-      const data = await api('/api/icd10/lookup', {
-        method: 'POST',
-        body: JSON.stringify({ code: normalizedQuery })
-      }, session.token);
-      setResult(data);
+      const [lookupData, searchData] = await Promise.all([
+        api('/api/icd10/lookup', {
+          method: 'POST',
+          body: JSON.stringify({ code: normalizedQuery })
+        }, session.token),
+        api('/api/icd10/search', {
+          method: 'POST',
+          body: JSON.stringify({ query, limit: 80 })
+        }, session.token)
+      ]);
+      setCatalogResult(searchData);
+      const exactEntry = (searchData.entries || []).find((entry) => entry.code === normalizedQuery);
+      const firstEntry = (searchData.entries || [])[0];
+      const nextResult = lookupData.found
+        ? lookupData
+        : exactEntry
+          ? { ...exactEntry, matched_code: exactEntry.code, found: true, source: searchData.source }
+          : firstEntry
+            ? { ...firstEntry, matched_code: firstEntry.code, found: true, source: searchData.source }
+            : lookupData;
+      setResult(nextResult);
+      setStatusText(nextResult.found ? `ICD10 ${nextResult.matched_code || nextResult.code} wurde übersetzt.` : 'Kein passender ICD10-Eintrag gefunden.');
     } catch (err) {
       setError(err.message);
     }
