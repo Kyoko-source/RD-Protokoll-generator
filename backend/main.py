@@ -159,6 +159,28 @@ class EmployeeUpdateRequest(BaseModel):
     reset_password: bool = False
 
 
+class AnnouncementItem(BaseModel):
+    title: str = ""
+    body: str = ""
+    published_at: str = ""
+
+
+class AnnouncementsRequest(BaseModel):
+    patch_notes: list[AnnouncementItem] = []
+    planned_updates: list[AnnouncementItem] = []
+
+
+class FeedbackRequest(BaseModel):
+    kind: str = "Bug"
+    title: str = ""
+    message: str = ""
+
+
+class FeedbackUpdateRequest(BaseModel):
+    status: str = "offen"
+    answer: str = ""
+
+
 class RetentionRequest(BaseModel):
     retention_days: int = 3650
 
@@ -187,6 +209,59 @@ def default_patient_case():
 
 def valid(value):
     return value not in [None, "", [], {}, "Keine Angabe", "Selber eintragen"]
+
+
+def clean_text(value, limit=2000):
+    text = str(value or "").strip()
+    return text[:limit]
+
+
+def announcements_store():
+    store = get_app_setting("announcements", {})
+    if not isinstance(store, dict):
+        store = {}
+    patch_notes = store.get("patch_notes") if isinstance(store.get("patch_notes"), list) else []
+    planned_updates = store.get("planned_updates") if isinstance(store.get("planned_updates"), list) else []
+    feedback = store.get("feedback") if isinstance(store.get("feedback"), list) else []
+    return {"patch_notes": patch_notes, "planned_updates": planned_updates, "feedback": feedback}
+
+
+def save_announcements_store(store):
+    safe_store = {
+        "patch_notes": store.get("patch_notes", []) if isinstance(store, dict) else [],
+        "planned_updates": store.get("planned_updates", []) if isinstance(store, dict) else [],
+        "feedback": store.get("feedback", []) if isinstance(store, dict) else [],
+    }
+    set_app_setting("announcements", safe_store)
+    return safe_store
+
+
+def public_announcement_item(item):
+    item = item if isinstance(item, dict) else {}
+    return {
+        "id": clean_text(item.get("id"), 80),
+        "title": clean_text(item.get("title"), 160),
+        "body": clean_text(item.get("body"), 4000),
+        "published_at": clean_text(item.get("published_at"), 80),
+    }
+
+
+def public_feedback_item(item, include_identity=False):
+    item = item if isinstance(item, dict) else {}
+    result = {
+        "id": clean_text(item.get("id"), 80),
+        "kind": clean_text(item.get("kind"), 40),
+        "title": clean_text(item.get("title"), 160),
+        "message": clean_text(item.get("message"), 4000),
+        "status": clean_text(item.get("status") or "offen", 40),
+        "answer": clean_text(item.get("answer"), 4000),
+        "created_at": clean_text(item.get("created_at"), 80),
+        "answered_at": clean_text(item.get("answered_at"), 80),
+    }
+    if include_identity:
+        result["employee_id"] = clean_text(item.get("employee_id"), 80)
+        result["employee_name"] = clean_text(item.get("employee_name"), 160)
+    return result
 
 
 def add_lines(title, rows):
@@ -1754,6 +1829,113 @@ def dashboard(employee=Depends(current_employee)):
         tiles.append({"id": "interfaces", "label": "Schnittstellen", "subtitle": "Import und Export"})
         tiles.append({"id": "admin", "label": "Admin", "subtitle": "Sicherheit und Verwaltung"})
     return {"employee": public_employee(employee), "tiles": tiles}
+
+
+@app.get("/api/announcements")
+def announcements(employee=Depends(current_employee)):
+    store = announcements_store()
+    own_feedback = [
+        public_feedback_item(item)
+        for item in store.get("feedback", [])
+        if item.get("employee_id") == employee.get("id")
+    ]
+    return {
+        "patch_notes": [public_announcement_item(item) for item in store.get("patch_notes", [])],
+        "planned_updates": [public_announcement_item(item) for item in store.get("planned_updates", [])],
+        "feedback": own_feedback,
+    }
+
+
+@app.post("/api/feedback")
+def create_feedback(payload: FeedbackRequest, employee=Depends(current_employee)):
+    title = clean_text(payload.title, 160)
+    message = clean_text(payload.message, 4000)
+    kind = clean_text(payload.kind, 40) or "Bug"
+    if kind not in {"Bug", "Wunsch"}:
+        kind = "Bug"
+    if not title or not message:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Titel und Beschreibung sind erforderlich.")
+
+    store = announcements_store()
+    item = {
+        "id": new_token()[:16],
+        "kind": kind,
+        "title": title,
+        "message": message,
+        "status": "offen",
+        "answer": "",
+        "created_at": local_now().isoformat(timespec="seconds"),
+        "answered_at": "",
+        "employee_id": employee.get("id", ""),
+        "employee_name": employee.get("name", ""),
+    }
+    store.setdefault("feedback", []).insert(0, item)
+    save_announcements_store(store)
+    audit("api_feedback_created", employee=employee, entity_type="feedback", entity_id=item["id"], details={"kind": kind})
+    return {"status": "created", "item": public_feedback_item(item)}
+
+
+@app.get("/api/admin/announcements")
+def admin_announcements(employee=Depends(require_admin)):
+    store = announcements_store()
+    return {
+        "patch_notes": [public_announcement_item(item) for item in store.get("patch_notes", [])],
+        "planned_updates": [public_announcement_item(item) for item in store.get("planned_updates", [])],
+        "feedback": [public_feedback_item(item, include_identity=True) for item in store.get("feedback", [])],
+    }
+
+
+@app.put("/api/admin/announcements")
+def update_announcements(payload: AnnouncementsRequest, employee=Depends(require_admin)):
+    store = announcements_store()
+
+    def normalize_items(items):
+        normalized = []
+        for item in items:
+            title = clean_text(item.title, 160)
+            body = clean_text(item.body, 4000)
+            published_at = clean_text(item.published_at, 80)
+            if not title and not body:
+                continue
+            normalized.append({
+                "id": new_token()[:16],
+                "title": title or "Ohne Titel",
+                "body": body,
+                "published_at": published_at or local_now().isoformat(timespec="seconds"),
+            })
+        return normalized[:50]
+
+    store["patch_notes"] = normalize_items(payload.patch_notes)
+    store["planned_updates"] = normalize_items(payload.planned_updates)
+    save_announcements_store(store)
+    audit("api_announcements_updated", employee=employee, details={"patch_notes": len(store["patch_notes"]), "planned_updates": len(store["planned_updates"])})
+    return {
+        "status": "saved",
+        "patch_notes": [public_announcement_item(item) for item in store["patch_notes"]],
+        "planned_updates": [public_announcement_item(item) for item in store["planned_updates"]],
+    }
+
+
+@app.put("/api/admin/feedback/{feedback_id}")
+def update_feedback(feedback_id: str, payload: FeedbackUpdateRequest, employee=Depends(require_admin)):
+    store = announcements_store()
+    target = None
+    for item in store.get("feedback", []):
+        if item.get("id") == feedback_id:
+            target = item
+            break
+    if not target:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Meldung nicht gefunden.")
+
+    status_value = clean_text(payload.status, 40) or "offen"
+    if status_value not in {"offen", "in Arbeit", "beantwortet", "erledigt", "abgelehnt"}:
+        status_value = "offen"
+    target["status"] = status_value
+    target["answer"] = clean_text(payload.answer, 4000)
+    target["answered_at"] = local_now().isoformat(timespec="seconds") if target["answer"] else ""
+    save_announcements_store(store)
+    audit("api_feedback_updated", employee=employee, entity_type="feedback", entity_id=feedback_id, details={"status": status_value})
+    return {"status": "saved", "item": public_feedback_item(target, include_identity=True)}
 
 
 @app.get("/api/hospitals")

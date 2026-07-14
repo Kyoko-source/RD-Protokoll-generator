@@ -741,6 +741,114 @@ function SystemStatus({ online, backendOnline, lastSync }) {
   );
 }
 
+function UserMenu({ session, employee, onLogout }) {
+  const [open, setOpen] = useState(false);
+  const [activePanel, setActivePanel] = useState('');
+  const [announcements, setAnnouncements] = useState({ patch_notes: [], planned_updates: [], feedback: [] });
+  const [feedbackDraft, setFeedbackDraft] = useState({ kind: 'Bug', title: '', message: '' });
+  const [statusText, setStatusText] = useState('');
+  const [error, setError] = useState('');
+
+  async function loadAnnouncements(nextPanel = activePanel || 'patch') {
+    setError('');
+    try {
+      const data = await api('/api/announcements', {}, session.token);
+      setAnnouncements(data);
+      setActivePanel(nextPanel);
+      setOpen(true);
+    } catch (err) {
+      setError(err.message);
+      setOpen(true);
+    }
+  }
+
+  async function submitFeedback(event) {
+    event.preventDefault();
+    setError('');
+    setStatusText('');
+    try {
+      await api('/api/feedback', {
+        method: 'POST',
+        body: JSON.stringify(feedbackDraft)
+      }, session.token);
+      setFeedbackDraft({ kind: 'Bug', title: '', message: '' });
+      setStatusText('Meldung wurde an den Adminfeed gesendet.');
+      await loadAnnouncements('feedback');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  const visibleList = activePanel === 'planned' ? announcements.planned_updates : announcements.patch_notes;
+
+  return (
+    <div className="user-menu">
+      <button
+        className="user-name-button"
+        type="button"
+        onClick={() => {
+          if (!open) loadAnnouncements('patch');
+          setOpen((current) => !current);
+        }}
+      >
+        {employee?.name || 'Profil'}
+      </button>
+      {open && (
+        <div className="user-dropdown">
+          <div className="user-dropdown-tabs">
+            <button type="button" className={activePanel === 'patch' ? 'active' : ''} onClick={() => loadAnnouncements('patch')}>Patch Notes</button>
+            <button type="button" className={activePanel === 'planned' ? 'active' : ''} onClick={() => loadAnnouncements('planned')}>Geplante Updates</button>
+            <button type="button" className={activePanel === 'feedback' ? 'active' : ''} onClick={() => loadAnnouncements('feedback')}>Bugs/Wünsche</button>
+          </div>
+          {error && <div className="error-box compact-box">{error}</div>}
+          {statusText && <div className="success-box compact-box">{statusText}</div>}
+
+          {(activePanel === 'patch' || activePanel === 'planned') && (
+            <div className="user-dropdown-list">
+              {visibleList.length === 0 ? (
+                <p className="muted">Noch keine Einträge vorhanden.</p>
+              ) : visibleList.map((item) => (
+                <article className="dropdown-entry" key={item.id || `${item.title}-${item.published_at}`}>
+                  <strong>{item.title}</strong>
+                  <span>{item.published_at}</span>
+                  <p>{item.body}</p>
+                </article>
+              ))}
+            </div>
+          )}
+
+          {activePanel === 'feedback' && (
+            <div className="user-feedback-panel">
+              <form className="feedback-form" onSubmit={submitFeedback}>
+                <select value={feedbackDraft.kind} onChange={(event) => setFeedbackDraft({ ...feedbackDraft, kind: event.target.value })}>
+                  <option value="Bug">Bug</option>
+                  <option value="Wunsch">Wunsch</option>
+                </select>
+                <input value={feedbackDraft.title} onChange={(event) => setFeedbackDraft({ ...feedbackDraft, title: event.target.value })} placeholder="Kurzbeschreibung" />
+                <textarea value={feedbackDraft.message} onChange={(event) => setFeedbackDraft({ ...feedbackDraft, message: event.target.value })} rows={4} placeholder="Was ist passiert oder was wünschst du dir?" />
+                <button type="submit">Absenden</button>
+              </form>
+              <div className="user-dropdown-list">
+                {(announcements.feedback || []).length === 0 ? (
+                  <p className="muted">Noch keine eigenen Meldungen.</p>
+                ) : announcements.feedback.map((item) => (
+                  <article className="dropdown-entry" key={item.id}>
+                    <strong>{item.kind}: {item.title}</strong>
+                    <span>{item.created_at} · {item.status}</span>
+                    <p>{item.message}</p>
+                    {item.answer && <p><b>Antwort:</b> {item.answer}</p>}
+                  </article>
+                ))}
+              </div>
+            </div>
+          )}
+          <button type="button" className="dropdown-logout" onClick={onLogout}>Abmelden</button>
+        </div>
+      )}
+    </div>
+  );
+}
+
 const tileIcons = {
   protocol: FileText,
   refusal: ShieldCheck,
@@ -1063,7 +1171,7 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
   }
 
   if (view === 'cancelled') {
-    return <CancellationView employee={employee} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} />;
+    return <CancellationView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} />;
   }
 
   if (view === 'hospital') {
@@ -1104,7 +1212,7 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
           <div className="app-subtitle">Notfall-Aufzeichnungs- und Nachbearbeitungs-Assistent</div>
         </div>
         <div className="user-area">
-          <span>{employee?.name}</span>
+          <UserMenu session={session} employee={employee} onLogout={logout} />
           {installPromptAvailable && (
             <button className="header-button install-button" type="button" onClick={onInstallApp}>
               <Download size={16} />
@@ -1251,7 +1359,7 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
           <div className="app-subtitle">Schnittstellen · Import und Export</div>
         </div>
         <div className="user-area">
-          <span>{employee?.name}</span>
+          <UserMenu session={session} employee={employee} onLogout={onLogout} />
           <button className="icon-button" onClick={onLogout} aria-label="Abmelden">
             <LogOut size={18} />
           </button>
@@ -1455,7 +1563,7 @@ function HospitalView({ session, employee, onBack, onOpenProtocol, onLogout }) {
           <div className="app-subtitle">Krankenhaus Finder · Zielklinik wählen</div>
         </div>
         <div className="user-area">
-          <span>{employee?.name}</span>
+          <UserMenu session={session} employee={employee} onLogout={onLogout} />
           <button className="icon-button" onClick={onLogout} aria-label="Abmelden"><LogOut size={18} /></button>
         </div>
       </header>
@@ -1644,7 +1752,7 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
           <div className="app-subtitle">ICD10 Code · Dekodierer</div>
         </div>
         <div className="user-area">
-          <span>{employee?.name}</span>
+          <UserMenu session={session} employee={employee} onLogout={onLogout} />
           <button className="icon-button" onClick={onLogout} aria-label="Abmelden"><LogOut size={18} /></button>
         </div>
       </header>
@@ -1760,7 +1868,7 @@ function DevicesView({ session, employee, onBack, onLogout }) {
           <div className="app-subtitle">Geräte · Kurzreferenzen</div>
         </div>
         <div className="user-area">
-          <span>{employee?.name}</span>
+          <UserMenu session={session} employee={employee} onLogout={onLogout} />
           <button className="icon-button" onClick={onLogout} aria-label="Abmelden"><LogOut size={18} /></button>
         </div>
       </header>
@@ -1853,6 +1961,10 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [privacy, setPrivacy] = useState(null);
   const [qualityRules, setQualityRules] = useState([]);
   const [cases, setCases] = useState([]);
+  const [announcementData, setAnnouncementData] = useState({ patch_notes: [], planned_updates: [], feedback: [] });
+  const [patchDraft, setPatchDraft] = useState({ title: '', body: '', published_at: '' });
+  const [plannedDraft, setPlannedDraft] = useState({ title: '', body: '', published_at: '' });
+  const [feedbackAnswers, setFeedbackAnswers] = useState({});
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState('employee');
   const [retentionDays, setRetentionDays] = useState(3650);
@@ -1864,11 +1976,12 @@ function AdminView({ session, employee, onBack, onLogout }) {
   async function loadAdminData() {
     setError('');
     try {
-      const [employeeData, auditData, privacyData, caseData] = await Promise.all([
+      const [employeeData, auditData, privacyData, caseData, announcementAdminData] = await Promise.all([
         api('/api/admin/employees', {}, session.token),
         api('/api/admin/audit', {}, session.token),
         api('/api/admin/privacy', {}, session.token),
-        api('/api/cases', {}, session.token)
+        api('/api/cases', {}, session.token),
+        api('/api/admin/announcements', {}, session.token)
       ]);
       const qualityData = await api('/api/admin/quality-rules', {}, session.token).catch(() => ({ rules: [] }));
       setEmployees(employeeData.employees || []);
@@ -1877,6 +1990,8 @@ function AdminView({ session, employee, onBack, onLogout }) {
       setQualityRules(qualityData.rules || []);
       setRetentionDays(privacyData.retention_days || 3650);
       setCases(caseData.cases || []);
+      setAnnouncementData(announcementAdminData);
+      setFeedbackAnswers(Object.fromEntries((announcementAdminData.feedback || []).map((item) => [item.id, item.answer || ''])));
     } catch (err) {
       setError(err.message);
     }
@@ -1995,6 +2110,63 @@ function AdminView({ session, employee, onBack, onLogout }) {
     }
   }
 
+  function addAnnouncement(kind) {
+    const draft = kind === 'patch_notes' ? patchDraft : plannedDraft;
+    if (!draft.title.trim() && !draft.body.trim()) return;
+    const item = {
+      title: draft.title.trim() || 'Ohne Titel',
+      body: draft.body.trim(),
+      published_at: draft.published_at.trim() || new Date().toLocaleString('de-DE')
+    };
+    setAnnouncementData((current) => ({
+      ...current,
+      [kind]: [item, ...(current[kind] || [])]
+    }));
+    if (kind === 'patch_notes') setPatchDraft({ title: '', body: '', published_at: '' });
+    if (kind === 'planned_updates') setPlannedDraft({ title: '', body: '', published_at: '' });
+  }
+
+  function removeAnnouncement(kind, index) {
+    setAnnouncementData((current) => ({
+      ...current,
+      [kind]: (current[kind] || []).filter((_, itemIndex) => itemIndex !== index)
+    }));
+  }
+
+  async function saveAnnouncements() {
+    setError('');
+    setStatusText('');
+    try {
+      const result = await api('/api/admin/announcements', {
+        method: 'PUT',
+        body: JSON.stringify({
+          patch_notes: announcementData.patch_notes || [],
+          planned_updates: announcementData.planned_updates || []
+        })
+      }, session.token);
+      setAnnouncementData((current) => ({ ...current, ...result }));
+      setStatusText('Patch Notes und geplante Updates wurden gespeichert.');
+      await loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function answerFeedback(item, statusValue = item.status || 'offen') {
+    setError('');
+    setStatusText('');
+    try {
+      await api(`/api/admin/feedback/${item.id}`, {
+        method: 'PUT',
+        body: JSON.stringify({ status: statusValue, answer: feedbackAnswers[item.id] || '' })
+      }, session.token);
+      setStatusText('Antwort wurde gespeichert.');
+      await loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -2003,7 +2175,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
           <div className="app-subtitle">Admin · Datenschutz & Benutzerverwaltung</div>
         </div>
         <div className="user-area">
-          <span>{employee?.name}</span>
+          <UserMenu session={session} employee={employee} onLogout={onLogout} />
           <button className="icon-button" onClick={onLogout} aria-label="Abmelden">
             <LogOut size={18} />
           </button>
@@ -2115,6 +2287,92 @@ function AdminView({ session, employee, onBack, onLogout }) {
 
       <section className="work-panel">
         <div className="section-head">
+          <h2>Patch Notes & Updates</h2>
+          <span>{(announcementData.patch_notes || []).length} Patch Notes · {(announcementData.planned_updates || []).length} geplant</span>
+        </div>
+        <div className="admin-announcement-grid">
+          <article>
+            <h3>Patch Note hinzufügen</h3>
+            <div className="inline-form announcement-form">
+              <input value={patchDraft.published_at} onChange={(event) => setPatchDraft({ ...patchDraft, published_at: event.target.value })} placeholder="Datum/Uhrzeit, z.B. 14.07.2026 22:30" />
+              <input value={patchDraft.title} onChange={(event) => setPatchDraft({ ...patchDraft, title: event.target.value })} placeholder="Titel" />
+              <textarea value={patchDraft.body} onChange={(event) => setPatchDraft({ ...patchDraft, body: event.target.value })} rows={4} placeholder="Was wurde geändert?" />
+              <button type="button" onClick={() => addAnnouncement('patch_notes')}>Hinzufügen</button>
+            </div>
+            <div className="admin-list compact-admin-list">
+              {(announcementData.patch_notes || []).map((item, index) => (
+                <div className="admin-row" key={`patch-${index}-${item.title}`}>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <span>{item.published_at} · {item.body}</span>
+                  </div>
+                  <button type="button" className="danger-button" onClick={() => removeAnnouncement('patch_notes', index)}>Entfernen</button>
+                </div>
+              ))}
+            </div>
+          </article>
+          <article>
+            <h3>Geplantes Update hinzufügen</h3>
+            <div className="inline-form announcement-form">
+              <input value={plannedDraft.published_at} onChange={(event) => setPlannedDraft({ ...plannedDraft, published_at: event.target.value })} placeholder="geplant für / Zeitraum" />
+              <input value={plannedDraft.title} onChange={(event) => setPlannedDraft({ ...plannedDraft, title: event.target.value })} placeholder="Titel" />
+              <textarea value={plannedDraft.body} onChange={(event) => setPlannedDraft({ ...plannedDraft, body: event.target.value })} rows={4} placeholder="Was ist geplant?" />
+              <button type="button" onClick={() => addAnnouncement('planned_updates')}>Hinzufügen</button>
+            </div>
+            <div className="admin-list compact-admin-list">
+              {(announcementData.planned_updates || []).map((item, index) => (
+                <div className="admin-row" key={`planned-${index}-${item.title}`}>
+                  <div>
+                    <strong>{item.title}</strong>
+                    <span>{item.published_at} · {item.body}</span>
+                  </div>
+                  <button type="button" className="danger-button" onClick={() => removeAnnouncement('planned_updates', index)}>Entfernen</button>
+                </div>
+              ))}
+            </div>
+          </article>
+        </div>
+        <div className="protocol-toolbar compact-toolbar">
+          <button type="button" onClick={saveAnnouncements}>Patch Notes / Updates speichern</button>
+        </div>
+      </section>
+
+      <section className="work-panel">
+        <div className="section-head">
+          <h2>Bugs/Wünsche</h2>
+          <span>{(announcementData.feedback || []).length} Meldungen</span>
+        </div>
+        <div className="admin-list feedback-admin-list">
+          {(announcementData.feedback || []).length === 0 ? (
+            <p className="muted">Noch keine Meldungen vorhanden.</p>
+          ) : (announcementData.feedback || []).map((item) => (
+            <div className="admin-row feedback-admin-row" key={item.id}>
+              <div>
+                <strong>{item.kind}: {item.title}</strong>
+                <span>{item.created_at} · {item.employee_name || 'unbekannt'} · {item.status}</span>
+                <p>{item.message}</p>
+              </div>
+              <select value={item.status || 'offen'} onChange={(event) => answerFeedback(item, event.target.value)}>
+                <option value="offen">offen</option>
+                <option value="in Arbeit">in Arbeit</option>
+                <option value="beantwortet">beantwortet</option>
+                <option value="erledigt">erledigt</option>
+                <option value="abgelehnt">abgelehnt</option>
+              </select>
+              <textarea
+                value={feedbackAnswers[item.id] || ''}
+                onChange={(event) => setFeedbackAnswers((current) => ({ ...current, [item.id]: event.target.value }))}
+                rows={3}
+                placeholder="Antwort an Mitarbeiter/in"
+              />
+              <button type="button" onClick={() => answerFeedback(item, item.status || 'beantwortet')}>Antwort speichern</button>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="work-panel">
+        <div className="section-head">
           <h2>Fall-Datenschutz</h2>
           <span>{cases.length} Einsätze</span>
         </div>
@@ -2187,7 +2445,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
   );
 }
 
-function CancellationView({ employee, onBack, onLogout, connectivity }) {
+function CancellationView({ session, employee, onBack, onLogout, connectivity }) {
   const [statusText, setStatusText] = useState('');
   const [actionFeedback, setActionFeedback] = useState(null);
   const [cancellation, setCancellation] = useState(() => {
@@ -2239,7 +2497,7 @@ function CancellationView({ employee, onBack, onLogout, connectivity }) {
           <div className="app-subtitle">Einsatz abgebrochen</div>
         </div>
         <div className="user-area">
-          <span>{employee?.name}</span>
+          <UserMenu session={session} employee={employee} onLogout={onLogout} />
           <button className="header-button" type="button" onClick={onBack}>
             <Home size={16} /> Hauptmenü
           </button>
@@ -3489,7 +3747,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <button className="header-button" type="button" onClick={onBack}>
             <Home size={16} /> Hauptmenü
           </button>
-          <span>{employee?.name}</span>
+          <UserMenu session={session} employee={employee} onLogout={onLogout} />
           <button className="icon-button" onClick={onLogout} aria-label="Abmelden">
             <LogOut size={18} />
           </button>
