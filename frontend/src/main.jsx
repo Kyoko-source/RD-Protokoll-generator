@@ -588,6 +588,40 @@ function buildPatientRefusalText(patient, refusal) {
   ].join('\n');
 }
 
+function buildCancellationText(cancellation) {
+  const reason = valueOrBlank(cancellation.reason);
+  const dateText = valueOrBlank(cancellation.date);
+  const timeText = valueOrBlank(cancellation.time);
+  const caseNumber = valueOrBlank(cancellation.case_number);
+  const location = valueOrBlank(cancellation.location);
+  const unit = valueOrBlank(cancellation.unit);
+  const dispatcher = valueOrBlank(cancellation.dispatcher);
+  const patientContact = valueOrBlank(cancellation.patient_contact);
+  const alternative = valueOrBlank(cancellation.alternative_action);
+  const details = valueOrBlank(cancellation.details);
+  const documentedBy = valueOrBlank(cancellation.documented_by);
+
+  return [
+    'Dokumentation Einsatzabbruch / nicht durchgeführter Einsatz',
+    '',
+    `Der Rettungsdiensteinsatz mit der Einsatznummer ${caseNumber} wurde am ${dateText} um ${timeText} Uhr für das Rettungsmittel ${unit} dokumentiert.`,
+    `Einsatzort / Bereich: ${location}.`,
+    '',
+    `Der Einsatz wurde nicht regulär durchgeführt bzw. vorzeitig beendet. Grund: ${reason}.`,
+    `Patientenkontakt: ${patientContact}.`,
+    '',
+    `Leitstelle / Rücksprache: ${dispatcher}.`,
+    `Weitere Veranlassung / Ersatzmaßnahme: ${alternative}.`,
+    '',
+    `Freitext / Verlauf: ${details}.`,
+    '',
+    'Die Dokumentation beschreibt den Grund des Abbruchs bzw. der Nichtdurchführbarkeit aus Sicht des Rettungsdienstes zum Zeitpunkt des Ereignisses. Relevante Rückmeldungen an Leitstelle, Führungskraft, Technik oder andere beteiligte Stellen sind ergänzend zu dokumentieren.',
+    '',
+    `Dokumentiert durch: ${documentedBy}`,
+    'Unterschrift / Kürzel Rettungsdienst: __________'
+  ].join('\n');
+}
+
 function api(path, options = {}, token = '') {
   const headers = {
     'Content-Type': 'application/json',
@@ -710,12 +744,29 @@ function SystemStatus({ online, backendOnline, lastSync }) {
 const tileIcons = {
   protocol: FileText,
   refusal: ShieldCheck,
+  cancelled: AlertTriangle,
   hospital: Building2,
   icd10: Stethoscope,
   devices: Wrench,
   interfaces: Cable,
   admin: ShieldCheck
 };
+
+const cancellationReasons = [
+  'Nur Tragehilfe / technische Hilfeleistung',
+  'Einsatz durch Leitstelle abgebrochen',
+  'Einsatz aus Wettergründen nicht durchführbar',
+  'Ausfall der Besatzung',
+  'Technischer Fehler am Fahrzeug',
+  'Fahrzeug nicht einsatzbereit',
+  'Einsatzort nicht erreichbar',
+  'Patient/in nicht auffindbar',
+  'Kein Patient / Fehleinsatz',
+  'Doppelalarmierung',
+  'Versorgung durch anderes Rettungsmittel übernommen',
+  'Polizei / Feuerwehr übernimmt',
+  'Sonstiges'
+];
 
 function Login({ onLogin }) {
   const [employees, setEmployees] = useState([]);
@@ -1011,6 +1062,10 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
     return <ProtocolView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} onSync={onSync} initialSection="verweigerung" standaloneRefusal />;
   }
 
+  if (view === 'cancelled') {
+    return <CancellationView employee={employee} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} />;
+  }
+
   if (view === 'hospital') {
     return <HospitalView session={session} employee={employee} onBack={() => setView('home')} onOpenProtocol={() => setView('protocol')} onLogout={logout} />;
   }
@@ -1086,6 +1141,7 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
               onClick={() => {
                 if (tile.id === 'protocol') setView('protocol');
                 if (tile.id === 'refusal') setView('refusal');
+                if (tile.id === 'cancelled') setView('cancelled');
                 if (tile.id === 'hospital') setView('hospital');
                 if (tile.id === 'icd10') setView('icd10');
                 if (tile.id === 'devices') setView('devices');
@@ -2126,6 +2182,148 @@ function AdminView({ session, employee, onBack, onLogout }) {
             </div>
           ))}
         </div>
+      </section>
+    </main>
+  );
+}
+
+function CancellationView({ employee, onBack, onLogout, connectivity }) {
+  const [statusText, setStatusText] = useState('');
+  const [actionFeedback, setActionFeedback] = useState(null);
+  const [cancellation, setCancellation] = useState(() => {
+    const now = new Date();
+    return {
+      reason: '',
+      case_number: '',
+      unit: '',
+      location: '',
+      date: now.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
+      time: now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
+      patient_contact: 'kein Patientenkontakt',
+      dispatcher: '',
+      alternative_action: '',
+      details: '',
+      documented_by: employee?.name || ''
+    };
+  });
+  const cancellationText = buildCancellationText(cancellation);
+
+  function updateCancellation(key, value) {
+    setCancellation((current) => ({ ...current, [key]: value }));
+  }
+
+  function markCancellationFeedback(key, message) {
+    setActionFeedback({ key, message });
+    setStatusText(message);
+    window.setTimeout(() => {
+      setActionFeedback((current) => (current?.key === key ? null : current));
+    }, 4200);
+  }
+
+  function downloadCancellationText() {
+    downloadBlob(new Blob([cancellationText], { type: 'text/plain;charset=utf-8' }), 'Einsatzabbruch.txt');
+    markCancellationFeedback('cancel-download', 'TXT wurde vorbereitet.');
+  }
+
+  function printCancellationText() {
+    const opened = printTextDocument('Einsatzabbruch', cancellationText);
+    markCancellationFeedback('cancel-print', opened ? 'Druckfenster wurde geöffnet.' : 'Druckfenster konnte nicht geöffnet werden.');
+  }
+
+  return (
+    <main className="app-shell">
+      <SystemStatus {...connectivity} />
+      <header className="topbar">
+        <div>
+          <div className="app-name">NANA</div>
+          <div className="app-subtitle">Einsatz abgebrochen</div>
+        </div>
+        <div className="user-area">
+          <span>{employee?.name}</span>
+          <button className="header-button" type="button" onClick={onBack}>
+            <Home size={16} /> Hauptmenü
+          </button>
+          <button className="icon-button" onClick={onLogout} aria-label="Abmelden">
+            <LogOut size={18} />
+          </button>
+        </div>
+      </header>
+
+      {statusText && <div className="success-box">{statusText}</div>}
+
+      <section className="work-panel cancellation-panel">
+        <div className="section-head">
+          <h2>Einsatz abgebrochen</h2>
+          <span>Abbruchgrund und Verlauf dokumentieren</span>
+        </div>
+        <div className="form-grid">
+          <label>
+            Grund
+            <select value={cancellation.reason} onChange={(event) => updateCancellation('reason', event.target.value)}>
+              <option value="">Bitte auswählen</option>
+              {cancellationReasons.map((reason) => <option key={reason} value={reason}>{reason}</option>)}
+            </select>
+          </label>
+          <label>
+            Patientenkontakt
+            <select value={cancellation.patient_contact} onChange={(event) => updateCancellation('patient_contact', event.target.value)}>
+              <option value="kein Patientenkontakt">kein Patientenkontakt</option>
+              <option value="Patientenkontakt ohne Behandlung">Patientenkontakt ohne Behandlung</option>
+              <option value="Patientenkontakt, Versorgung durch andere Einheit">Patientenkontakt, Versorgung durch andere Einheit</option>
+              <option value="nicht beurteilbar">nicht beurteilbar</option>
+            </select>
+          </label>
+          <label>
+            Einsatznummer
+            <input value={cancellation.case_number} onChange={(event) => updateCancellation('case_number', event.target.value)} />
+          </label>
+          <label>
+            Rettungsmittel
+            <input value={cancellation.unit} onChange={(event) => updateCancellation('unit', event.target.value)} placeholder="z.B. RTW 1, KTW, NEF" />
+          </label>
+          <label>
+            Datum
+            <input value={cancellation.date} onChange={(event) => updateCancellation('date', event.target.value)} />
+          </label>
+          <label>
+            Uhrzeit
+            <input value={cancellation.time} onChange={(event) => updateCancellation('time', event.target.value)} />
+          </label>
+          <label className="full-span">
+            Einsatzort / Bereich
+            <input value={cancellation.location} onChange={(event) => updateCancellation('location', event.target.value)} placeholder="Ort, Straße, Abschnitt oder Bereich" />
+          </label>
+          <label>
+            Leitstelle / Rücksprache
+            <input value={cancellation.dispatcher} onChange={(event) => updateCancellation('dispatcher', event.target.value)} placeholder="z.B. Leitstelle informiert, Funk, Telefon" />
+          </label>
+          <label>
+            Weitere Veranlassung
+            <input value={cancellation.alternative_action} onChange={(event) => updateCancellation('alternative_action', event.target.value)} placeholder="z.B. Ersatz-RTW, Technik, Führungskraft" />
+          </label>
+          <label className="full-span">
+            Freitext / Verlauf
+            <textarea value={cancellation.details} onChange={(event) => updateCancellation('details', event.target.value)} rows={5} placeholder="Was ist passiert? Warum war der Einsatz nicht möglich bzw. warum wurde abgebrochen?" />
+          </label>
+          <label>
+            Dokumentiert durch
+            <input value={cancellation.documented_by} onChange={(event) => updateCancellation('documented_by', event.target.value)} />
+          </label>
+        </div>
+        <div className="protocol-toolbar compact-toolbar">
+          <button type="button" className={actionFeedback?.key === 'cancel-download' ? 'action-confirmed' : ''} onClick={downloadCancellationText}>
+            {actionFeedback?.key === 'cancel-download' ? 'TXT vorbereitet' : 'TXT herunterladen'}
+          </button>
+          <button type="button" className={actionFeedback?.key === 'cancel-print' ? 'action-confirmed' : ''} onClick={printCancellationText}>
+            {actionFeedback?.key === 'cancel-print' ? 'Druck geöffnet' : 'Drucken'}
+          </button>
+        </div>
+        <textarea
+          className="protocol-preview cancellation-preview"
+          value={cancellationText}
+          readOnly
+          rows={16}
+        />
       </section>
     </main>
   );
@@ -4348,7 +4546,7 @@ function isStandaloneApp() {
 
 function getInitialDashboardView() {
   const view = new URLSearchParams(window.location.search).get('view');
-  return ['protocol', 'refusal', 'hospital', 'icd10', 'devices'].includes(view) ? view : 'home';
+  return ['protocol', 'refusal', 'cancelled', 'hospital', 'icd10', 'devices'].includes(view) ? view : 'home';
 }
 
 function isLocalDevHost() {
