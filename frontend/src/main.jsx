@@ -561,15 +561,13 @@ function printBlob(blob) {
 }
 
 function printTextDocument(title, text) {
-  const printWindow = window.open('', '_blank', 'noopener,noreferrer');
-  if (!printWindow) return false;
   const escapedTitle = String(title || '').replace(/[&<>"']/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[char]));
   const escapedText = String(text || '').replace(/[&<>"']/g, (char) => ({
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   }[char]));
-  printWindow.document.write(`
+  const htmlDocument = `
     <!doctype html>
     <html>
       <head>
@@ -587,10 +585,18 @@ function printTextDocument(title, text) {
         <pre>${escapedText}</pre>
       </body>
     </html>
-  `);
-  printWindow.document.close();
-  printWindow.focus();
-  window.setTimeout(() => printWindow.print(), 150);
+  `;
+  const blob = new Blob([htmlDocument], { type: 'text/html;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const printWindow = window.open(url, '_blank', 'noopener,noreferrer');
+  if (!printWindow) {
+    URL.revokeObjectURL(url);
+    return false;
+  }
+  printWindow.addEventListener('load', () => {
+    printWindow.print();
+    window.setTimeout(() => URL.revokeObjectURL(url), 60000);
+  }, { once: true });
   return true;
 }
 
