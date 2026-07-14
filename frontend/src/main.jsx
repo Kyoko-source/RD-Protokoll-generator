@@ -1346,7 +1346,6 @@ function HospitalView({ session, employee, onBack, onOpenProtocol, onLogout }) {
 }
 
 function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
-  const [code, setCode] = useState('');
   const [result, setResult] = useState(null);
   const [catalogQuery, setCatalogQuery] = useState('');
   const [catalogResult, setCatalogResult] = useState({ entries: [], source: '', catalog_size: 0 });
@@ -1363,31 +1362,31 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
   useEffect(() => {
     const timer = window.setTimeout(async () => {
       try {
+        const query = catalogQuery.trim();
         const data = await api('/api/icd10/search', {
           method: 'POST',
-          body: JSON.stringify({ query: catalogQuery, limit: 80 })
+          body: JSON.stringify({ query, limit: 80 })
         }, session.token);
         setCatalogResult(data);
+        const normalizedQuery = query.replace(/\s+/g, '').toUpperCase();
+        const exactEntry = (data.entries || []).find((entry) => entry.code === normalizedQuery);
+        if (exactEntry) {
+          setResult({ ...exactEntry, matched_code: exactEntry.code, found: true, source: data.source });
+        } else if (/^[A-Z]\d{2}(?:\.[0-9A-Z]{1,2})?-?$/.test(normalizedQuery)) {
+          const lookupData = await api('/api/icd10/lookup', {
+            method: 'POST',
+            body: JSON.stringify({ code: normalizedQuery })
+          }, session.token);
+          setResult(lookupData);
+        } else {
+          setResult(null);
+        }
       } catch (err) {
         setError(err.message);
       }
     }, 250);
     return () => window.clearTimeout(timer);
   }, [catalogQuery, session.token]);
-
-  async function lookup() {
-    setError('');
-    setStatusText('');
-    try {
-      const data = await api('/api/icd10/lookup', {
-        method: 'POST',
-        body: JSON.stringify({ code })
-      }, session.token);
-      setResult(data);
-    } catch (err) {
-      setError(err.message);
-    }
-  }
 
   async function applyIcdEntry(entry) {
     if (!entry) return;
@@ -1410,11 +1409,6 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
     } catch (err) {
       setError(err.message);
     }
-  }
-
-  async function applyIcd() {
-    if (!result) return;
-    await applyIcdEntry(result);
   }
 
   return (
@@ -1449,9 +1443,17 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
           <input
             value={catalogQuery}
             onChange={(event) => setCatalogQuery(event.target.value)}
-            placeholder="Code oder Diagnose, z.B. J45, Asthma, Schlaganfall"
+            placeholder="Code oder Diagnose, z.B. F45, J45, Asthma, Schlaganfall"
           />
         </label>
+        {result && catalogQuery.trim() && (
+          <div className="icd-result">
+            <strong>{result.code}</strong>
+            <span>{result.diagnosis}</span>
+            <small>{result.found ? `Treffer über ${result.matched_code || result.code}` : 'Bitte fachlich prüfen und ggf. manuell ergänzen.'}</small>
+            {result.found && <button type="button" onClick={() => applyIcdEntry(result)}>In Dokumentation übernehmen</button>}
+          </div>
+        )}
         <div className="icd-results-list">
           {(catalogResult.entries || []).map((entry) => (
             <button type="button" key={`${entry.code}-${entry.diagnosis}`} onClick={() => applyIcdEntry(entry)}>
@@ -1460,18 +1462,6 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
             </button>
           ))}
         </div>
-        <div className="icd-search">
-          <input value={code} onChange={(event) => setCode(event.target.value)} placeholder="z.B. I21.9, I63, R55" />
-          <button type="button" onClick={lookup}>Dekodieren</button>
-        </div>
-        {result && (
-          <div className="icd-result">
-            <strong>{result.code}</strong>
-            <span>{result.diagnosis}</span>
-            <small>{result.found ? `Treffer über ${result.matched_code}` : 'Bitte fachlich prüfen und ggf. manuell ergänzen.'}</small>
-            <button type="button" onClick={applyIcd}>In Dokumentation übernehmen</button>
-          </div>
-        )}
       </section>
     </main>
   );

@@ -1235,6 +1235,7 @@ ICD10_LOCAL = {
     "T14": "Verletzung an einer nicht näher bezeichneten Körperregion",
     "O80": "Spontangeburt eines Einlings",
     "F10": "Psychische und Verhaltensstörungen durch Alkohol",
+    "F45": "Somatoforme Störungen",
 }
 
 
