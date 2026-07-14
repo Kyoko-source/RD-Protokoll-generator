@@ -178,6 +178,7 @@ def default_patient_case():
             "notizen": "",
         },
         "massnahmen": {"timeline": [], "medikation": []},
+        "reanimation": {"shocks": []},
         "transport": {},
         "einsatz": {},
         "uebergabe": {},
@@ -355,6 +356,54 @@ def format_action_lines(measures):
     return lines
 
 
+def format_reanimation_lines(reanimation):
+    if not isinstance(reanimation, dict):
+        return []
+    shocks = reanimation.get("shocks", []) if isinstance(reanimation, dict) else []
+    lines = [
+        "Reanimation durchgeführt" if reanimation.get("active") else "",
+        compact_join([
+            f"CPR-Beginn {reanimation.get('cpr_start')}" if valid(reanimation.get("cpr_start")) else "",
+            f"CPR-Ende/Übergabe {reanimation.get('cpr_end')}" if valid(reanimation.get("cpr_end")) else "",
+            f"Initialrhythmus {reanimation.get('initial_rhythm')}" if valid(reanimation.get("initial_rhythm")) else "",
+        ], "; "),
+        compact_join([
+            f"ROSC {reanimation.get('rosc')}" if valid(reanimation.get("rosc")) else "",
+            f"ROSC-Zeit {reanimation.get('rosc_time')}" if valid(reanimation.get("rosc_time")) else "",
+        ], "; "),
+        compact_join([
+            f"No-flow {reanimation.get('no_flow')}" if valid(reanimation.get("no_flow")) else "",
+            f"Low-flow {reanimation.get('low_flow')}" if valid(reanimation.get("low_flow")) else "",
+            "mechanische Reanimationshilfe eingesetzt" if reanimation.get("mechanical_cpr") else "",
+        ], "; "),
+        f"Atemweg/Beatmung: {reanimation.get('airway')}" if valid(reanimation.get("airway")) else "",
+        f"Zugang: {reanimation.get('access')}" if valid(reanimation.get("access")) else "",
+        f"Medikamente während CPR: {reanimation.get('meds')}" if valid(reanimation.get("meds")) else "",
+        compact_join([
+            f"Notarzt alarmiert {reanimation.get('notarzt_alarm')}" if valid(reanimation.get("notarzt_alarm")) else "",
+            f"eingetroffen {reanimation.get('notarzt_arrival')}" if valid(reanimation.get("notarzt_arrival")) else "",
+            f"Übernahme {reanimation.get('notarzt_takeover')}" if valid(reanimation.get("notarzt_takeover")) else "",
+        ], "; "),
+        f"Ausgang: {reanimation.get('outcome')}" if valid(reanimation.get("outcome")) else "",
+        f"Notizen: {reanimation.get('notes')}" if valid(reanimation.get("notes")) else "",
+    ]
+    documented = [line for line in lines if valid(line)]
+    if isinstance(shocks, list):
+        for index, item in enumerate(shocks, start=1):
+            if isinstance(item, dict):
+                line = compact_join([
+                    f"{index}. Schock",
+                    item.get("zeit"),
+                    f"{item.get('energie')} J" if valid(item.get("energie")) else "",
+                    item.get("rhythmus"),
+                ], " - ")
+            else:
+                line = str(item) if valid(item) else ""
+            if valid(line):
+                documented.append(line)
+    return documented
+
+
 def build_sinnhaft_rows(patient):
     vital = patient.get("vitalwerte", {}) or {}
     x = patient.get("xabcde", {}) or {}
@@ -362,6 +411,9 @@ def build_sinnhaft_rows(patient):
     o = patient.get("opqrst", {}) or {}
     amls = patient.get("amls", {}) or {}
     measures = patient.get("massnahmen", {}) or {}
+    reanimation = patient.get("reanimation", {}) or {}
+    if not isinstance(reanimation, dict):
+        reanimation = {}
     handover = patient.get("uebergabe", {}) or {}
 
     priority = compact_join([
@@ -374,7 +426,7 @@ def build_sinnhaft_rows(patient):
         f"Kreislauf {x.get('haut')}" if valid(x.get("haut")) else "",
         f"AVPU {x.get('avpu')}" if valid(x.get("avpu")) else "",
     ])
-    action_lines = format_action_lines(measures)
+    action_lines = format_action_lines(measures) + format_reanimation_lines(reanimation)
     anamnesis = compact_join([
         f"Allergien: {format_selected_allergies(s)}" if valid(format_selected_allergies(s)) else "",
         f"Medikation: {format_selected_medication(s)}" if valid(format_selected_medication(s)) else "",
@@ -402,6 +454,7 @@ def build_narrative_report(patient):
     o = patient.get("opqrst", {}) or {}
     amls = patient.get("amls", {}) or {}
     measures = patient.get("massnahmen", {}) or {}
+    reanimation = patient.get("reanimation", {}) or {}
     handover = patient.get("uebergabe", {}) or {}
 
     primary = []
@@ -450,6 +503,7 @@ def build_narrative_report(patient):
         ], " "))
 
     actions = format_action_lines(measures)
+    reanimation_summary = format_reanimation_lines(reanimation)
     handover_sentence = compact_join([
         f"Ziel/Empfänger: {handover.get('ziel')}" if valid(handover.get("ziel")) else "",
         handover.get("text"),
@@ -460,6 +514,7 @@ def build_narrative_report(patient):
     text += add_paragraph("ERSTBEFUND UND VERLAUF", [item for item in assessment if valid(item)])
     text += add_paragraph("ANAMNESE UND SCHMERZASSESSMENT", [item for item in history if valid(item)])
     text += add_paragraph("MAßNAHMEN UND WIRKUNG", ["; ".join(actions) if actions else "Keine Maßnahmen/Medikationen dokumentiert."])
+    text += add_paragraph("REANIMATION", reanimation_summary)
     text += add_paragraph("ÜBERGABE-KURZFAZIT", [handover_sentence])
     return text
 
@@ -916,6 +971,9 @@ def generate_protocol_text(patient):
     s = patient.get("samplers", {})
     o = patient.get("opqrst", {})
     measures = patient.get("massnahmen", {})
+    reanimation = patient.get("reanimation", {}) or {}
+    if not isinstance(reanimation, dict):
+        reanimation = {}
     handover = patient.get("uebergabe", {})
     amls = patient.get("amls", {})
 
@@ -1041,6 +1099,43 @@ def generate_protocol_text(patient):
                 text += f"{item.get('zeit', '')} - {item.get('medikament', '')} {item.get('dosis', '')} {item.get('weg', '')}\n"
             elif valid(item):
                 text += f"{item}\n"
+        text += "\n"
+
+    text += add_lines("REANIMATION", [
+        ("Durchgeführt", "Ja" if reanimation.get("active") else ""),
+        ("CPR-Beginn", reanimation.get("cpr_start")),
+        ("CPR-Ende / Übergabe", reanimation.get("cpr_end")),
+        ("Initialrhythmus", reanimation.get("initial_rhythm")),
+        ("ROSC", reanimation.get("rosc")),
+        ("ROSC-Zeit", reanimation.get("rosc_time")),
+        ("No-flow-Zeit", reanimation.get("no_flow")),
+        ("Low-flow-Zeit", reanimation.get("low_flow")),
+        ("Mechanische Reanimationshilfe", "Ja" if reanimation.get("mechanical_cpr") else ""),
+        ("Atemweg / Beatmung", reanimation.get("airway")),
+        ("Zugang", reanimation.get("access")),
+        ("Medikamente während CPR", reanimation.get("meds")),
+        ("Notarzt alarmiert", reanimation.get("notarzt_alarm")),
+        ("Notarzt eingetroffen", reanimation.get("notarzt_arrival")),
+        ("Notarzt übernimmt", reanimation.get("notarzt_takeover")),
+        ("Ausgang", reanimation.get("outcome")),
+        ("Notizen", reanimation.get("notes")),
+    ])
+
+    shocks = reanimation.get("shocks", [])
+    if isinstance(shocks, list) and shocks:
+        text += "DEFIBRILLATIONEN\n" + ("=" * 50) + "\n"
+        for index, item in enumerate(shocks, start=1):
+            if isinstance(item, dict):
+                line = compact_join([
+                    f"{index}. Schock",
+                    item.get("zeit"),
+                    f"{item.get('energie')} J" if valid(item.get("energie")) else "",
+                    item.get("rhythmus"),
+                ], " - ")
+                if valid(line):
+                    text += f"- {line}\n"
+            elif valid(item):
+                text += f"- {item}\n"
         text += "\n"
 
     return text.strip()

@@ -288,6 +288,49 @@ function actionLines(measures) {
   ].filter(hasValue);
 }
 
+function reanimationLines(reanimation) {
+  const shocks = Array.isArray(reanimation.shocks) ? reanimation.shocks : [];
+  const lines = [
+    reanimation.active ? 'Reanimation durchgeführt' : '',
+    compactJoin([
+      hasValue(reanimation.cpr_start) ? `CPR-Beginn ${reanimation.cpr_start}` : '',
+      hasValue(reanimation.cpr_end) ? `CPR-Ende/Übergabe ${reanimation.cpr_end}` : '',
+      hasValue(reanimation.initial_rhythm) ? `Initialrhythmus ${reanimation.initial_rhythm}` : ''
+    ], '; '),
+    compactJoin([
+      hasValue(reanimation.rosc) ? `ROSC ${reanimation.rosc}` : '',
+      hasValue(reanimation.rosc_time) ? `ROSC-Zeit ${reanimation.rosc_time}` : ''
+    ], '; '),
+    compactJoin([
+      hasValue(reanimation.no_flow) ? `No-flow ${reanimation.no_flow}` : '',
+      hasValue(reanimation.low_flow) ? `Low-flow ${reanimation.low_flow}` : '',
+      reanimation.mechanical_cpr ? 'mechanische Reanimationshilfe eingesetzt' : ''
+    ], '; '),
+    hasValue(reanimation.airway) ? `Atemweg/Beatmung: ${reanimation.airway}` : '',
+    hasValue(reanimation.access) ? `Zugang: ${reanimation.access}` : '',
+    hasValue(reanimation.meds) ? `Medikamente während CPR: ${reanimation.meds}` : '',
+    compactJoin([
+      hasValue(reanimation.notarzt_alarm) ? `Notarzt alarmiert ${reanimation.notarzt_alarm}` : '',
+      hasValue(reanimation.notarzt_arrival) ? `eingetroffen ${reanimation.notarzt_arrival}` : '',
+      hasValue(reanimation.notarzt_takeover) ? `Übernahme ${reanimation.notarzt_takeover}` : ''
+    ], '; '),
+    hasValue(reanimation.outcome) ? `Ausgang: ${reanimation.outcome}` : '',
+    hasValue(reanimation.notes) ? `Notizen: ${reanimation.notes}` : ''
+  ].filter(hasValue);
+
+  const shockLines = shocks.map((item, index) => {
+    const shock = item || {};
+    return compactJoin([
+      `${index + 1}. Schock`,
+      hasValue(shock.zeit) ? shock.zeit : '',
+      hasValue(shock.energie) ? `${shock.energie} J` : '',
+      shock.rhythmus
+    ], ' - ');
+  }).filter(hasValue);
+
+  return [...lines, ...shockLines];
+}
+
 function sinnhaftRows(patient) {
   const vital = patient.vitalwerte || {};
   const x = patient.xabcde || {};
@@ -295,6 +338,7 @@ function sinnhaftRows(patient) {
   const o = patient.opqrst || {};
   const amls = patient.amls || {};
   const measures = patient.massnahmen || {};
+  const reanimation = patient.reanimation || {};
   const handover = patient.uebergabe || {};
   const priority = compactJoin([
     hasValue(formatBloodPressure(vital)) ? `RR ${formatBloodPressure(vital)}` : '',
@@ -361,6 +405,7 @@ function generateLocalProtocolText(patient) {
     ])
   ]);
   text += addProtocolParagraph('MAßNAHMEN UND WIRKUNG', [actionLines(measures).join('; ') || 'Keine Maßnahmen/Medikationen dokumentiert.']);
+  text += addProtocolParagraph('REANIMATION', reanimationLines(reanimation));
   text += addProtocolBlock('VITALWERTE & DEMOGRAPHIE', [
     ['Alter', vital.alter],
     ['Geschlecht', vital.geschlecht],
@@ -442,6 +487,34 @@ function generateLocalProtocolText(patient) {
   });
   text += renderListBlock('MAßNAHMEN', measures.timeline, (item) => `${item.zeit || ''} - ${item.massnahme || ''}`.trim());
   text += renderListBlock('MEDIKATION', measures.medikation, (item) => `${item.zeit || ''} - ${item.medikament || ''} ${item.dosis || ''} ${item.weg || ''}`.trim());
+  text += addProtocolBlock('REANIMATION', [
+    ['Durchgeführt', reanimation.active ? 'Ja' : ''],
+    ['CPR-Beginn', reanimation.cpr_start],
+    ['CPR-Ende / Übergabe', reanimation.cpr_end],
+    ['Initialrhythmus', reanimation.initial_rhythm],
+    ['ROSC', reanimation.rosc],
+    ['ROSC-Zeit', reanimation.rosc_time],
+    ['No-flow-Zeit', reanimation.no_flow],
+    ['Low-flow-Zeit', reanimation.low_flow],
+    ['Mechanische Reanimationshilfe', reanimation.mechanical_cpr ? 'Ja' : ''],
+    ['Atemweg / Beatmung', reanimation.airway],
+    ['Zugang', reanimation.access],
+    ['Medikamente während CPR', reanimation.meds],
+    ['Notarzt alarmiert', reanimation.notarzt_alarm],
+    ['Notarzt eingetroffen', reanimation.notarzt_arrival],
+    ['Notarzt übernimmt', reanimation.notarzt_takeover],
+    ['Ausgang', reanimation.outcome],
+    ['Notizen', reanimation.notes],
+  ]);
+  text += renderListBlock('DEFIBRILLATIONEN', reanimation.shocks, (item, index) => {
+    const shock = item || {};
+    return compactJoin([
+      `${index + 1}. Schock`,
+      shock.zeit,
+      hasValue(shock.energie) ? `${shock.energie} J` : '',
+      shock.rhythmus
+    ], ' - ');
+  });
   text += addProtocolBlock('SINNHAFT-ÜBERGABE', sinnhaftRows(patient));
   text += addProtocolBlock('ÜBERGABE', [
     ['Ziel', handover.ziel],
@@ -2064,6 +2137,7 @@ const emptyPatient = {
   einweisung: {},
   amls: { excluded: [], custom_candidates: [], arbeitsdiagnose: '', leitsymptom: '', notizen: '' },
   massnahmen: { timeline: [], medikation: [] },
+  reanimation: { shocks: [] },
   transport: {},
   einsatz: {},
   uebergabe: {}
@@ -2111,6 +2185,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const samplers = patient.samplers || {};
   const opqrst = patient.opqrst || {};
   const massnahmen = patient.massnahmen || { timeline: [], medikation: [] };
+  const reanimation = patient.reanimation || { shocks: [] };
   const amls = patient.amls || {};
   const uebergabe = patient.uebergabe || {};
   const amlsCandidates = Array.isArray(amls.custom_candidates) ? amls.custom_candidates : [];
@@ -2885,6 +2960,49 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     });
   }
 
+  function updateReanimation(key, value) {
+    setPatient((current) => ({
+      ...current,
+      reanimation: {
+        ...(current.reanimation || {}),
+        shocks: Array.isArray((current.reanimation || {}).shocks) ? (current.reanimation || {}).shocks : [],
+        [key]: value
+      }
+    }));
+  }
+
+  function addShock() {
+    setPatient((current) => ({
+      ...current,
+      reanimation: {
+        ...(current.reanimation || {}),
+        shocks: [...(Array.isArray((current.reanimation || {}).shocks) ? (current.reanimation || {}).shocks : []), { zeit: '', energie: '', rhythmus: '' }]
+      }
+    }));
+  }
+
+  function updateShock(index, key, value) {
+    setPatient((current) => {
+      const shocks = [...(Array.isArray((current.reanimation || {}).shocks) ? (current.reanimation || {}).shocks : [])];
+      shocks[index] = { ...(shocks[index] || {}), [key]: value };
+      return {
+        ...current,
+        reanimation: {
+          ...(current.reanimation || {}),
+          shocks
+        }
+      };
+    });
+  }
+
+  function removeShock(index) {
+    setPatient((current) => {
+      const shocks = [...(Array.isArray((current.reanimation || {}).shocks) ? (current.reanimation || {}).shocks : [])];
+      shocks.splice(index, 1);
+      return { ...current, reanimation: { ...(current.reanimation || {}), shocks } };
+    });
+  }
+
   async function loadAmlsSuggestions() {
     setError('');
     setStatusText('');
@@ -3220,6 +3338,13 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           onClick={() => setProtocolSection('massnahmen')}
         >
           Maßnahmen
+        </button>
+        <button
+          type="button"
+          className={protocolSection === 'reanimation' ? 'active' : ''}
+          onClick={() => setProtocolSection('reanimation')}
+        >
+          Reanimation
         </button>
         <button
           type="button"
@@ -3678,6 +3803,130 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             </div>
           ))}
           {(massnahmen.medikation || []).length === 0 && <p className="muted">Noch keine Medikation dokumentiert.</p>}
+        </div>
+      </section>}
+
+      {protocolSection === 'reanimation' && <section className="work-panel">
+        <div className="section-head">
+          <h2>Reanimation</h2>
+          <span>CPR, Defibrillation, ROSC und Notarzt</span>
+        </div>
+
+        <div className="form-grid">
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={Boolean(reanimation.active)}
+              onChange={(event) => updateReanimation('active', event.target.checked)}
+            />
+            Reanimation durchgeführt
+          </label>
+          <label>
+            Initialrhythmus
+            <select value={reanimation.initial_rhythm || ''} onChange={(event) => updateReanimation('initial_rhythm', event.target.value)}>
+              <option value="">Keine Angabe</option>
+              <option value="Kammerflimmern">Kammerflimmern</option>
+              <option value="pulslose ventrikuläre Tachykardie">pulslose ventrikuläre Tachykardie</option>
+              <option value="Asystolie">Asystolie</option>
+              <option value="PEA">PEA</option>
+              <option value="AED-Analyse ohne Schockempfehlung">AED-Analyse ohne Schockempfehlung</option>
+              <option value="unbekannt">unbekannt</option>
+            </select>
+          </label>
+          <label>
+            CPR-Beginn
+            <input value={reanimation.cpr_start || ''} onChange={(event) => updateReanimation('cpr_start', event.target.value)} placeholder="z.B. 20:14" />
+          </label>
+          <label>
+            CPR-Ende / Übergabe
+            <input value={reanimation.cpr_end || ''} onChange={(event) => updateReanimation('cpr_end', event.target.value)} placeholder="z.B. 20:42" />
+          </label>
+          <label>
+            ROSC
+            <select value={reanimation.rosc || ''} onChange={(event) => updateReanimation('rosc', event.target.value)}>
+              <option value="">Keine Angabe</option>
+              <option value="Ja">Ja</option>
+              <option value="Nein">Nein</option>
+              <option value="intermittierend">intermittierend</option>
+            </select>
+          </label>
+          <label>
+            ROSC-Zeit
+            <input value={reanimation.rosc_time || ''} onChange={(event) => updateReanimation('rosc_time', event.target.value)} placeholder="z.B. 20:31" />
+          </label>
+          <label>
+            No-flow-Zeit
+            <input value={reanimation.no_flow || ''} onChange={(event) => updateReanimation('no_flow', event.target.value)} placeholder="z.B. unbekannt / ca. 2 min" />
+          </label>
+          <label>
+            Low-flow-Zeit
+            <input value={reanimation.low_flow || ''} onChange={(event) => updateReanimation('low_flow', event.target.value)} placeholder="z.B. ca. 18 min" />
+          </label>
+          <label className="checkbox-field">
+            <input
+              type="checkbox"
+              checked={Boolean(reanimation.mechanical_cpr)}
+              onChange={(event) => updateReanimation('mechanical_cpr', event.target.checked)}
+            />
+            Mechanische Reanimationshilfe eingesetzt
+          </label>
+          <label>
+            Ausgang
+            <select value={reanimation.outcome || ''} onChange={(event) => updateReanimation('outcome', event.target.value)}>
+              <option value="">Keine Angabe</option>
+              <option value="Transport nach ROSC">Transport nach ROSC</option>
+              <option value="Transport unter CPR">Transport unter CPR</option>
+              <option value="Übergabe an Notarzt">Übergabe an Notarzt</option>
+              <option value="Reanimation beendet">Reanimation beendet</option>
+            </select>
+          </label>
+        </div>
+
+        <div className="list-head">
+          <h3>Defibrillationen</h3>
+          <button type="button" onClick={addShock}>Schock hinzufügen</button>
+        </div>
+        <div className="dynamic-list">
+          {(reanimation.shocks || []).map((item, index) => (
+            <div className="dynamic-row shock-row" key={`shock-${index}`}>
+              <input placeholder="Zeit" value={item.zeit || ''} onChange={(event) => updateShock(index, 'zeit', event.target.value)} />
+              <input placeholder="Energie/J" value={item.energie || ''} onChange={(event) => updateShock(index, 'energie', event.target.value)} inputMode="numeric" />
+              <input placeholder="Rhythmus vor/nach Schock" value={item.rhythmus || ''} onChange={(event) => updateShock(index, 'rhythmus', event.target.value)} />
+              <button type="button" onClick={() => removeShock(index)}>Entfernen</button>
+            </div>
+          ))}
+          {(reanimation.shocks || []).length === 0 && <p className="muted">Noch keine Defibrillation dokumentiert.</p>}
+        </div>
+
+        <div className="form-grid reanimation-detail-grid">
+          <label>
+            Atemweg / Beatmung
+            <textarea value={reanimation.airway || ''} onChange={(event) => updateReanimation('airway', event.target.value)} rows={4} placeholder="z.B. BMV, supraglottischer Atemweg, Tubus, Kapnographie" />
+          </label>
+          <label>
+            Zugang
+            <textarea value={reanimation.access || ''} onChange={(event) => updateReanimation('access', event.target.value)} rows={4} placeholder="z.B. i.v., i.o., Lage, Besonderheiten" />
+          </label>
+          <label>
+            Medikamente während CPR
+            <textarea value={reanimation.meds || ''} onChange={(event) => updateReanimation('meds', event.target.value)} rows={4} placeholder="z.B. Adrenalin 1 mg i.v. 20:18, Amiodaron ..." />
+          </label>
+          <label>
+            Notizen / Verlauf
+            <textarea value={reanimation.notes || ''} onChange={(event) => updateReanimation('notes', event.target.value)} rows={4} placeholder="z.B. Laienreanimation, AED vor Eintreffen, Rhythmuswechsel, Transportentscheidung" />
+          </label>
+          <label>
+            Notarzt alarmiert
+            <input value={reanimation.notarzt_alarm || ''} onChange={(event) => updateReanimation('notarzt_alarm', event.target.value)} placeholder="z.B. 20:12" />
+          </label>
+          <label>
+            Notarzt eingetroffen
+            <input value={reanimation.notarzt_arrival || ''} onChange={(event) => updateReanimation('notarzt_arrival', event.target.value)} placeholder="z.B. 20:24" />
+          </label>
+          <label>
+            Notarzt übernimmt
+            <input value={reanimation.notarzt_takeover || ''} onChange={(event) => updateReanimation('notarzt_takeover', event.target.value)} placeholder="z.B. 20:25 / ja / nein" />
+          </label>
         </div>
       </section>}
 

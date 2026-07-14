@@ -2376,6 +2376,10 @@ legend {
   grid-template-columns: 100px minmax(0, 1fr) 120px 100px 110px;
 }
 
+.shock-row {
+  grid-template-columns: 100px 120px minmax(0, 1fr) 110px;
+}
+
 .amls-row {
   grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.25fr) 110px;
 }
@@ -2383,6 +2387,27 @@ legend {
 .amls-actions {
   margin-top: 18px;
   justify-content: flex-end;
+}
+
+.checkbox-field {
+  min-height: 72px;
+  display: flex;
+  flex-direction: row;
+  gap: 10px;
+  align-items: center;
+  justify-content: flex-start;
+  color: rgba(237, 244, 255, 0.9);
+  font-weight: 850;
+}
+
+.checkbox-field input {
+  width: 20px;
+  height: 20px;
+  accent-color: #37c8ab;
+}
+
+.reanimation-detail-grid {
+  margin-top: 18px;
 }
 
 .protocol-preview {
@@ -2571,7 +2596,8 @@ legend {
   .archive-row,
   .interface-case-row,
   .dynamic-row,
-  .medication-row {
+  .medication-row,
+  .shock-row {
     grid-template-columns: 1fr;
   }
 
