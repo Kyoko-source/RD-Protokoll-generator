@@ -1195,6 +1195,7 @@ def json_attachment(filename, payload):
 
 
 ICD10_BFARM_BASE_URL = "https://klassifikationen.bfarm.de/icd-10-gm/kode-suche/htmlgm2026/"
+ICD10_STATIC_CATALOG_PATH = Path(__file__).resolve().parents[1] / "assets" / "icd10_gm_2026.json"
 ICD10_CATALOG_CACHE = {"loaded_at": None, "entries": [], "source": "Fallback", "error": ""}
 ICD10_FALLBACK_ENTRIES = [
     {"code": "A00-B99", "diagnosis": "Bestimmte infektiöse und parasitäre Krankheiten"},
@@ -1241,12 +1242,44 @@ ICD10_LOCAL = {
 
 def normalize_icd_code(value):
     code = re.sub(r"\s+", "", str(value or "")).upper()
-    return code.rstrip("!+*#")
+    code = code.rstrip("!+*#")
+    if code.endswith(".-"):
+        return code[:-2]
+    if code.endswith("-"):
+        return code[:-1]
+    return code
 
 
 def clean_icd_title(value):
     text = html.unescape(re.sub(r"<[^>]+>", " ", str(value or "")))
     return re.sub(r"\s+", " ", text).strip()
+
+
+def load_static_icd10_catalog(now):
+    if not ICD10_STATIC_CATALOG_PATH.exists():
+        return None
+    try:
+        payload = json.loads(ICD10_STATIC_CATALOG_PATH.read_text(encoding="utf-8"))
+        entries = [
+            {
+                "code": normalize_icd_code(item.get("code", "")),
+                "diagnosis": str(item.get("diagnosis", "")).strip(),
+                "source_url": item.get("source_url", ""),
+            }
+            for item in payload.get("entries", [])
+            if item.get("code") and item.get("diagnosis")
+        ]
+        entries = sorted(entries, key=lambda item: item["code"])
+        if entries:
+            return {
+                "loaded_at": now,
+                "entries": entries,
+                "source": payload.get("source") or "BfArM ICD-10-GM 2026",
+                "error": "",
+            }
+    except (OSError, json.JSONDecodeError, TypeError, ValueError) as exc:
+        return {"loaded_at": now, "entries": [], "source": "Fallback", "error": str(exc)}
+    return None
 
 
 def load_icd10_catalog(force=False):
@@ -1260,6 +1293,13 @@ def load_icd10_catalog(force=False):
     ):
         return ICD10_CATALOG_CACHE
 
+    static_catalog = load_static_icd10_catalog(now)
+    if static_catalog and static_catalog.get("entries"):
+        ICD10_CATALOG_CACHE.update(static_catalog)
+        return ICD10_CATALOG_CACHE
+    if static_catalog and static_catalog.get("error"):
+        ICD10_CATALOG_CACHE.update(static_catalog)
+
     try:
         request = urllib.request.Request(ICD10_BFARM_BASE_URL, headers={"User-Agent": "NANA-RD-Protokoll/1.0"})
         with urllib.request.urlopen(request, timeout=12) as response:
@@ -1272,7 +1312,7 @@ def load_icd10_catalog(force=False):
             with urllib.request.urlopen(block_request, timeout=12) as response:
                 block_page = response.read().decode("utf-8", errors="replace")
             for match in re.finditer(
-                r"<h[4-6][^>]*>\s*([A-Z][0-9]{2}(?:\.[0-9A-Z]{1,2})?-?)\s+(.+?)</h[4-6]>",
+                r'<(?:h[4-6]|li)[^>]*>\s*<a(?=[^>]*class="code")[^>]*>\s*([A-Z][0-9]{2}(?:\.[0-9A-Z]{0,2})?-?)\s*</a>\s*<span(?=[^>]*class="label")[^>]*>(.*?)</span>\s*</(?:h[4-6]|li)>',
                 block_page,
                 flags=re.IGNORECASE | re.DOTALL,
             ):
