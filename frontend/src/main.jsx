@@ -2058,6 +2058,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const [amlsSuggestions, setAmlsSuggestions] = useState([]);
   const [calculator, setCalculator] = useState({ sop: 'Anaphylaxie (SOPKB0105)', age: '30', weight: '70', pregnant: 'Nein', bz: '55', rr_sys: '160', nrs: '7' });
   const [calculatorResult, setCalculatorResult] = useState(null);
+  const [acceptedCalculatorMedication, setAcceptedCalculatorMedication] = useState(null);
   const [refusal, setRefusal] = useState(() => {
     const now = new Date();
     return {
@@ -2935,13 +2936,14 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         })
       }, session.token);
       setCalculatorResult(result);
+      setAcceptedCalculatorMedication(null);
       setStatusText('SOP-Rechner wurde aktualisiert.');
     } catch (err) {
       setError(err.message);
     }
   }
 
-  function addCalculatedMedication(text) {
+  function addCalculatedMedication(text, index) {
     setPatient((current) => ({
       ...current,
       massnahmen: {
@@ -2950,6 +2952,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         medikation: [...(((current.massnahmen || {}).medikation) || []), { zeit: '', medikament: text, dosis: '', weg: 'laut SOP-Rechner' }]
       }
     }));
+    setAcceptedCalculatorMedication({ index, text });
     setStatusText('Medikation wurde in die Dokumentation übernommen.');
   }
 
@@ -3566,13 +3569,19 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             <article>
               <h3>Berechnete Medikation</h3>
               {(calculatorResult.medications || []).length === 0 && <p className="muted">Keine konkrete Medikation in diesem Entscheidungszweig.</p>}
-              {(calculatorResult.medications || []).map((item, index) => (
-                <div className="support-row support-row-action" key={`calc-med-${index}`}>
-                  <strong>{index + 1}</strong>
-                  <span>{item}</span>
-                  <button type="button" onClick={() => addCalculatedMedication(item)}>Übernehmen</button>
-                </div>
-              ))}
+              {(calculatorResult.medications || []).map((item, index) => {
+                const wasAccepted = acceptedCalculatorMedication?.index === index && acceptedCalculatorMedication?.text === item;
+                return (
+                  <div className={`support-row support-row-action${wasAccepted ? ' support-row-confirmed' : ''}`} key={`calc-med-${index}`}>
+                    <strong>{index + 1}</strong>
+                    <span>{item}</span>
+                    <button type="button" onClick={() => addCalculatedMedication(item, index)}>
+                      {wasAccepted ? 'Übernommen' : 'Übernehmen'}
+                    </button>
+                    {wasAccepted && <em aria-live="polite">In Maßnahmen übernommen</em>}
+                  </div>
+                );
+              })}
             </article>
             <article>
               <h3>Handlungshilfe</h3>

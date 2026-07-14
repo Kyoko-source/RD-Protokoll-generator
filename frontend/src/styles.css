@@ -2255,6 +2255,25 @@ legend {
   cursor: pointer;
 }
 
+.support-row-confirmed {
+  border-color: rgba(78, 211, 171, 0.34);
+  background: rgba(78, 211, 171, 0.1);
+}
+
+.support-row-confirmed button {
+  border-color: rgba(78, 211, 171, 0.5);
+  background: rgba(78, 211, 171, 0.22);
+  color: #d9fff1;
+}
+
+.support-row-action em {
+  grid-column: 2 / 4;
+  color: #baf8e3;
+  font-size: 0.86rem;
+  font-style: normal;
+  font-weight: 780;
+}
+
 .support-note {
   padding: 10px 12px;
   border-radius: 10px;
@@ -2539,5 +2558,10 @@ legend {
 
   .support-row-action {
     grid-template-columns: 34px minmax(0, 1fr);
+  }
+
+  .support-row-action button,
+  .support-row-action em {
+    grid-column: 2;
   }
 }
