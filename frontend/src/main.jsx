@@ -1411,6 +1411,27 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
     }
   }
 
+  async function translateCatalogQuery() {
+    const query = catalogQuery.trim();
+    if (!query) {
+      setResult(null);
+      setStatusText('Bitte ICD10-Code oder Suchbegriff eingeben.');
+      return;
+    }
+    setError('');
+    setStatusText('');
+    try {
+      const normalizedQuery = query.replace(/\s+/g, '').toUpperCase();
+      const data = await api('/api/icd10/lookup', {
+        method: 'POST',
+        body: JSON.stringify({ code: normalizedQuery })
+      }, session.token);
+      setResult(data);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   return (
     <main className="app-shell">
       <header className="topbar">
@@ -1438,14 +1459,23 @@ function Icd10View({ session, employee, onBack, onOpenProtocol, onLogout }) {
           <strong>{catalogResult.catalog_size || 0}</strong>
           <span>hinterlegte ICD10-Einträge</span>
         </div>
-        <label className="full-span">
-          ICD10-Katalog durchsuchen
-          <input
-            value={catalogQuery}
-            onChange={(event) => setCatalogQuery(event.target.value)}
-            placeholder="Code oder Diagnose, z.B. F45, J45, Asthma, Schlaganfall"
-          />
-        </label>
+        <div className="icd-search">
+          <label className="icd-search-field">
+            ICD10-Katalog durchsuchen
+            <input
+              value={catalogQuery}
+              onChange={(event) => setCatalogQuery(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter') {
+                  event.preventDefault();
+                  translateCatalogQuery();
+                }
+              }}
+              placeholder="Code oder Diagnose, z.B. F45, J45, Asthma, Schlaganfall"
+            />
+          </label>
+          <button type="button" onClick={translateCatalogQuery}>Übersetzen</button>
+        </div>
         {result && catalogQuery.trim() && (
           <div className="icd-result">
             <strong>{result.code}</strong>
