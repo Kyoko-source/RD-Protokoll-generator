@@ -467,25 +467,29 @@ function buildPatientRefusalText(patient, refusal) {
   const caseNumber = valueOrBlank(refusal.case_number || einsatz.einsatznummer);
   const dateText = valueOrBlank(refusal.date);
   const timeText = valueOrBlank(refusal.time);
-  const scope = valueOrBlank(refusal.scope, 'eine weitere rettungsdienstliche Versorgung / der Transport');
+  const scope = valueOrBlank(refusal.scope, 'die weitere rettungsdienstliche Behandlung und/oder den empfohlenen Transport');
   const reason = valueOrBlank(refusal.reason);
-  const risks = valueOrBlank(refusal.risks, 'mögliche gesundheitliche Risiken und Folgen');
+  const risks = valueOrBlank(refusal.risks, 'Verschlechterung des Gesundheitszustands, verzögerte Diagnostik/Therapie, bleibende Gesundheitsschäden bis hin zu akuter Lebensgefahr');
   const witness = valueOrBlank(refusal.witness);
 
   return [
-    'Patientenverweigerung',
+    'Dokumentation einer Behandlungs-/Transportverweigerung',
     '',
-    `Der/Die Patient/in ${patientName}${identity} wurde heute, am ${dateText} um ${timeText} Uhr, dem ${presentedTo} durch den Rettungsdienst mit der Einsatznummer ${caseNumber} vorgestellt.`,
+    `Der/die Patient/in ${patientName}${identity} wurde am ${dateText} um ${timeText} Uhr im Rahmen des Rettungsdiensteinsatzes ${caseNumber} durch den Rettungsdienst untersucht, beraten und über das weitere empfohlene Vorgehen aufgeklärt.`,
+    `Eine Vorstellung oder Rücksprache erfolgte bei/mit: ${presentedTo}.`,
     '',
-    `Nach Untersuchung, Aufklärung und Beratung verweigert der/die Patient/in ${scope}. Als Grund wurde angegeben: ${reason}.`,
+    `Der/die Patient/in lehnt trotz Empfehlung des Rettungsdienstes ${scope} ab. Als Grund wurde angegeben: ${reason}.`,
     '',
-    `Der/Die Patient/in wurde über ${risks} aufgeklärt. Insbesondere wurde darauf hingewiesen, dass sich der Gesundheitszustand verschlechtern kann und bei erneuten oder zunehmenden Beschwerden unverzüglich erneut der Rettungsdienst bzw. ärztliche Hilfe zu verständigen ist.`,
+    `Die Aufklärung erfolgte in verständlicher Form. Besprochen wurden insbesondere die erhobenen Befunde bzw. die Verdachtslage, die empfohlene weitere Abklärung/Behandlung sowie die möglichen Folgen der Ablehnung: ${risks}. Es wurde ausdrücklich darauf hingewiesen, dass derzeit nicht sicher ausgeschlossen werden kann, dass eine ernsthafte oder lebensbedrohliche Erkrankung vorliegt oder sich im weiteren Verlauf entwickelt.`,
     '',
-    'Der/Die Patient/in war zum Zeitpunkt der Aufklärung wach, orientiert und nach Einschätzung des Rettungsdienstpersonals einwilligungsfähig, sofern nicht anders dokumentiert. Die Verweigerung erfolgte gegen den ausdrücklichen Rat des Rettungsdienstes.',
+    'Dem/der Patient/in wurde empfohlen, sich zeitnah ärztlich vorstellen zu lassen bzw. den empfohlenen Transport wahrzunehmen. Bei erneuten, anhaltenden oder zunehmenden Beschwerden, Verschlechterung des Allgemeinzustands, Schmerzen, Atemnot, neurologischen Auffälligkeiten, Bewusstseinsveränderung oder Unsicherheit soll unverzüglich erneut der Notruf 112 bzw. ärztliche Hilfe verständigt werden.',
+    '',
+    'Der/die Patient/in wirkte zum Zeitpunkt der Entscheidung, soweit rettungsdienstlich beurteilbar, wach, ansprechbar, situationsadäquat und einwilligungsfähig. Abweichende Befunde oder Einschränkungen der Einwilligungsfähigkeit sind gesondert im Einsatzprotokoll zu dokumentieren. Die Entscheidung wurde nach erneuter Nachfrage aus freiem Willen geäußert; eine weitere Hilfeleistung bzw. ein Transport wurde erneut angeboten.',
     '',
     `Zeuge/Zeugin: ${witness}`,
     'Unterschrift Patient/in: __________',
-    'Unterschrift Rettungsdienst: __________'
+    'Unterschrift Rettungsdienst: __________',
+    'Falls Unterschrift verweigert: Vermerk/Zeuge: __________'
   ].join('\n');
 }
 
@@ -1988,11 +1992,11 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       patient_name: '',
       presented_to: '',
       case_number: '',
-      date: now.toLocaleDateString('de-DE'),
+      date: now.toLocaleDateString('de-DE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
       time: now.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }),
-      scope: 'eine weitere rettungsdienstliche Versorgung / der Transport',
+      scope: 'die weitere rettungsdienstliche Behandlung und/oder den empfohlenen Transport',
       reason: '',
-      risks: 'mögliche Verschlechterung, verzögerte Diagnostik/Therapie, bleibende Schäden bis hin zu Lebensgefahr',
+      risks: 'Verschlechterung des Gesundheitszustands, verzögerte Diagnostik/Therapie, bleibende Gesundheitsschäden bis hin zu akuter Lebensgefahr',
       witness: ''
     };
   });

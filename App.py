@@ -528,9 +528,12 @@ def build_patient_refusal_text(patient_data, refusal_data):
     case_number = blank_or_value(refusal_data.get("case_number") or einsatz.get("einsatznummer"))
     date_text = blank_or_value(refusal_data.get("date"))
     time_text = blank_or_value(refusal_data.get("time"))
-    refusal_scope = blank_or_value(refusal_data.get("scope"), "eine weitere rettungsdienstliche Versorgung / den Transport")
+    refusal_scope = blank_or_value(refusal_data.get("scope"), "die weitere rettungsdienstliche Behandlung und/oder den empfohlenen Transport")
     refusal_reason = blank_or_value(refusal_data.get("reason"))
-    risks = blank_or_value(refusal_data.get("risks"), "mögliche gesundheitliche Risiken und Folgen")
+    risks = blank_or_value(
+        refusal_data.get("risks"),
+        "Verschlechterung des Gesundheitszustands, verzögerte Diagnostik/Therapie, bleibende Gesundheitsschäden bis hin zu akuter Lebensgefahr",
+    )
     witness = blank_or_value(refusal_data.get("witness"))
     signature = blank_or_value(refusal_data.get("signature"), "Unterschrift Patient/in")
 
@@ -542,20 +545,31 @@ def build_patient_refusal_text(patient_data, refusal_data):
     identity = f" ({', '.join(identity_parts)})" if identity_parts else ""
 
     return (
-        f"Patientenverweigerung\n\n"
-        f"Der/Die Patient/in {patient_name}{identity} wurde heute, am {date_text} um {time_text} Uhr, "
-        f"dem {presented_to} durch den Rettungsdienst mit der Einsatznummer {case_number} vorgestellt.\n\n"
-        f"Nach Untersuchung, Aufklärung und Beratung verweigert der/die Patient/in {refusal_scope}. "
+        f"Dokumentation einer Behandlungs-/Transportverweigerung\n\n"
+        f"Der/die Patient/in {patient_name}{identity} wurde am {date_text} um {time_text} Uhr im Rahmen "
+        f"des Rettungsdiensteinsatzes {case_number} durch den Rettungsdienst untersucht, beraten und über "
+        f"das weitere empfohlene Vorgehen aufgeklärt.\n"
+        f"Eine Vorstellung oder Rücksprache erfolgte bei/mit: {presented_to}.\n\n"
+        f"Der/die Patient/in lehnt trotz Empfehlung des Rettungsdienstes {refusal_scope} ab. "
         f"Als Grund wurde angegeben: {refusal_reason}.\n\n"
-        f"Der/Die Patient/in wurde über {risks} aufgeklärt. Insbesondere wurde darauf hingewiesen, "
-        f"dass sich der Gesundheitszustand verschlechtern kann und bei erneuten oder zunehmenden Beschwerden "
-        f"unverzüglich erneut der Rettungsdienst bzw. ärztliche Hilfe zu verständigen ist.\n\n"
-        f"Der/Die Patient/in war zum Zeitpunkt der Aufklärung wach, orientiert und nach Einschätzung des "
-        f"Rettungsdienstpersonals einwilligungsfähig, sofern nicht anders dokumentiert. "
-        f"Die Verweigerung erfolgte gegen den ausdrücklichen Rat des Rettungsdienstes.\n\n"
+        f"Die Aufklärung erfolgte in verständlicher Form. Besprochen wurden insbesondere die erhobenen Befunde "
+        f"bzw. die Verdachtslage, die empfohlene weitere Abklärung/Behandlung sowie die möglichen Folgen der "
+        f"Ablehnung: {risks}. Es wurde ausdrücklich darauf hingewiesen, dass derzeit nicht sicher ausgeschlossen "
+        f"werden kann, dass eine ernsthafte oder lebensbedrohliche Erkrankung vorliegt oder sich im weiteren "
+        f"Verlauf entwickelt.\n\n"
+        f"Dem/der Patient/in wurde empfohlen, sich zeitnah ärztlich vorstellen zu lassen bzw. den empfohlenen "
+        f"Transport wahrzunehmen. Bei erneuten, anhaltenden oder zunehmenden Beschwerden, Verschlechterung des "
+        f"Allgemeinzustands, Schmerzen, Atemnot, neurologischen Auffälligkeiten, Bewusstseinsveränderung oder "
+        f"Unsicherheit soll unverzüglich erneut der Notruf 112 bzw. ärztliche Hilfe verständigt werden.\n\n"
+        f"Der/die Patient/in wirkte zum Zeitpunkt der Entscheidung, soweit rettungsdienstlich beurteilbar, wach, "
+        f"ansprechbar, situationsadäquat und einwilligungsfähig. Abweichende Befunde oder Einschränkungen der "
+        f"Einwilligungsfähigkeit sind gesondert im Einsatzprotokoll zu dokumentieren. Die Entscheidung wurde "
+        f"nach erneuter Nachfrage aus freiem Willen geäußert; eine weitere Hilfeleistung bzw. ein Transport "
+        f"wurde erneut angeboten.\n\n"
         f"Zeuge/Zeugin: {witness}\n"
         f"Unterschrift Patient/in: {signature}\n"
-        f"Unterschrift Rettungsdienst: __________"
+        f"Unterschrift Rettungsdienst: __________\n"
+        f"Falls Unterschrift verweigert: Vermerk/Zeuge: __________"
     )
 
 
@@ -6434,7 +6448,7 @@ elif seite == "📄 Protokoll":
 
         refusal_defaults["scope"] = st.text_input(
             "Verweigert wird",
-            value=refusal_defaults.get("scope", "eine weitere rettungsdienstliche Versorgung / der Transport"),
+            value=refusal_defaults.get("scope", "die weitere rettungsdienstliche Behandlung und/oder den empfohlenen Transport"),
             key="refusal_scope",
         )
         refusal_defaults["reason"] = st.text_area(
@@ -6448,7 +6462,7 @@ elif seite == "📄 Protokoll":
             "Aufklärung über Risiken",
             value=refusal_defaults.get(
                 "risks",
-                "mögliche Verschlechterung, verzögerte Diagnostik/Therapie, bleibende Schäden bis hin zu Lebensgefahr",
+                "Verschlechterung des Gesundheitszustands, verzögerte Diagnostik/Therapie, bleibende Gesundheitsschäden bis hin zu akuter Lebensgefahr",
             ),
             height=90,
             key="refusal_risks",
