@@ -3900,7 +3900,6 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             <label>Vorname<input placeholder="Noch nicht dokumentierbar" /></label>
             <label>Nachname<input placeholder="Noch nicht dokumentierbar" /></label>
             <label>Geburtsdatum<input type="date" /></label>
-            <label>Geburtsort<input placeholder="Noch nicht dokumentierbar" /></label>
             <label>Alter<input inputMode="numeric" placeholder="Noch nicht dokumentierbar" /></label>
             <label>
               Geschlecht
@@ -3911,8 +3910,6 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
                 <option value="divers">divers</option>
               </select>
             </label>
-            <label>Größe<input placeholder="Noch nicht dokumentierbar" /></label>
-            <label>Gewicht<input placeholder="Noch nicht dokumentierbar" /></label>
             <label className="full-span">Straße und Hausnummer<input placeholder="Noch nicht dokumentierbar" /></label>
             <label>Postleitzahl<input placeholder="Noch nicht dokumentierbar" /></label>
             <label>Wohnort<input placeholder="Noch nicht dokumentierbar" /></label>
