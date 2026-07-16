@@ -165,6 +165,15 @@ const riskFactorLabels = {
   antikoagulation: 'Antikoagulation'
 };
 
+const pediatricRiskFactorLabels = {
+  fruehgeburtlichkeit: 'Frühgeburtlichkeit',
+  angeborene_erkrankung: 'Angeborene Erkrankung',
+  chronische_erkrankung_kind: 'Chronische Erkrankung',
+  immunsuppression_kind: 'Immunsuppression',
+  entwicklungsauffaelligkeit: 'Entwicklungsauffälligkeit',
+  relevante_exposition: 'Relevante Exposition im Umfeld'
+};
+
 function effectiveVitalStatus(vital, statusKey) {
   return vital?.[statusKey] === CUSTOM_STATUS ? vital?.[`${statusKey}_custom`] : vital?.[statusKey];
 }
@@ -209,7 +218,7 @@ function formatLastMeal(s) {
 }
 
 function formatRiskFactors(s) {
-  const risks = Object.entries(riskFactorLabels)
+  const risks = Object.entries({ ...riskFactorLabels, ...pediatricRiskFactorLabels })
     .filter(([key]) => Boolean(s[key]))
     .map(([, label]) => label);
   if (hasValue(s.risiken_sonstige)) risks.push(s.risiken_sonstige);
@@ -3139,11 +3148,12 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     }
 
     if (samplersSection === 'R') {
+      const activeRiskLabels = isChild ? pediatricRiskFactorLabels : riskFactorLabels;
       return (
         <fieldset className="samplers-panel">
           <legend>R - Risikofaktoren</legend>
           <div className="samplers-check-grid">
-            {Object.entries(riskFactorLabels).map(([key, label]) => (
+            {Object.entries(activeRiskLabels).map(([key, label]) => (
               <label key={key} className="checkbox-line">
                 <input type="checkbox" checked={Boolean(samplers[key])} onChange={() => toggleSamplerRisk(key)} />
                 {label}

@@ -320,6 +320,12 @@ RISK_FACTOR_LABELS = {
     "diabetes": "Diabetes",
     "hypertonie": "Hypertonie",
     "antikoagulation": "Antikoagulation",
+    "fruehgeburtlichkeit": "Frühgeburtlichkeit",
+    "angeborene_erkrankung": "Angeborene Erkrankung",
+    "chronische_erkrankung_kind": "Chronische Erkrankung",
+    "immunsuppression_kind": "Immunsuppression",
+    "entwicklungsauffaelligkeit": "Entwicklungsauffälligkeit",
+    "relevante_exposition": "Relevante Exposition im Umfeld",
 }
 
 
