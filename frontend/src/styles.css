@@ -1243,6 +1243,90 @@ form button,
   background: rgba(2, 10, 22, 0.24);
 }
 
+.trauma-body-map {
+  margin-top: 18px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(4, 12, 24, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.body-map-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(180px, 1fr));
+  gap: 18px;
+  max-width: 620px;
+  margin: 0 auto 18px;
+}
+
+.body-map-view {
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+}
+
+.body-map-view svg {
+  width: min(100%, 220px);
+  max-height: 430px;
+}
+
+.body-region {
+  fill: rgba(122, 166, 212, 0.32);
+  stroke: rgba(226, 241, 255, 0.58);
+  stroke-width: 2;
+  cursor: pointer;
+  transition: 0.16s ease;
+}
+
+.body-region:hover,
+.body-region:focus,
+.body-region.marked {
+  fill: rgba(239, 76, 95, 0.66);
+  stroke: #ffbec7;
+}
+
+.trauma-finding {
+  margin-top: 10px;
+  border-radius: 13px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+
+.trauma-finding-head {
+  width: 100%;
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 13px 15px;
+  color: #eef8ff;
+  background: rgba(255, 255, 255, 0.05);
+  text-align: left;
+  cursor: pointer;
+}
+
+.trauma-finding-editor {
+  padding: 16px;
+}
+
+.anatomy-hint {
+  display: grid;
+  gap: 5px;
+  margin-top: 14px;
+  padding: 13px;
+  border-radius: 12px;
+  color: rgba(230, 244, 255, 0.82);
+  background: rgba(45, 124, 255, 0.09);
+  border: 1px solid rgba(116, 185, 255, 0.2);
+}
+
+.anatomy-hint small {
+  color: #ffe5a3;
+}
+
+.remove-trauma-finding {
+  margin-top: 12px;
+}
+
 .status-band div {
   min-height: 58px;
   display: flex;
@@ -2972,6 +3056,10 @@ legend {
   }
 
   .age-entry-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .body-map-grid {
     grid-template-columns: 1fr;
   }
 

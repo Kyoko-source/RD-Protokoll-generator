@@ -188,6 +188,22 @@ const apgarComponents = [
   ['hautkolorit', 'Hautkolorit', ['0 – blass/blau', '1 – Stamm rosig, Extremitäten blau', '2 – vollständig rosig']]
 ];
 
+const traumaBodyRegions = {
+  kopf: { label: 'Kopf', bones: 'Schädel, Unterkiefer, Gesichtsschädel', vessels: 'A. carotis externa und Äste, oberflächliche Kopfgefäße' },
+  hals: { label: 'Hals', bones: 'Halswirbelsäule, Schlüsselbeinansatz', vessels: 'A. carotis, V. jugularis' },
+  thorax: { label: 'Brustkorb', bones: 'Rippen, Sternum, Schlüsselbein, Brustwirbelsäule', vessels: 'Aorta thoracica, A./V. subclavia, Interkostalgefäße' },
+  abdomen: { label: 'Bauch', bones: 'untere Rippen, Lendenwirbelsäule', vessels: 'Aorta abdominalis, V. cava inferior, Mesenterialgefäße' },
+  becken: { label: 'Becken', bones: 'Beckenring, Hüftgelenk, Kreuzbein', vessels: 'A./V. iliaca, femorale Gefäßübergänge' },
+  arm_links: { label: 'Arm links', bones: 'Humerus, Radius, Ulna, Handknochen', vessels: 'A. axillaris, brachialis, radialis, ulnaris' },
+  arm_rechts: { label: 'Arm rechts', bones: 'Humerus, Radius, Ulna, Handknochen', vessels: 'A. axillaris, brachialis, radialis, ulnaris' },
+  bein_links: { label: 'Bein links', bones: 'Femur, Patella, Tibia, Fibula, Fußknochen', vessels: 'A. femoralis, poplitea, tibialis' },
+  bein_rechts: { label: 'Bein rechts', bones: 'Femur, Patella, Tibia, Fibula, Fußknochen', vessels: 'A. femoralis, poplitea, tibialis' },
+  ruecken_oben: { label: 'Oberer Rücken', bones: 'Schulterblatt, Rippen, Brustwirbelsäule', vessels: 'paravertebrale und interkostale Gefäße' },
+  ruecken_unten: { label: 'Unterer Rücken', bones: 'Lendenwirbelsäule, Kreuzbein, hinterer Beckenring', vessels: 'Aorta abdominalis/iliakale Gefäße in tiefer Nachbarschaft' }
+};
+
+const traumaInjuryTypes = ['Wunde', 'Blutung', 'Frakturverdacht', 'Luxationsverdacht', 'Prellung/Hämatom', 'Verbrennung', 'Schwellung', 'Druckschmerz', 'Fehlstellung', 'Amputation', 'Fremdkörper'];
+
 function effectiveVitalStatus(vital, statusKey) {
   return vital?.[statusKey] === CUSTOM_STATUS ? vital?.[`${statusKey}_custom`] : vital?.[statusKey];
 }
@@ -461,6 +477,10 @@ function generateLocalProtocolText(patient) {
     ['BE-FAST Speech', x.befast_speech],
     ['BE-FAST Time', x.befast_time],
   ]);
+  text += renderListBlock('Trauma-Lokalisationen', x.trauma_befunde, (item) => {
+    const region = traumaBodyRegions[item?.region]?.label || item?.region || '';
+    return `${region} (${item?.side || ''}): ${compactJoin([...(item?.verletzungsarten || []), item?.blutung ? `Blutung ${item.blutung}` : '', item?.notiz], '; ')}`;
+  });
   text += addProtocolBlock('SAMPLERS', [
     ['Symptome', s.symptome],
     ['Allergien', formatSelectedAllergies(s)],
@@ -472,6 +492,13 @@ function generateLocalProtocolText(patient) {
     ['Letzte Miktion', s.letzte_miktion],
     ['Letztes Erbrechen', s.letztes_erbrechen],
     ['Ereignis', s.ereignis],
+    ['Traumamechanismus', s.trauma_mechanismus],
+    ['Sturzhöhe Kategorie', s.sturzhoehe_kategorie],
+    ['Sturzhöhe Meter', s.sturzhoehe_meter],
+    ['Aufprallfläche', s.aufprallflaeche],
+    ['Aufprallrichtung/Körperposition', s.aufprallrichtung],
+    ['Schutzsysteme', s.schutzsysteme],
+    ['Trauma-Besonderheiten', s.trauma_besonderheiten],
     ['Risikofaktoren', formatRiskFactors(s)],
     ['Schwangerschaft', formatPregnancyStatus(s)],
     ['Sonstiges', s.sonstiges],
@@ -2632,6 +2659,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const [xabcdeSection, setXabcdeSection] = useState('A');
   const [samplersSection, setSamplersSection] = useState('S1');
   const [opqrstSection, setOpqrstSection] = useState('O');
+  const [selectedTraumaRegion, setSelectedTraumaRegion] = useState('');
   const [statusText, setStatusText] = useState('');
   const [actionFeedback, setActionFeedback] = useState(null);
   const [error, setError] = useState('');
@@ -2930,6 +2958,77 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     updateXabcde(key, !Boolean(xabcde[key]));
   }
 
+  function traumaFindings() {
+    return Array.isArray(xabcde.trauma_befunde) ? xabcde.trauma_befunde : [];
+  }
+
+  function selectTraumaRegion(region, side) {
+    const id = `${side}:${region}`;
+    setSelectedTraumaRegion(id);
+    setPatient((current) => {
+      const currentX = current.xabcde || {};
+      const findings = Array.isArray(currentX.trauma_befunde) ? currentX.trauma_befunde : [];
+      if (findings.some((item) => item.id === id)) return current;
+      return {
+        ...current,
+        xabcde: {
+          ...currentX,
+          bodycheck: 'Auffällig',
+          trauma_befunde: [...findings, { id, region, side, verletzungsarten: [], blutung: '', notiz: '' }]
+        }
+      };
+    });
+  }
+
+  function updateTraumaFinding(id, key, value) {
+    setPatient((current) => {
+      const currentX = current.xabcde || {};
+      const findings = Array.isArray(currentX.trauma_befunde) ? currentX.trauma_befunde : [];
+      return { ...current, xabcde: { ...currentX, trauma_befunde: findings.map((item) => item.id === id ? { ...item, [key]: value } : item) } };
+    });
+  }
+
+  function toggleTraumaInjury(id, injuryType) {
+    const finding = traumaFindings().find((item) => item.id === id);
+    const values = Array.isArray(finding?.verletzungsarten) ? finding.verletzungsarten : [];
+    updateTraumaFinding(id, 'verletzungsarten', values.includes(injuryType) ? values.filter((item) => item !== injuryType) : [...values, injuryType]);
+  }
+
+  function removeTraumaFinding(id) {
+    updateXabcde('trauma_befunde', traumaFindings().filter((item) => item.id !== id));
+    if (selectedTraumaRegion === id) setSelectedTraumaRegion('');
+  }
+
+  function bodyMap(side) {
+    const selectedIds = new Set(traumaFindings().map((item) => item.id));
+    const region = (key, element) => (
+      <g className={`body-region ${selectedIds.has(`${side}:${key}`) ? 'marked' : ''}`} onClick={() => selectTraumaRegion(key, side)} role="button" tabIndex="0" key={key}>
+        {element}
+        <title>{traumaBodyRegions[key]?.label}</title>
+      </g>
+    );
+    return <div className="body-map-view">
+      <strong>{side === 'vorne' ? 'Vorne' : 'Hinten'}</strong>
+      <svg viewBox="0 0 180 420" aria-label={`Körperskizze ${side}`}>
+        {region('kopf', <circle cx="90" cy="35" r="25" />)}
+        {region('hals', <rect x="78" y="60" width="24" height="24" rx="8" />)}
+        {side === 'vorne' ? <>
+          {region('thorax', <path d="M55 85 Q90 70 125 85 L120 190 Q90 205 60 190 Z" />)}
+          {region('abdomen', <rect x="63" y="180" width="54" height="76" rx="18" />)}
+          {region('becken', <path d="M60 245 Q90 270 120 245 L125 290 Q90 305 55 290 Z" />)}
+        </> : <>
+          {region('ruecken_oben', <path d="M55 85 Q90 70 125 85 L120 180 Q90 195 60 180 Z" />)}
+          {region('ruecken_unten', <rect x="63" y="170" width="54" height="86" rx="18" />)}
+          {region('becken', <path d="M60 245 Q90 270 120 245 L125 290 Q90 305 55 290 Z" />)}
+        </>}
+        {region('arm_rechts', <path d="M55 90 L35 105 L12 235 L35 240 L65 125 Z" />)}
+        {region('arm_links', <path d="M125 90 L145 105 L168 235 L145 240 L115 125 Z" />)}
+        {region('bein_rechts', <path d="M58 280 L88 285 L80 410 L48 410 Z" />)}
+        {region('bein_links', <path d="M92 285 L122 280 L132 410 L100 410 Z" />)}
+      </svg>
+    </div>;
+  }
+
   function renderXabcdeSelect(key, label) {
     const options = xabcdeOptions[key];
     return (
@@ -3079,12 +3178,32 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             </label>
           </div>
         </div>
-        {xabcde.bodycheck === 'Auffällig' && (
+        {xabcde.bodycheck === 'Auffällig' && (<>
           <label className="wide-field">
             Auffälligkeiten
             <textarea value={xabcde.bodycheck_text || ''} onChange={(event) => updateXabcde('bodycheck_text', event.target.value)} rows={5} />
           </label>
-        )}
+          <section className="trauma-body-map">
+            <div className="section-head compact-head"><h3>Trauma-Lokalisation</h3><span>Körperregion anklicken und Befund auswählen</span></div>
+            <div className="body-map-grid">{bodyMap('vorne')}{bodyMap('hinten')}</div>
+            {traumaFindings().map((finding) => {
+              const anatomy = traumaBodyRegions[finding.region] || {};
+              const expanded = selectedTraumaRegion === finding.id;
+              return <article className={`trauma-finding ${expanded ? 'expanded' : ''}`} key={finding.id}>
+                <button type="button" className="trauma-finding-head" onClick={() => setSelectedTraumaRegion(expanded ? '' : finding.id)}><strong>{anatomy.label || finding.region} · {finding.side}</strong><span>{(finding.verletzungsarten || []).join(', ') || 'Befund noch offen'}</span></button>
+                {expanded && <div className="trauma-finding-editor">
+                  <div className="check-grid">{traumaInjuryTypes.map((type) => <label className="checkbox-line" key={type}><input type="checkbox" checked={(finding.verletzungsarten || []).includes(type)} onChange={() => toggleTraumaInjury(finding.id, type)} />{type}</label>)}</div>
+                  <div className="form-grid">
+                    <label>Blutungsstärke<select value={finding.blutung || ''} onChange={(event) => updateTraumaFinding(finding.id, 'blutung', event.target.value)}><option value="">Keine Angabe</option><option value="keine">keine</option><option value="gering">gering</option><option value="mittel">mittel</option><option value="stark/kritisch">stark / kritisch</option><option value="kontrolliert">kontrolliert</option></select></label>
+                    <label>Zusatzbefund<input value={finding.notiz || ''} onChange={(event) => updateTraumaFinding(finding.id, 'notiz', event.target.value)} /></label>
+                  </div>
+                  <div className="anatomy-hint"><strong>Anatomische Orientierung</strong><span>Knochen: {anatomy.bones}</span><span>Größere Gefäße in der Region: {anatomy.vessels}</span><small>Nähe bedeutet keine Verletzung. Klinisch untersuchen und gegebenenfalls bildgebend abklären.</small></div>
+                  <button type="button" className="remove-trauma-finding" onClick={() => removeTraumaFinding(finding.id)}>Markierung entfernen</button>
+                </div>}
+              </article>;
+            })}
+          </section>
+        </>)}
       </fieldset>
     );
   }
@@ -3220,6 +3339,15 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       return (
         <fieldset className="samplers-panel">
           <legend>E - Ereignis</legend>
+          <div className="form-grid trauma-mechanism-grid">
+            <label>Unfall-/Traumamechanismus<select value={samplers.trauma_mechanismus || ''} onChange={(event) => updateSamplers('trauma_mechanismus', event.target.value)}><option value="">Kein Trauma / keine Angabe</option><option value="Sturz">Sturz</option><option value="Verkehrsunfall">Verkehrsunfall</option><option value="Anprall/Kollision">Anprall / Kollision</option><option value="Penetrierendes Trauma">Penetrierendes Trauma</option><option value="Quetschung/Einklemmung">Quetschung / Einklemmung</option><option value="Explosion">Explosion</option><option value="Sporttrauma">Sporttrauma</option><option value="Sonstiges Trauma">Sonstiges Trauma</option></select></label>
+            {samplers.trauma_mechanismus === 'Sturz' && <label>Sturzhöhe<select value={samplers.sturzhoehe_kategorie || ''} onChange={(event) => updateSamplers('sturzhoehe_kategorie', event.target.value)}><option value="">Bitte auswählen</option><option value="ebenerdig">ebenerdig</option><option value="unter 3 m">unter 3 m</option><option value="3 m oder höher">3 m oder höher</option><option value="unbekannt">unbekannt</option></select></label>}
+            {samplers.trauma_mechanismus === 'Sturz' && <label>Geschätzte Höhe<input value={samplers.sturzhoehe_meter || ''} onChange={(event) => updateSamplers('sturzhoehe_meter', event.target.value)} inputMode="decimal" placeholder="Meter, falls bekannt" /></label>}
+            <label>Aufprallfläche / Untergrund<input value={samplers.aufprallflaeche || ''} onChange={(event) => updateSamplers('aufprallflaeche', event.target.value)} /></label>
+            <label>Aufprallrichtung / Körperposition<input value={samplers.aufprallrichtung || ''} onChange={(event) => updateSamplers('aufprallrichtung', event.target.value)} /></label>
+            <label>Schutzsysteme<input value={samplers.schutzsysteme || ''} onChange={(event) => updateSamplers('schutzsysteme', event.target.value)} placeholder="Helm, Gurt, Airbag ..." /></label>
+            <label>Einklemmung / Herausschleudern / Überschlag<input value={samplers.trauma_besonderheiten || ''} onChange={(event) => updateSamplers('trauma_besonderheiten', event.target.value)} /></label>
+          </div>
           <label>
             Ereignisbeschreibung
             <textarea value={samplers.ereignis || ''} onChange={(event) => updateSamplers('ereignis', event.target.value)} rows={8} />

@@ -660,6 +660,8 @@ def build_suspicion_assessment(patient):
     text = " ".join([
         str(samplers.get("symptome") or ""),
         str(samplers.get("ereignis") or ""),
+        str(samplers.get("trauma_mechanismus") or ""),
+        str(samplers.get("sturzhoehe_kategorie") or ""),
         str(samplers.get("vorgeschichte") or ""),
         str(samplers.get("medikamente") or ""),
         str(samplers.get("risiken_sonstige") or ""),
@@ -1130,6 +1132,7 @@ def generate_protocol_text(patient):
     gcs_parts = [as_number(paediatrie.get(key)) for key in ("gcs_augen", "gcs_verbal", "gcs_motorik")]
     pediatric_gcs_total = sum(gcs_parts) if all(value is not None for value in gcs_parts) else ""
     apgar_details = paediatrie.get("apgar_details", {}) or {}
+    trauma_findings = x.get("trauma_befunde", []) if isinstance(x.get("trauma_befunde"), list) else []
 
     def apgar_total(minute):
         details = apgar_details.get(str(minute), {}) or {}
@@ -1187,6 +1190,15 @@ def generate_protocol_text(patient):
         ("Unterkühlung", "Ja" if x.get("unterkuehlung") else ""),
         ("Verbrennung", "Ja" if x.get("verbrennung") else ""),
     ])
+    if trauma_findings:
+        text += "TRAUMA-LOKALISATIONEN\n" + ("=" * 50) + "\n"
+        for finding in trauma_findings:
+            if not isinstance(finding, dict):
+                continue
+            injuries = compact_join(finding.get("verletzungsarten", []))
+            detail = compact_join([injuries, f"Blutung: {finding.get('blutung')}" if valid(finding.get("blutung")) else "", finding.get("notiz")], "; ")
+            text += f"- {finding.get('region', '')} ({finding.get('side', '')}): {detail or 'markiert'}\n"
+        text += "\n"
     text += add_lines("SAMPLERS", [
         ("Symptome", s.get("symptome")),
         ("Allergien", format_selected_allergies(s)),
@@ -1198,6 +1210,13 @@ def generate_protocol_text(patient):
         ("Letzte Miktion", s.get("letzte_miktion")),
         ("Letztes Erbrechen", s.get("letztes_erbrechen")),
         ("Ereignis", s.get("ereignis")),
+        ("Traumamechanismus", s.get("trauma_mechanismus")),
+        ("Sturzhöhe Kategorie", s.get("sturzhoehe_kategorie")),
+        ("Sturzhöhe Meter", s.get("sturzhoehe_meter")),
+        ("Aufprallfläche", s.get("aufprallflaeche")),
+        ("Aufprallrichtung/Körperposition", s.get("aufprallrichtung")),
+        ("Schutzsysteme", s.get("schutzsysteme")),
+        ("Trauma-Besonderheiten", s.get("trauma_besonderheiten")),
         ("Risikofaktoren", format_risk_factors(s)),
         ("Schwangerschaft", format_pregnancy_status(s)),
         ("Sonstiges", s.get("sonstiges")),
