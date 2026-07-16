@@ -1116,6 +1116,73 @@ form button,
   background: linear-gradient(135deg, #2d7cff 0%, #12c6b2 100%);
 }
 
+.patient-type-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-bottom: 18px;
+}
+
+.patient-type-grid button {
+  min-height: 112px;
+  display: grid;
+  place-content: center;
+  gap: 7px;
+  border-radius: 18px;
+  color: rgba(239, 248, 255, 0.82);
+  background: rgba(255, 255, 255, 0.045);
+  border: 2px solid rgba(255, 255, 255, 0.10);
+  cursor: pointer;
+}
+
+.patient-type-grid button strong {
+  font-size: 1.35rem;
+}
+
+.patient-type-grid button span {
+  color: rgba(239, 248, 255, 0.58);
+}
+
+.patient-type-grid button.selected {
+  color: #fff;
+  background: linear-gradient(135deg, rgba(45, 124, 255, 0.28), rgba(18, 198, 178, 0.22));
+  border-color: #31cbd1;
+  box-shadow: 0 12px 30px rgba(18, 198, 178, 0.12);
+}
+
+.pilot-privacy-note {
+  display: grid;
+  gap: 4px;
+  margin: 0 0 18px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  color: #ffe9a6;
+  background: rgba(255, 190, 60, 0.09);
+  border: 1px solid rgba(255, 205, 86, 0.24);
+}
+
+.pilot-privacy-note span {
+  color: rgba(255, 239, 190, 0.72);
+}
+
+.privacy-fields {
+  margin-top: 20px;
+  padding: 18px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  background: rgba(255, 255, 255, 0.025);
+}
+
+.privacy-fields legend {
+  padding: 0 8px;
+  color: rgba(239, 248, 255, 0.48);
+  font-weight: 850;
+}
+
+.privacy-fields:disabled {
+  opacity: 0.52;
+}
+
 .status-band div {
   min-height: 58px;
   display: flex;
@@ -2838,6 +2905,10 @@ legend {
   .protocol-tabs {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .patient-type-grid {
+    grid-template-columns: 1fr;
   }
 
   .support-row-action {

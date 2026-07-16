@@ -2588,6 +2588,7 @@ function CancellationView({ session, employee, onBack, onLogout, connectivity })
 }
 
 const emptyPatient = {
+  patient: { patientengruppe: '' },
   vitalwerte: {},
   xabcde: {},
   samplers: {},
@@ -2601,7 +2602,7 @@ const emptyPatient = {
   uebergabe: {}
 };
 
-function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSync, initialSection = 'vitalwerte', standaloneRefusal = false }) {
+function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSync, initialSection = 'patient', standaloneRefusal = false }) {
   const initialLocalDraft = loadLocalDraft(employee?.id);
   const [patient, setPatient] = useState(emptyPatient);
   const [protocolSection, setProtocolSection] = useState(initialSection);
@@ -2641,6 +2642,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     };
   });
   const vitalwerte = patient.vitalwerte || {};
+  const patientData = patient.patient || {};
   const xabcde = patient.xabcde || {};
   const samplers = patient.samplers || {};
   const opqrst = patient.opqrst || {};
@@ -2736,6 +2738,16 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       ...current,
       vitalwerte: {
         ...(current.vitalwerte || {}),
+        [key]: value
+      }
+    }));
+  }
+
+  function updatePatientData(key, value) {
+    setPatient((current) => ({
+      ...current,
+      patient: {
+        ...(current.patient || {}),
         [key]: value
       }
     }));
@@ -3775,6 +3787,13 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       {!standaloneRefusal && <section className="protocol-tabs">
         <button
           type="button"
+          className={protocolSection === 'patient' ? 'active' : ''}
+          onClick={() => setProtocolSection('patient')}
+        >
+          Patient
+        </button>
+        <button
+          type="button"
           className={protocolSection === 'vitalwerte' ? 'active' : ''}
           onClick={() => setProtocolSection('vitalwerte')}
         >
@@ -3845,26 +3864,73 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         </button>
       </section>}
 
+      {protocolSection === 'patient' && <section className="work-panel patient-panel">
+        <div className="section-head">
+          <h2>Patient</h2>
+          <span>Patientengruppe und Stammdaten</span>
+        </div>
+
+        <div className="patient-type-grid" role="group" aria-label="Patientengruppe">
+          <button
+            type="button"
+            className={patientData.patientengruppe === 'Erwachsen' ? 'selected' : ''}
+            onClick={() => updatePatientData('patientengruppe', 'Erwachsen')}
+          >
+            <strong>Erwachsen</strong>
+            <span>ab 18 Jahren</span>
+          </button>
+          <button
+            type="button"
+            className={patientData.patientengruppe === 'Kind' ? 'selected' : ''}
+            onClick={() => updatePatientData('patientengruppe', 'Kind')}
+          >
+            <strong>Kind</strong>
+            <span>unter 18 Jahren</span>
+          </button>
+        </div>
+
+        <div className="pilot-privacy-note">
+          <strong>Pilotbetrieb – keine echten personenbezogenen Daten eingeben</strong>
+          <span>Datenschutzrechtlich relevante Stammdaten sind deshalb sichtbar, aber noch deaktiviert.</span>
+        </div>
+
+        <fieldset className="privacy-fields" disabled>
+          <legend>Patientendaten – im Pilotbetrieb gesperrt</legend>
+          <div className="form-grid">
+            <label>Vorname<input placeholder="Noch nicht dokumentierbar" /></label>
+            <label>Nachname<input placeholder="Noch nicht dokumentierbar" /></label>
+            <label>Geburtsdatum<input type="date" /></label>
+            <label>Geburtsort<input placeholder="Noch nicht dokumentierbar" /></label>
+            <label>Alter<input inputMode="numeric" placeholder="Noch nicht dokumentierbar" /></label>
+            <label>
+              Geschlecht
+              <select defaultValue="">
+                <option value="">Noch nicht dokumentierbar</option>
+                <option value="männlich">männlich</option>
+                <option value="weiblich">weiblich</option>
+                <option value="divers">divers</option>
+              </select>
+            </label>
+            <label>Größe<input placeholder="Noch nicht dokumentierbar" /></label>
+            <label>Gewicht<input placeholder="Noch nicht dokumentierbar" /></label>
+            <label className="full-span">Straße und Hausnummer<input placeholder="Noch nicht dokumentierbar" /></label>
+            <label>Postleitzahl<input placeholder="Noch nicht dokumentierbar" /></label>
+            <label>Wohnort<input placeholder="Noch nicht dokumentierbar" /></label>
+            <label>Krankenkasse<input placeholder="Noch nicht dokumentierbar" /></label>
+            <label>Versichertennummer<input placeholder="Noch nicht dokumentierbar" /></label>
+            <label>Telefonnummer<input placeholder="Noch nicht dokumentierbar" /></label>
+            <label>Kontaktperson / Angehörige<input placeholder="Noch nicht dokumentierbar" /></label>
+          </div>
+        </fieldset>
+      </section>}
+
       {protocolSection === 'vitalwerte' && <section className="work-panel">
         <div className="section-head">
-          <h2>Vitalwerte & Demographie</h2>
+          <h2>Vitalwerte</h2>
           <span>Entwurf pro Mitarbeiter</span>
         </div>
 
         <div className="form-grid">
-          <label>
-            Alter
-            <input value={vitalwerte.alter || ''} onChange={(event) => updateVital('alter', event.target.value)} inputMode="numeric" />
-          </label>
-          <label>
-            Geschlecht
-            <select value={vitalwerte.geschlecht || ''} onChange={(event) => updateVital('geschlecht', event.target.value)}>
-              <option value="">Keine Angabe</option>
-              <option value="männlich">männlich</option>
-              <option value="weiblich">weiblich</option>
-              <option value="divers">divers</option>
-            </select>
-          </label>
           {renderBloodPressurePair()}
           {renderVitalPair({ title: 'Puls', valueKey: 'puls', statusKey: 'puls_status', placeholder: '/min' })}
           {renderVitalPair({ title: 'SpO2', valueKey: 'spo2', statusKey: 'spo2_status', placeholder: '%' })}
