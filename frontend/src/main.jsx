@@ -2657,6 +2657,9 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     ? Number(patientData.alter_wert) * (patientData.alter_einheit === 'Jahre' ? 12 : 1)
     : null;
   const isNewborn = childAgeMonths !== null && childAgeMonths <= 1;
+  const activeSamplersSections = isChild
+    ? samplersSections.filter((section) => section.key !== 'S2')
+    : samplersSections;
   const pediatricAgeGroup = childAgeMonths === null ? ''
     : childAgeMonths <= 1 ? 'Neugeborenes'
       : childAgeMonths < 12 ? 'Säugling'
@@ -2693,8 +2696,8 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const refusalText = buildPatientRefusalText(patient, refusal);
   const xabcdeCompletedCount = xabcdeSections.filter((section) => xabcdeSectionComplete(section.key)).length;
   const xabcdeOpenSections = xabcdeSections.filter((section) => !xabcdeSectionComplete(section.key)).map((section) => section.key);
-  const samplersCompletedCount = samplersSections.filter((section) => samplersSectionComplete(section.key)).length;
-  const samplersOpenSections = samplersSections.filter((section) => !samplersSectionComplete(section.key)).map((section) => section.label);
+  const samplersCompletedCount = activeSamplersSections.filter((section) => samplersSectionComplete(section.key)).length;
+  const samplersOpenSections = activeSamplersSections.filter((section) => !samplersSectionComplete(section.key)).map((section) => section.label);
   const amlsReadiness = amls.arbeitsdiagnose
     ? { level: 'ok', text: `Arbeitsdiagnose gesetzt: ${amls.arbeitsdiagnose}` }
     : amlsRemainingCandidates.length === 1
@@ -2736,6 +2739,12 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       loadAmlsSuggestions();
     }
   }, [protocolSection]);
+
+  useEffect(() => {
+    if (isChild && samplersSection === 'S2') {
+      setSamplersSection('S1');
+    }
+  }, [isChild, samplersSection]);
 
   function restoreLocalDraft() {
     const draft = loadLocalDraft(employee?.id);
@@ -4088,7 +4097,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
         <div className="samplers-layout">
           <div className="samplers-nav" role="tablist" aria-label="SAMPLERS Unterpunkte">
-            {samplersSections.map((section) => (
+            {activeSamplersSections.map((section) => (
               <button
                 key={section.key}
                 type="button"
@@ -4102,14 +4111,14 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           </div>
 
           <div className="samplers-active-hint">
-            {samplersCompletedCount}/{samplersSections.length} Bereiche dokumentiert · offen: {samplersOpenSections.length ? samplersOpenSections.join(', ') : 'keine'}
+            {samplersCompletedCount}/{activeSamplersSections.length} Bereiche dokumentiert · offen: {samplersOpenSections.length ? samplersOpenSections.join(', ') : 'keine'}
           </div>
 
           {renderSamplersContent()}
 
           <aside className="samplers-summary">
             <h3>Live-Zusammenfassung</h3>
-            <div className="summary-meter"><span style={{ width: `${Math.round((samplersCompletedCount / samplersSections.length) * 100)}%` }} /></div>
+            <div className="summary-meter"><span style={{ width: `${Math.round((samplersCompletedCount / activeSamplersSections.length) * 100)}%` }} /></div>
             <p>{hasValue(samplers.symptome) ? `Symptome: ${samplers.symptome}` : 'Symptome noch offen'}</p>
             <p>{hasValue(formatSelectedAllergies(samplers)) ? `Allergien: ${formatSelectedAllergies(samplers)}` : 'Allergien noch offen'}</p>
             <p>{hasValue(samplers.vorgeschichte) ? `Vorgeschichte: ${samplers.vorgeschichte}` : 'Vorgeschichte noch offen'}</p>
