@@ -1377,6 +1377,41 @@ form button,
   line-height: 1.45;
 }
 
+.psyche-legal-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.psyche-legal-actions a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  min-height: 34px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  border: 1px solid rgba(113, 220, 202, 0.28);
+  color: rgba(232, 255, 251, 0.92);
+  background: rgba(113, 220, 202, 0.1);
+  font-size: 0.85rem;
+  font-weight: 700;
+  text-decoration: none;
+  transition: border-color 0.15s ease, background 0.15s ease, transform 0.15s ease;
+}
+
+.psyche-legal-actions a:hover {
+  border-color: rgba(113, 220, 202, 0.52);
+  background: rgba(113, 220, 202, 0.17);
+  transform: translateY(-1px);
+}
+
+.psyche-legal-actions a svg {
+  flex: 0 0 auto;
+  color: currentColor;
+}
+
 .patient-type-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

@@ -12,6 +12,7 @@ import {
   ChevronDown,
   ClipboardList,
   Download,
+  ExternalLink,
   FileText,
   HeartPulse,
   Home,
@@ -4743,6 +4744,22 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <div>
             <strong>Dokumentationshilfe – keine eigenständige Unterbringungsanordnung</strong>
             <span>Konkrete Beobachtungen festhalten. Eine Unterbringung nach PsychKG NRW wird durch Ordnungsbehörde beziehungsweise Amtsgericht veranlasst; bei Gefahr im Verzug gelten die Voraussetzungen des § 14 PsychKG NRW.</span>
+            <div className="psyche-legal-actions" aria-label="Originalparagraphen PsychKG NRW">
+              <a
+                href="https://recht.nrw.de/lrgv/gesetz/01072025-gesetz-ueber-hilfen-und-schutzmassnahmen-bei-psychischen-krankheiten-psychkg/#:~:text=%C2%A7%2014%20Sofortige%20Unterbringung"
+                target="_blank"
+                rel="noreferrer"
+              >
+                § 14 Sofortige Unterbringung <ExternalLink size={14} />
+              </a>
+              <a
+                href="https://recht.nrw.de/lrgv/gesetz/01072025-gesetz-ueber-hilfen-und-schutzmassnahmen-bei-psychischen-krankheiten-psychkg/#:~:text=%C2%A7%2026%20Freiwilliger%20Krankenhausaufenthalt"
+                target="_blank"
+                rel="noreferrer"
+              >
+                § 26 Freiwilliger Krankenhausaufenthalt <ExternalLink size={14} />
+              </a>
+            </div>
           </div>
         </div>
 
