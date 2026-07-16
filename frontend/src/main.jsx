@@ -51,9 +51,21 @@ const EMPLOYEE_ROLE_OPTIONS = [
   { value: 'azubi', label: 'Azubi' },
   { value: 'admin', label: 'Admin' }
 ];
+const EMPLOYEE_QUALIFICATION_OPTIONS = [
+  { value: '', label: 'Keine Angabe' },
+  { value: 'Rettungshelfer', label: 'Rettungshelfer' },
+  { value: 'Rettungssanitäter', label: 'Rettungssanitäter' },
+  { value: 'Rettungsassistent', label: 'Rettungsassistent' },
+  { value: 'Notfallsanitäter', label: 'Notfallsanitäter' },
+  { value: 'Notarzt', label: 'Notarzt' }
+];
 
 function roleLabel(role) {
   return EMPLOYEE_ROLE_OPTIONS.find((item) => item.value === role)?.label || 'Mitarbeiter';
+}
+
+function qualificationLabel(qualification) {
+  return EMPLOYEE_QUALIFICATION_OPTIONS.find((item) => item.value === qualification)?.label || 'Keine Angabe';
 }
 
 function localDraftKey(employeeId) {
@@ -1098,7 +1110,7 @@ function Login({ onLogin }) {
               <select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
                 {employees.map((employee) => (
                   <option key={employee.id} value={employee.id}>
-                    {employee.name} · {roleLabel(employee.role)}
+                    {employee.name} · {qualificationLabel(employee.qualification)}
                   </option>
                 ))}
               </select>
@@ -2065,6 +2077,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [feedbackAnswers, setFeedbackAnswers] = useState({});
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState('employee');
+  const [newQualification, setNewQualification] = useState('');
   const [retentionDays, setRetentionDays] = useState(3650);
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [statusText, setStatusText] = useState('');
@@ -2107,11 +2120,12 @@ function AdminView({ session, employee, onBack, onLogout }) {
     try {
       const result = await api('/api/admin/employees', {
         method: 'POST',
-        body: JSON.stringify({ name: newName, role: newRole })
+        body: JSON.stringify({ name: newName, role: newRole, qualification: newQualification })
       }, session.token);
       setTemporaryPassword(`${result.employee.name}: ${result.temporary_password}`);
       setStatusText('Mitarbeiterprofil wurde angelegt.');
       setNewName('');
+      setNewQualification('');
       await loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -2302,6 +2316,11 @@ function AdminView({ session, employee, onBack, onLogout }) {
           </div>
           <form className="inline-form" onSubmit={createEmployee}>
             <input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Name" />
+            <select value={newQualification} onChange={(event) => setNewQualification(event.target.value)} aria-label="Qualifikation">
+              {EMPLOYEE_QUALIFICATION_OPTIONS.map((qualification) => (
+                <option key={qualification.value || 'none'} value={qualification.value}>{qualification.label}</option>
+              ))}
+            </select>
             <select value={newRole} onChange={(event) => setNewRole(event.target.value)}>
               {EMPLOYEE_ROLE_OPTIONS.map((role) => (
                 <option key={role.value} value={role.value}>{role.label}</option>
@@ -2314,8 +2333,13 @@ function AdminView({ session, employee, onBack, onLogout }) {
               <div className="admin-row" key={item.id}>
                 <div>
                   <strong>{item.name}</strong>
-                  <span>{roleLabel(item.role)} · {item.active ? 'aktiv' : 'gesperrt'}</span>
+                  <span>{qualificationLabel(item.qualification)} · {roleLabel(item.role)} · {item.active ? 'aktiv' : 'gesperrt'}</span>
                 </div>
+                <select value={item.qualification || ''} onChange={(event) => updateEmployee(item, { qualification: event.target.value })} aria-label={`Qualifikation von ${item.name}`}>
+                  {EMPLOYEE_QUALIFICATION_OPTIONS.map((qualification) => (
+                    <option key={qualification.value || 'none'} value={qualification.value}>{qualification.label}</option>
+                  ))}
+                </select>
                 <select value={item.role} onChange={(event) => updateEmployee(item, { role: event.target.value })}>
                   {EMPLOYEE_ROLE_OPTIONS.map((role) => (
                     <option key={role.value} value={role.value}>{role.label}</option>

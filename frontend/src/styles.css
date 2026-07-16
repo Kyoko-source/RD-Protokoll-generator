@@ -2073,7 +2073,7 @@ form button,
 
 .inline-form {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) 150px auto;
+  grid-template-columns: minmax(0, 1fr) 180px 150px auto;
   gap: 10px;
   align-items: center;
   margin-bottom: 14px;
@@ -2138,7 +2138,7 @@ form button,
 
 .admin-row {
   display: grid;
-  grid-template-columns: minmax(180px, 1fr) 150px 110px 92px 112px;
+  grid-template-columns: minmax(180px, 1fr) 180px 150px 110px 92px 112px;
   gap: 10px;
   align-items: center;
   padding: 12px;

@@ -72,6 +72,14 @@ if production_mode() and not os.getenv("NANA_DATA_KEY", "").strip():
 sessions = {}
 password_change_tokens = {}
 EMPLOYEE_ROLES = {"employee", "admin", "bufdi", "azubi"}
+EMPLOYEE_QUALIFICATIONS = {
+    "",
+    "Rettungshelfer",
+    "Rettungssanitäter",
+    "Rettungsassistent",
+    "Notfallsanitäter",
+    "Notarzt",
+}
 
 app = FastAPI(title="NANA API", version="0.1.0")
 app.add_middleware(
@@ -150,11 +158,13 @@ class HospitalSaveRequest(BaseModel):
 class EmployeeCreateRequest(BaseModel):
     name: str
     role: str = "employee"
+    qualification: str = ""
 
 
 class EmployeeUpdateRequest(BaseModel):
     name: str | None = None
     role: str | None = None
+    qualification: str | None = None
     active: bool | None = None
     reset_password: bool = False
 
@@ -1751,6 +1761,7 @@ def public_employee(employee):
         "id": employee.get("id", ""),
         "name": employee.get("name", ""),
         "role": employee.get("role", "employee"),
+        "qualification": employee.get("qualification", ""),
         "must_change_password": bool(employee.get("must_change_password")),
     }
 
@@ -1800,6 +1811,11 @@ def require_admin(employee=Depends(current_employee)):
 
 def normalize_employee_role(role):
     return role if role in EMPLOYEE_ROLES else "employee"
+
+
+def normalize_employee_qualification(qualification):
+    value = (qualification or "").strip()
+    return value if value in EMPLOYEE_QUALIFICATIONS else ""
 
 
 @app.on_event("startup")
@@ -2448,6 +2464,7 @@ def admin_employees(employee=Depends(require_admin)):
 def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_admin)):
     name = payload.name.strip()
     role = normalize_employee_role(payload.role)
+    qualification = normalize_employee_qualification(payload.qualification)
     if not name:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name fehlt.")
 
@@ -2457,6 +2474,7 @@ def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_adm
         "id": new_token()[:16],
         "name": name,
         "role": role,
+        "qualification": qualification,
         "active": True,
         "password_hash": "",
         "temp_password_hash": password_hash(temp_password),
@@ -2471,7 +2489,7 @@ def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_adm
         employee=employee,
         entity_type="employee",
         entity_id=new_employee["id"],
-        details={"role": role},
+        details={"role": role, "qualification": qualification},
     )
     return {"employee": admin_employee(new_employee), "temporary_password": temp_password}
 
@@ -2491,6 +2509,8 @@ def update_employee(employee_id: str, payload: EmployeeUpdateRequest, employee=D
         target["name"] = payload.name.strip()
     if payload.role is not None:
         target["role"] = normalize_employee_role(payload.role)
+    if payload.qualification is not None:
+        target["qualification"] = normalize_employee_qualification(payload.qualification)
     if payload.active is not None:
         if target.get("id") == employee.get("id") and payload.active is False:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Eigenes Admin-Profil kann nicht deaktiviert werden.")
