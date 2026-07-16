@@ -174,6 +174,20 @@ const pediatricRiskFactorLabels = {
   relevante_exposition: 'Relevante Exposition im Umfeld'
 };
 
+const pediatricGcsOptions = {
+  gcs_augen: [['', 'Bitte auswählen'], ['4', '4 – spontan'], ['3', '3 – auf Ansprache'], ['2', '2 – auf Schmerzreiz'], ['1', '1 – keine Reaktion']],
+  gcs_verbal: [['', 'Bitte auswählen'], ['5', '5 – altersentsprechend / orientiert'], ['4', '4 – irritabel / verwirrt'], ['3', '3 – anhaltendes Schreien / unpassende Worte'], ['2', '2 – Stöhnen / unverständliche Laute'], ['1', '1 – keine Reaktion']],
+  gcs_motorik: [['', 'Bitte auswählen'], ['6', '6 – befolgt Aufforderung / spontan altersgerecht'], ['5', '5 – lokalisiert Schmerz'], ['4', '4 – zieht auf Schmerz zurück'], ['3', '3 – abnorme Beugung'], ['2', '2 – Streckreaktion'], ['1', '1 – keine Reaktion']]
+};
+
+const apgarComponents = [
+  ['herzfrequenz', 'Herzfrequenz', ['0 – nicht vorhanden', '1 – unter 100/min', '2 – mindestens 100/min']],
+  ['atmung', 'Atmung', ['0 – nicht vorhanden', '1 – langsam/unregelmäßig, schwacher Schrei', '2 – regelmäßig, kräftiger Schrei']],
+  ['muskeltonus', 'Muskeltonus', ['0 – schlaff', '1 – geringe Beugung', '2 – aktive Bewegung']],
+  ['reflexe', 'Reflexantwort', ['0 – keine Reaktion', '1 – Grimassieren', '2 – Husten/Niesen/kräftige Reaktion']],
+  ['hautkolorit', 'Hautkolorit', ['0 – blass/blau', '1 – Stamm rosig, Extremitäten blau', '2 – vollständig rosig']]
+];
+
 function effectiveVitalStatus(vital, statusKey) {
   return vital?.[statusKey] === CUSTOM_STATUS ? vital?.[`${statusKey}_custom`] : vital?.[statusKey];
 }
@@ -2667,6 +2681,9 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           : childAgeMonths < 72 ? 'Vorschulkind'
             : childAgeMonths < 144 ? 'Schulkind'
               : 'Jugendlicher';
+  const pediatricGcsValues = ['gcs_augen', 'gcs_verbal', 'gcs_motorik'].map((key) => Number(patientData.paediatrie?.[key] || 0));
+  const pediatricGcsComplete = pediatricGcsValues.every((value) => value > 0);
+  const pediatricGcsTotal = pediatricGcsComplete ? pediatricGcsValues.reduce((sum, value) => sum + value, 0) : null;
   const xabcde = patient.xabcde || {};
   const samplers = patient.samplers || {};
   const opqrst = patient.opqrst || {};
@@ -2794,6 +2811,51 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         }
       }
     }));
+  }
+
+  function selectPatientGroup(nextGroup) {
+    const currentGroup = patientData.patientengruppe;
+    if (currentGroup && currentGroup !== nextGroup) {
+      const confirmed = window.confirm(`Zu ${nextGroup} wechseln? Nicht passende Angaben des bisherigen Modus werden entfernt.`);
+      if (!confirmed) return;
+    }
+    setPatient((current) => {
+      const next = {
+        ...current,
+        patient: {
+          ...(current.patient || {}),
+          patientengruppe: nextGroup
+        }
+      };
+      if (nextGroup === 'Kind') {
+        next.vitalwerte = { ...(next.vitalwerte || {}) };
+        delete next.vitalwerte.gcs;
+        delete next.vitalwerte.gcs_status;
+        next.samplers = { ...(next.samplers || {}) };
+        delete next.samplers.schwangerschaft;
+      } else {
+        next.patient = { ...next.patient, alter_wert: '', alter_einheit: 'Jahre', pat: {}, paediatrie: {} };
+        next.samplers = { ...(next.samplers || {}) };
+        Object.keys(pediatricRiskFactorLabels).forEach((key) => delete next.samplers[key]);
+      }
+      return next;
+    });
+    setAmlsSuggestions([]);
+  }
+
+  function updateApgar(minute, key, value) {
+    const current = patientData.paediatrie?.apgar_details || {};
+    updatePediatricGroup('paediatrie', 'apgar_details', {
+      ...current,
+      [minute]: { ...(current[minute] || {}), [key]: value }
+    });
+  }
+
+  function apgarTotal(minute) {
+    const values = Object.values(patientData.paediatrie?.apgar_details?.[minute] || {});
+    return values.length === 5 && values.every((value) => value !== '')
+      ? values.reduce((sum, value) => sum + Number(value), 0)
+      : null;
   }
 
   function renderVitalStatus(statusKey, label) {
@@ -3102,6 +3164,12 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             Vorerkrankungen
             <textarea value={samplers.vorgeschichte || ''} onChange={(event) => updateSamplers('vorgeschichte', event.target.value)} rows={7} />
           </label>
+          {isChild && <div className="form-grid pediatric-history">
+            <label>Impfstatus<select value={samplers.impfstatus || ''} onChange={(event) => updateSamplers('impfstatus', event.target.value)}><option value="">Keine Angabe</option><option value="altersentsprechend vollständig">altersentsprechend vollständig</option><option value="unvollständig">unvollständig</option><option value="unbekannt">unbekannt</option></select></label>
+            <label>Ausgangszustand / Entwicklung<input value={samplers.ausgangszustand_kind || ''} onChange={(event) => updateSamplers('ausgangszustand_kind', event.target.value)} /></label>
+            <label>Geburts-/Frühgeburtsanamnese<input value={samplers.geburtsanamnese || ''} onChange={(event) => updateSamplers('geburtsanamnese', event.target.value)} /></label>
+            <label>Betreuungsperson<input value={samplers.betreuungsperson || ''} onChange={(event) => updateSamplers('betreuungsperson', event.target.value)} placeholder="Rolle, keine Klarnamen im Pilotbetrieb" /></label>
+          </div>}
         </fieldset>
       );
     }
@@ -3123,6 +3191,10 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             </label>
           )}
           <div className="samplers-subgrid">
+            {isChild && <label>Trinkmenge / Nahrungsaufnahme<input value={samplers.trinkmenge_kind || ''} onChange={(event) => updateSamplers('trinkmenge_kind', event.target.value)} /></label>}
+            {isChild && <label>Nasse Windeln / Ausscheidung<input value={samplers.windeln_kind || ''} onChange={(event) => updateSamplers('windeln_kind', event.target.value)} /></label>}
+            {isChild && <label>Fieberdauer<input value={samplers.fieberdauer_kind || ''} onChange={(event) => updateSamplers('fieberdauer_kind', event.target.value)} /></label>}
+            {isChild && <label>Exanthem / Krampf / Fremdkörperverdacht<input value={samplers.besonderheiten_kind || ''} onChange={(event) => updateSamplers('besonderheiten_kind', event.target.value)} /></label>}
             <label>
               Letzte Medikamenteneinnahme
               <input value={samplers.letzte_medikamenteneinnahme || ''} onChange={(event) => updateSamplers('letzte_medikamenteneinnahme', event.target.value)} />
@@ -3920,7 +3992,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <button
             type="button"
             className={patientData.patientengruppe === 'Erwachsen' ? 'selected' : ''}
-            onClick={() => updatePatientData('patientengruppe', 'Erwachsen')}
+            onClick={() => selectPatientGroup('Erwachsen')}
           >
             <strong>Erwachsen</strong>
             <span>ab 18 Jahren</span>
@@ -3928,7 +4000,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <button
             type="button"
             className={patientData.patientengruppe === 'Kind' ? 'selected' : ''}
-            onClick={() => updatePatientData('patientengruppe', 'Kind')}
+            onClick={() => selectPatientGroup('Kind')}
           >
             <strong>Kind</strong>
             <span>unter 18 Jahren</span>
@@ -3947,6 +4019,22 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
               <select value={patientData.alter_einheit || 'Jahre'} onChange={(event) => updatePatientData('alter_einheit', event.target.value)}>
                 <option value="Monate">Monate</option>
                 <option value="Jahre">Jahre</option>
+              </select>
+            </label>
+          </div>
+          <div className="age-entry-grid pediatric-medical-data">
+            <label>
+              Medizinisches Gewicht
+              <input value={patientData.medizinisches_gewicht || ''} onChange={(event) => updatePatientData('medizinisches_gewicht', event.target.value)} inputMode="decimal" placeholder="kg" />
+            </label>
+            <label>
+              Herkunft des Gewichts
+              <select value={patientData.gewicht_quelle || ''} onChange={(event) => updatePatientData('gewicht_quelle', event.target.value)}>
+                <option value="">Bitte auswählen</option>
+                <option value="gemessen">gemessen</option>
+                <option value="Elternangabe">von Eltern angegeben</option>
+                <option value="geschätzt">geschätzt</option>
+                <option value="unbekannt">unbekannt</option>
               </select>
             </label>
           </div>
@@ -3969,6 +4057,18 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
               ))}
             </div>
             <label className="wide-field">PAT-Beobachtung<textarea value={patientData.pat?.notiz || ''} onChange={(event) => updatePediatricGroup('pat', 'notiz', event.target.value)} rows={3} /></label>
+            <div className="check-grid pediatric-observations">
+              {[
+                ['tonus', 'Tonus auffällig'], ['interaktion', 'Interaktion auffällig'], ['troestbarkeit', 'nicht tröstbar'],
+                ['blickkontakt', 'Blickkontakt auffällig'], ['einziehungen', 'Einziehungen'], ['nasenfluegeln', 'Nasenflügeln'],
+                ['stridor', 'Stridor'], ['stoenen', 'Stöhnen'], ['blass', 'Blässe'], ['marmoriert', 'Marmorierung'], ['zyanose', 'Zyanose']
+              ].map(([key, label]) => (
+                <label key={key} className="checkbox-line">
+                  <input type="checkbox" checked={Boolean(patientData.pat?.[key])} onChange={(event) => updatePediatricGroup('pat', key, event.target.checked)} />
+                  {label}
+                </label>
+              ))}
+            </div>
           </fieldset>
         </section>}
 
@@ -4010,6 +4110,11 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <span>Entwurf pro Mitarbeiter</span>
         </div>
 
+        {isChild && <div className="pediatric-vital-note">
+          <strong>{pediatricAgeGroup || 'Pädiatrischer Fall'}: altersbezogene Bewertung erforderlich</strong>
+          <span>Puls, Atemfrequenz und Blutdruck werden bis zur fachlichen Freigabe einer Referenztabelle neutral dokumentiert und nicht mit Erwachsenen-Grenzwerten bewertet.</span>
+        </div>}
+
         <div className="form-grid">
           {renderBloodPressurePair()}
           {renderVitalPair({ title: 'Puls', valueKey: 'puls', statusKey: 'puls_status', placeholder: '/min' })}
@@ -4023,20 +4128,27 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         {isChild && <fieldset className="pediatric-assessment">
           <legend>Neurologische Beurteilung Kind</legend>
           <div className="form-grid">
-            <label>Augen (1–4)<input value={patientData.paediatrie?.gcs_augen || ''} onChange={(event) => updatePediatricGroup('paediatrie', 'gcs_augen', event.target.value)} inputMode="numeric" /></label>
-            <label>Verbal, altersadaptiert (1–5)<input value={patientData.paediatrie?.gcs_verbal || ''} onChange={(event) => updatePediatricGroup('paediatrie', 'gcs_verbal', event.target.value)} inputMode="numeric" /></label>
-            <label>Motorisch (1–6)<input value={patientData.paediatrie?.gcs_motorik || ''} onChange={(event) => updatePediatricGroup('paediatrie', 'gcs_motorik', event.target.value)} inputMode="numeric" /></label>
+            {Object.entries(pediatricGcsOptions).map(([key, options]) => (
+              <label key={key}>
+                {key === 'gcs_augen' ? 'Augen' : key === 'gcs_verbal' ? 'Verbal, altersadaptiert' : 'Motorisch'}
+                <select value={patientData.paediatrie?.[key] || ''} onChange={(event) => updatePediatricGroup('paediatrie', key, event.target.value)}>
+                  {options.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+              </label>
+            ))}
           </div>
+          <div className={`score-result ${pediatricGcsComplete ? '' : 'incomplete'}`}>Kinder-GCS: {pediatricGcsComplete ? `${pediatricGcsTotal}/15` : 'noch unvollständig'}</div>
           <p className="field-hint">Verbale und motorische Reaktion alters- und entwicklungsbezogen beurteilen.</p>
         </fieldset>}
 
         {isChild && isNewborn && <fieldset className="pediatric-assessment">
           <legend>APGAR – nur Neugeborenenversorgung</legend>
-          <div className="form-grid">
-            {['1', '5', '10'].map((minute) => (
-              <label key={minute}>APGAR nach {minute} Minute(n)<input value={patientData.paediatrie?.[`apgar_${minute}`] || ''} onChange={(event) => updatePediatricGroup('paediatrie', `apgar_${minute}`, event.target.value)} inputMode="numeric" placeholder="0–10" /></label>
-            ))}
-          </div>
+          {['1', '5', '10'].map((minute) => <div className="apgar-block" key={minute}>
+            <h4>{minute}. Minute · Summe {apgarTotal(minute) ?? 'offen'}/10</h4>
+            <div className="form-grid">
+              {apgarComponents.map(([key, label, options]) => <label key={key}>{label}<select value={patientData.paediatrie?.apgar_details?.[minute]?.[key] ?? ''} onChange={(event) => updateApgar(minute, key, event.target.value)}><option value="">Bitte auswählen</option>{options.map((text, score) => <option key={score} value={String(score)}>{text}</option>)}</select></label>)}
+            </div>
+          </div>)}
           <p className="field-hint">Reanimationsmaßnahmen niemals zur Erhebung des Scores verzögern.</p>
         </fieldset>}
 
@@ -4187,6 +4299,11 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         <div className="section-head">
           <h2>Diagnosehilfe</h2>
           <span>Aus Vitalwerten, Anamnese und Vorerkrankungen abgeleitete Differenzialdiagnosen</span>
+        </div>
+
+        <div className="pilot-privacy-note diagnosis-safety-note">
+          <strong>Dokumentations- und Denkhilfe</strong>
+          <span>Die Vorschläge stellen keine Diagnose und ersetzen weder Untersuchung, Leitlinie, SOP noch ärztliche Beurteilung. Gelb bedeutet: Mindestens ein dokumentierter Befund passt derzeit nicht.</span>
         </div>
 
         <div className="amls-summary">

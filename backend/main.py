@@ -217,6 +217,29 @@ def clean_text(value, limit=2000):
     return text[:limit]
 
 
+PILOT_BLOCKED_IDENTITY_KEYS = {
+    "vorname", "nachname", "name", "geburtsdatum", "geburtsort", "strasse", "straße",
+    "hausnummer", "plz", "postleitzahl", "wohnort", "adresse", "krankenkasse",
+    "versichertennummer", "telefon", "telefonnummer", "email",
+}
+
+
+def sanitize_pilot_patient(patient):
+    """Server-side guard: identity data must not be persisted during the pilot."""
+    def scrub(value):
+        if isinstance(value, dict):
+            return {
+                key: scrub(item)
+                for key, item in value.items()
+                if str(key).strip().lower() not in PILOT_BLOCKED_IDENTITY_KEYS
+            }
+        if isinstance(value, list):
+            return [scrub(item) for item in value]
+        return value
+
+    return scrub(patient if isinstance(patient, dict) else {})
+
+
 def announcements_store():
     store = get_app_setting("announcements", {})
     if not isinstance(store, dict):
@@ -701,6 +724,8 @@ def build_suspicion_assessment(patient):
 
 
 def build_amls_candidates(patient):
+    patient_data = patient.get("patient", {}) or {}
+    is_child = patient_data.get("patientengruppe") == "Kind"
     vital = patient.get("vitalwerte", {}) or {}
     xabcde = patient.get("xabcde", {}) or {}
     samplers = patient.get("samplers", {}) or {}
@@ -727,7 +752,7 @@ def build_amls_candidates(patient):
     gcs = as_number(vital.get("gcs"))
     bz = as_number(vital.get("bz"))
 
-    if af is not None and af > 20:
+    if not is_child and af is not None and af > 20:
         add("Lungenarterienembolie", "Kardiopulmonal", f"Tachypnoe mit AF {af:g}/min")
         add("Sepsis / schwere Infektion", "Infektiös", f"Tachypnoe mit AF {af:g}/min")
         add("Schock", "Kreislauf", f"Tachypnoe mit AF {af:g}/min als Kompensationszeichen")
@@ -735,10 +760,10 @@ def build_amls_candidates(patient):
         add("Respiratorische Insuffizienz", "Respiratorisch", f"SpO2 {spo2:g} %")
         add("Pneumonie", "Infektiös", f"SpO2 {spo2:g} %")
         add("Kardiales Lungenödem", "Kardiopulmonal", f"SpO2 {spo2:g} %")
-    if pulse is not None and pulse > 100:
+    if not is_child and pulse is not None and pulse > 100:
         add("Tachyarrhythmie", "Kardial", f"Puls {pulse:g}/min")
         add("Schmerz-/Stressreaktion", "Sonstige", f"Puls {pulse:g}/min")
-    if rr_sys is not None and rr_sys < 90:
+    if not is_child and rr_sys is not None and rr_sys < 90:
         add("Schock", "Kreislauf", f"Hypotonie mit RR syst. {rr_sys:g} mmHg")
         add("Blutung / Volumenmangel", "Kreislauf", f"Hypotonie mit RR syst. {rr_sys:g} mmHg")
     if temp is not None and temp >= 38:
@@ -748,6 +773,14 @@ def build_amls_candidates(patient):
         add("Intoxikation", "Toxikologisch", f"GCS {gcs:g}")
     if bz is not None and bz < 70:
         add("Hypoglykämie", "Metabolisch", f"BZ {bz:g} mg/dL")
+    if is_child:
+        pat = patient_data.get("pat", {}) or {}
+        if pat.get("atemarbeit") == "auffällig":
+            add("Respiratorische Erkrankung im Kindesalter", "Pädiatrisch/Respiratorisch", "PAT: Atemarbeit auffällig")
+        if pat.get("hautdurchblutung") == "auffällig":
+            add("Kreislaufbeeinträchtigung im Kindesalter", "Pädiatrisch/Kreislauf", "PAT: Hautdurchblutung auffällig")
+        if pat.get("erscheinungsbild") == "auffällig":
+            add("Schwer erkranktes Kind / neurologische oder metabolische Ursache", "Pädiatrisch", "PAT: Erscheinungsbild auffällig")
     if any(term in text for term in ["brust", "thorax", "retrosternal"]):
         add("Akutes Koronarsyndrom", "Kardial", "Thoraxbeschwerden dokumentiert")
         add("Aortensyndrom / Aortendissektion", "Vaskulär", "Zeitkritische Ursache bei Thoraxschmerz")
@@ -918,6 +951,8 @@ def quality_item(rule_id, status_value, message, severity="warning"):
 
 
 def assess_protocol_quality(patient):
+    patient_data = patient.get("patient", {}) or {}
+    is_child = patient_data.get("patientengruppe") == "Kind"
     vital = patient.get("vitalwerte", {}) or {}
     xabcde = patient.get("xabcde", {}) or {}
     samplers = patient.get("samplers", {}) or {}
@@ -927,10 +962,11 @@ def assess_protocol_quality(patient):
     measures = patient.get("massnahmen", {}) or {}
 
     items = []
+    age_documented = valid(patient_data.get("alter_wert")) if is_child else valid(vital.get("alter"))
     items.append(quality_item(
         "vital_age",
-        "ok" if valid(vital.get("alter")) else "warning",
-        "Alter ist dokumentiert." if valid(vital.get("alter")) else "Alter fehlt.",
+        "ok" if age_documented else "warning",
+        "Alter ist dokumentiert." if age_documented else "Alter fehlt.",
     ))
     items.append(quality_item(
         "vital_gender",
@@ -939,13 +975,19 @@ def assess_protocol_quality(patient):
         "info",
     ))
 
+    paediatrie = patient_data.get("paediatrie", {}) or {}
+    pediatric_gcs_complete = all(valid(paediatrie.get(key)) for key in ("gcs_augen", "gcs_verbal", "gcs_motorik"))
     core_vital_groups = [
         ("Puls", ["puls", "puls_status", "puls_status_custom"]),
         ("SpO2", ["spo2", "spo2_status", "spo2_status_custom"]),
         ("RR", ["rr_sys", "rr_dia", "rr_status", "rr_status_custom"]),
-        ("GCS", ["gcs", "gcs_status", "gcs_status_custom"]),
     ]
     missing_core = [label for label, keys in core_vital_groups if not any(valid(vital.get(key)) for key in keys)]
+    if is_child:
+        if not pediatric_gcs_complete:
+            missing_core.append("Kinder-GCS")
+    elif not any(valid(vital.get(key)) for key in ("gcs", "gcs_status", "gcs_status_custom")):
+        missing_core.append("GCS")
     items.append(quality_item(
         "vital_core",
         "ok" if not missing_core else "warning",
@@ -1022,12 +1064,13 @@ def assess_protocol_quality(patient):
         criticals.append("SpO2 unter 92 Prozent")
     if gcs is not None and gcs < 15:
         criticals.append("GCS unter 15")
-    if rr_sys is not None and (rr_sys < 90 or rr_sys > 200):
-        criticals.append("RR systolisch außerhalb 90-200 mmHg")
-    if pulse is not None and (pulse < 45 or pulse > 130):
-        criticals.append("Puls außerhalb 45-130/min")
-    if af is not None and (af < 8 or af > 30):
-        criticals.append("Atemfrequenz außerhalb 8-30/min")
+    if not is_child:
+        if rr_sys is not None and (rr_sys < 90 or rr_sys > 200):
+            criticals.append("RR systolisch außerhalb 90-200 mmHg")
+        if pulse is not None and (pulse < 45 or pulse > 130):
+            criticals.append("Puls außerhalb 45-130/min")
+        if af is not None and (af < 8 or af > 30):
+            criticals.append("Atemfrequenz außerhalb 8-30/min")
 
     for index, message in enumerate(criticals, start=1):
         items.append({
@@ -1084,6 +1127,15 @@ def generate_protocol_text(patient):
 
     pat = patient_data.get("pat", {}) or {}
     paediatrie = patient_data.get("paediatrie", {}) or {}
+    gcs_parts = [as_number(paediatrie.get(key)) for key in ("gcs_augen", "gcs_verbal", "gcs_motorik")]
+    pediatric_gcs_total = sum(gcs_parts) if all(value is not None for value in gcs_parts) else ""
+    apgar_details = paediatrie.get("apgar_details", {}) or {}
+
+    def apgar_total(minute):
+        details = apgar_details.get(str(minute), {}) or {}
+        values = [as_number(details.get(key)) for key in ("herzfrequenz", "atmung", "muskeltonus", "reflexe", "hautkolorit")]
+        return int(sum(values)) if all(value is not None for value in values) else ""
+
     text += add_lines("PATIENT / PÄDIATRIE", [
         ("Patientengruppe", patient_data.get("patientengruppe")),
         ("Alter", f"{patient_data.get('alter_wert')} {patient_data.get('alter_einheit')}" if valid(patient_data.get("alter_wert")) else ""),
@@ -1094,9 +1146,10 @@ def generate_protocol_text(patient):
         ("Kinder-GCS Augen", paediatrie.get("gcs_augen")),
         ("Kinder-GCS Verbal", paediatrie.get("gcs_verbal")),
         ("Kinder-GCS Motorisch", paediatrie.get("gcs_motorik")),
-        ("APGAR 1 Minute", paediatrie.get("apgar_1")),
-        ("APGAR 5 Minuten", paediatrie.get("apgar_5")),
-        ("APGAR 10 Minuten", paediatrie.get("apgar_10")),
+        ("Kinder-GCS Summe", f"{int(pediatric_gcs_total)}/15" if pediatric_gcs_total != "" else ""),
+        ("APGAR 1 Minute", apgar_total(1)),
+        ("APGAR 5 Minuten", apgar_total(5)),
+        ("APGAR 10 Minuten", apgar_total(10)),
     ])
     text += add_lines("VITALWERTE & DEMOGRAPHIE", [
         ("Alter", vital.get("alter")),
@@ -2080,27 +2133,28 @@ def get_draft(employee=Depends(current_employee)):
 
 @app.put("/api/draft")
 def save_draft(payload: DraftRequest, employee=Depends(current_employee)):
-    updated_at = save_employee_patient_draft(employee, payload.patient)
+    updated_at = save_employee_patient_draft(employee, sanitize_pilot_patient(payload.patient))
     audit("api_case_draft_saved", employee=employee, entity_type="case_draft")
     return {"status": "saved", "updated_at": updated_at}
 
 
 @app.post("/api/protocol/preview")
 def protocol_preview(payload: ProtocolRequest, employee=Depends(current_employee)):
-    protocol_text = generate_protocol_text(payload.patient)
+    patient = sanitize_pilot_patient(payload.patient)
+    protocol_text = generate_protocol_text(patient)
     audit("api_protocol_generated", employee=employee, entity_type="case_draft")
-    return {"protocol_text": protocol_text, "summary": build_case_summary(payload.patient)}
+    return {"protocol_text": protocol_text, "summary": build_case_summary(patient)}
 
 
 @app.post("/api/protocol/suspicion")
 def protocol_suspicion(payload: ProtocolRequest, employee=Depends(current_employee)):
-    suspicions, recommendations = build_suspicion_assessment(payload.patient)
+    suspicions, recommendations = build_suspicion_assessment(sanitize_pilot_patient(payload.patient))
     return {"suspicions": suspicions, "recommendations": recommendations}
 
 
 @app.post("/api/protocol/amls-candidates")
 def protocol_amls_candidates(payload: ProtocolRequest, employee=Depends(current_employee)):
-    return {"candidates": build_amls_candidates(payload.patient)}
+    return {"candidates": build_amls_candidates(sanitize_pilot_patient(payload.patient))}
 
 
 @app.post("/api/protocol/medication-calculator")
@@ -2110,7 +2164,7 @@ def protocol_medication_calculator(payload: MedicationCalcRequest, employee=Depe
 
 @app.post("/api/protocol/quality")
 def protocol_quality(payload: ProtocolRequest, employee=Depends(current_employee)):
-    result = assess_protocol_quality(payload.patient)
+    result = assess_protocol_quality(sanitize_pilot_patient(payload.patient))
     audit(
         "api_protocol_quality_checked",
         employee=employee,
@@ -2122,8 +2176,9 @@ def protocol_quality(payload: ProtocolRequest, employee=Depends(current_employee
 
 @app.post("/api/protocol/pdf")
 def protocol_pdf(payload: ProtocolRequest, employee=Depends(current_employee)):
-    protocol_text = generate_protocol_text(payload.patient)
-    summary = build_case_summary(payload.patient)
+    patient = sanitize_pilot_patient(payload.patient)
+    protocol_text = generate_protocol_text(patient)
+    summary = build_case_summary(patient)
     created_at = local_now().isoformat(timespec="seconds")
     pdf_bytes = build_pdf_bytes(
         "Laufender Einsatz",
@@ -2146,8 +2201,9 @@ def protocol_pdf(payload: ProtocolRequest, employee=Depends(current_employee)):
 
 @app.post("/api/cases/finish")
 def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
-    protocol_text = generate_protocol_text(payload.patient)
-    quality = assess_protocol_quality(payload.patient)
+    patient = sanitize_pilot_patient(payload.patient)
+    protocol_text = generate_protocol_text(patient)
+    quality = assess_protocol_quality(patient)
     completed_at = local_now().isoformat(timespec="seconds")
     retention_days = int(get_app_setting("retention_days", 3650) or 3650)
     retention_until = (local_now() + timedelta(days=max(1, retention_days))).date().isoformat()
@@ -2157,8 +2213,8 @@ def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
         "employee_id": employee.get("id", ""),
         "employee_name": employee.get("name", ""),
         "completed_at": completed_at,
-        "summary": build_case_summary(payload.patient),
-        "patient": payload.patient,
+        "summary": build_case_summary(patient),
+        "patient": patient,
         "protocol_text": protocol_text,
         "retention_until": retention_until,
     })
