@@ -5,11 +5,14 @@ import {
   AlertTriangle,
   ArrowLeft,
   Building2,
+  Calculator,
   Cable,
   CheckCircle2,
   ChevronDown,
+  ClipboardList,
   Download,
   FileText,
+  HeartPulse,
   Home,
   Lock,
   LogOut,
@@ -17,12 +20,15 @@ import {
   MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
+  Pill,
   Printer,
   RotateCcw,
   Save,
+  Search,
   ShieldCheck,
   Stethoscope,
   Trash2,
+  UserRound,
   UserPlus,
   Wrench
 } from 'lucide-react';
@@ -2801,6 +2807,61 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     : amlsRemainingCandidates.length === 1
       ? { level: 'warning', text: `Ein Kandidat verbleibt: ${amlsRemainingCandidates[0].name}` }
       : { level: 'info', text: 'Arbeitsdiagnose noch offen.' };
+  const protocolNavItems = [
+    {
+      key: 'patient',
+      label: 'Patient',
+      icon: UserRound,
+      complete: hasValue(patientData.patientengruppe) && (!isChild || (hasValue(patientData.alter_wert) && hasValue(patientData.medizinisches_gewicht)))
+    },
+    {
+      key: 'vitalwerte',
+      label: 'Vitalwerte',
+      icon: HeartPulse,
+      complete: ['rr_sys', 'rr_dia', 'puls', 'spo2', 'af'].every((key) => hasValue(vitalwerte[key]))
+        && (isChild ? pediatricGcsComplete : hasValue(vitalwerte.gcs))
+    },
+    {
+      key: 'xabcde',
+      label: 'xABCDE',
+      icon: Stethoscope,
+      complete: xabcdeCompletedCount === xabcdeSections.length
+    },
+    {
+      key: 'samplers',
+      label: 'SAMPLERS',
+      icon: ClipboardList,
+      complete: samplersCompletedCount === activeSamplersSections.length
+    },
+    {
+      key: 'opqrst',
+      label: 'OPQRST',
+      icon: Activity,
+      complete: hasValue(opqrst.schmerz_vorhanden)
+        && opqrstSections.every((section) => opqrstSectionComplete(section.key))
+    },
+    { key: 'amls', label: 'Diagnosehilfe', icon: Search, complete: hasValue(amls.arbeitsdiagnose) },
+    { key: 'rechner', label: 'Rechner', icon: Calculator, complete: Boolean(calculatorResult) },
+    {
+      key: 'massnahmen',
+      label: 'Maßnahmen',
+      icon: Pill,
+      complete: (massnahmen.timeline || []).length > 0 || (massnahmen.medikation || []).length > 0
+    },
+    {
+      key: 'reanimation',
+      label: 'Reanimation',
+      icon: HeartPulse,
+      complete: Boolean(reanimation.active && hasValue(reanimation.outcome))
+    },
+    {
+      key: 'abschluss',
+      label: 'Übergabe',
+      icon: ShieldCheck,
+      complete: hasValue(uebergabe.ziel) && hasValue(uebergabe.text)
+    },
+    { key: 'protokoll', label: 'Dokumentation', icon: FileText, complete: hasValue(generatedProtocol) }
+  ];
 
   useEffect(() => {
     api('/api/draft', {}, session.token)
@@ -4128,83 +4189,26 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           {protocolNavCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
           <span>Navigation</span>
         </button>
-        <button
-          type="button"
-          className={protocolSection === 'patient' ? 'active' : ''}
-          onClick={() => setProtocolSection('patient')}
-        >
-          Patient
-        </button>
-        <button
-          type="button"
-          className={protocolSection === 'vitalwerte' ? 'active' : ''}
-          onClick={() => setProtocolSection('vitalwerte')}
-        >
-          Vitalwerte
-        </button>
-        <button
-          type="button"
-          className={protocolSection === 'xabcde' ? 'active' : ''}
-          onClick={() => setProtocolSection('xabcde')}
-        >
-          xABCDE
-        </button>
-        <button
-          type="button"
-          className={protocolSection === 'samplers' ? 'active' : ''}
-          onClick={() => setProtocolSection('samplers')}
-        >
-          SAMPLERS
-        </button>
-        <button
-          type="button"
-          className={protocolSection === 'opqrst' ? 'active' : ''}
-          onClick={() => setProtocolSection('opqrst')}
-        >
-          OPQRST
-        </button>
-        <button
-          type="button"
-          className={protocolSection === 'amls' ? 'active' : ''}
-          onClick={() => setProtocolSection('amls')}
-        >
-          Diagnosehilfe
-        </button>
-        <button
-          type="button"
-          className={protocolSection === 'rechner' ? 'active' : ''}
-          onClick={() => setProtocolSection('rechner')}
-        >
-          Rechner
-        </button>
-        <button
-          type="button"
-          className={protocolSection === 'massnahmen' ? 'active' : ''}
-          onClick={() => setProtocolSection('massnahmen')}
-        >
-          Maßnahmen
-        </button>
-        <button
-          type="button"
-          className={protocolSection === 'reanimation' ? 'active' : ''}
-          onClick={() => setProtocolSection('reanimation')}
-        >
-          Reanimation
-        </button>
-        <button
-          type="button"
-          className={protocolSection === 'abschluss' ? 'active' : ''}
-          onClick={() => setProtocolSection('abschluss')}
-        >
-          Übergabe
-        </button>
-        <button
-          type="button"
-          className={protocolSection === 'protokoll' ? 'active' : ''}
-          onClick={() => setProtocolSection('protokoll')}
-        >
-          Dokumentation
-        </button>
+        {protocolNavItems.map((item) => {
+          const Icon = item.icon;
+          const isActive = protocolSection === item.key;
+          return (
+            <button
+              type="button"
+              className={`protocol-nav-item${isActive ? ' active' : ''}${item.complete ? ' complete' : ''}`}
+              onClick={() => setProtocolSection(item.key)}
+              title={protocolNavCollapsed ? `${item.label}${item.complete ? ' – vollständig' : ''}` : undefined}
+              aria-current={isActive ? 'page' : undefined}
+              key={item.key}
+            >
+              <Icon className="protocol-nav-icon" size={19} />
+              <span className="protocol-nav-label">{item.label}</span>
+              <span className="protocol-nav-status" aria-label={item.complete ? 'Vollständig' : 'Offen'}>
+                {item.complete ? <CheckCircle2 size={17} /> : <span />}
+              </span>
+            </button>
+          );
+        })}
       </nav>}
 
       {protocolSection === 'patient' && <section className="work-panel patient-panel">
