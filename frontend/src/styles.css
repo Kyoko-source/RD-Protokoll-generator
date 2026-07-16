@@ -1253,9 +1253,9 @@ form button,
 
 .body-map-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(180px, 1fr));
-  gap: 18px;
-  max-width: 620px;
+  grid-template-columns: repeat(2, minmax(220px, 1fr));
+  gap: 28px;
+  max-width: 760px;
   margin: 0 auto 18px;
 }
 
@@ -1266,23 +1266,30 @@ form button,
 }
 
 .body-map-view svg {
-  width: min(100%, 220px);
-  max-height: 430px;
+  width: min(100%, 280px);
+  max-height: 520px;
+  overflow: visible;
+  filter: drop-shadow(0 12px 20px rgba(0, 0, 0, 0.22));
 }
 
 .body-region {
-  fill: rgba(122, 166, 212, 0.32);
-  stroke: rgba(226, 241, 255, 0.58);
-  stroke-width: 2;
+  fill: rgba(112, 157, 202, 0.38);
+  stroke: rgba(219, 239, 255, 0.72);
+  stroke-width: 1.6;
+  stroke-linejoin: round;
   cursor: pointer;
   transition: 0.16s ease;
 }
 
 .body-region:hover,
-.body-region:focus,
+.body-region:focus-visible,
 .body-region.marked {
   fill: rgba(239, 76, 95, 0.66);
   stroke: #ffbec7;
+}
+
+.body-region:hover {
+  filter: brightness(1.18);
 }
 
 .trauma-finding {

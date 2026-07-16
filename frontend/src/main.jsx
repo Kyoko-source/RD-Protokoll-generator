@@ -190,16 +190,42 @@ const apgarComponents = [
 
 const traumaBodyRegions = {
   kopf: { label: 'Kopf', bones: 'Schädel, Unterkiefer, Gesichtsschädel', vessels: 'A. carotis externa und Äste, oberflächliche Kopfgefäße' },
+  gesicht: { label: 'Gesicht', bones: 'Nasenbein, Jochbein, Ober- und Unterkiefer', vessels: 'A. facialis, A. temporalis superficialis' },
+  hinterkopf: { label: 'Hinterkopf', bones: 'Hinterhauptbein, Schädelbasis', vessels: 'A. occipitalis, oberflächliche Kopfgefäße' },
   hals: { label: 'Hals', bones: 'Halswirbelsäule, Schlüsselbeinansatz', vessels: 'A. carotis, V. jugularis' },
+  schulter_rechts: { label: 'Schulter rechts', bones: 'Clavicula, Scapula, proximaler Humerus', vessels: 'A./V. subclavia und axillaris' },
+  schulter_links: { label: 'Schulter links', bones: 'Clavicula, Scapula, proximaler Humerus', vessels: 'A./V. subclavia und axillaris' },
   thorax: { label: 'Brustkorb', bones: 'Rippen, Sternum, Schlüsselbein, Brustwirbelsäule', vessels: 'Aorta thoracica, A./V. subclavia, Interkostalgefäße' },
+  thorax_rechts: { label: 'Brustkorb rechts', bones: 'rechte Rippen, Clavicula, Sternum', vessels: 'Interkostalgefäße, A./V. subclavia' },
+  thorax_links: { label: 'Brustkorb links', bones: 'linke Rippen, Clavicula, Sternum', vessels: 'Interkostalgefäße, A./V. subclavia' },
   abdomen: { label: 'Bauch', bones: 'untere Rippen, Lendenwirbelsäule', vessels: 'Aorta abdominalis, V. cava inferior, Mesenterialgefäße' },
+  abdomen_rechts: { label: 'Bauch rechts', bones: 'untere rechte Rippen, Lendenwirbelsäule', vessels: 'Aorta abdominalis, V. cava inferior, Mesenterialgefäße' },
+  abdomen_links: { label: 'Bauch links', bones: 'untere linke Rippen, Lendenwirbelsäule', vessels: 'Aorta abdominalis, V. cava inferior, Mesenterialgefäße' },
   becken: { label: 'Becken', bones: 'Beckenring, Hüftgelenk, Kreuzbein', vessels: 'A./V. iliaca, femorale Gefäßübergänge' },
+  oberarm_rechts: { label: 'Oberarm rechts', bones: 'Humerus', vessels: 'A. brachialis, V. basilica und cephalica' },
+  oberarm_links: { label: 'Oberarm links', bones: 'Humerus', vessels: 'A. brachialis, V. basilica und cephalica' },
+  ellenbogen_rechts: { label: 'Ellenbogen rechts', bones: 'distaler Humerus, Radiuskopf, Ulna', vessels: 'A. brachialis und Ellenbogengefäßnetz' },
+  ellenbogen_links: { label: 'Ellenbogen links', bones: 'distaler Humerus, Radiuskopf, Ulna', vessels: 'A. brachialis und Ellenbogengefäßnetz' },
+  unterarm_rechts: { label: 'Unterarm rechts', bones: 'Radius und Ulna', vessels: 'A. radialis und ulnaris' },
+  unterarm_links: { label: 'Unterarm links', bones: 'Radius und Ulna', vessels: 'A. radialis und ulnaris' },
+  hand_rechts: { label: 'Hand rechts', bones: 'Handwurzel, Mittelhand, Fingerknochen', vessels: 'Arcus palmaris, Digitalarterien' },
+  hand_links: { label: 'Hand links', bones: 'Handwurzel, Mittelhand, Fingerknochen', vessels: 'Arcus palmaris, Digitalarterien' },
+  oberschenkel_rechts: { label: 'Oberschenkel rechts', bones: 'Femur', vessels: 'A./V. femoralis, A. profunda femoris' },
+  oberschenkel_links: { label: 'Oberschenkel links', bones: 'Femur', vessels: 'A./V. femoralis, A. profunda femoris' },
+  knie_rechts: { label: 'Knie rechts', bones: 'Patella, distaler Femur, Tibiakopf', vessels: 'A./V. poplitea' },
+  knie_links: { label: 'Knie links', bones: 'Patella, distaler Femur, Tibiakopf', vessels: 'A./V. poplitea' },
+  unterschenkel_rechts: { label: 'Unterschenkel rechts', bones: 'Tibia und Fibula', vessels: 'A. tibialis anterior/posterior, A. fibularis' },
+  unterschenkel_links: { label: 'Unterschenkel links', bones: 'Tibia und Fibula', vessels: 'A. tibialis anterior/posterior, A. fibularis' },
+  fuss_rechts: { label: 'Fuß rechts', bones: 'Fußwurzel, Mittelfuß, Zehenknochen', vessels: 'A. dorsalis pedis, Plantargefäße' },
+  fuss_links: { label: 'Fuß links', bones: 'Fußwurzel, Mittelfuß, Zehenknochen', vessels: 'A. dorsalis pedis, Plantargefäße' },
   arm_links: { label: 'Arm links', bones: 'Humerus, Radius, Ulna, Handknochen', vessels: 'A. axillaris, brachialis, radialis, ulnaris' },
   arm_rechts: { label: 'Arm rechts', bones: 'Humerus, Radius, Ulna, Handknochen', vessels: 'A. axillaris, brachialis, radialis, ulnaris' },
   bein_links: { label: 'Bein links', bones: 'Femur, Patella, Tibia, Fibula, Fußknochen', vessels: 'A. femoralis, poplitea, tibialis' },
   bein_rechts: { label: 'Bein rechts', bones: 'Femur, Patella, Tibia, Fibula, Fußknochen', vessels: 'A. femoralis, poplitea, tibialis' },
   ruecken_oben: { label: 'Oberer Rücken', bones: 'Schulterblatt, Rippen, Brustwirbelsäule', vessels: 'paravertebrale und interkostale Gefäße' },
-  ruecken_unten: { label: 'Unterer Rücken', bones: 'Lendenwirbelsäule, Kreuzbein, hinterer Beckenring', vessels: 'Aorta abdominalis/iliakale Gefäße in tiefer Nachbarschaft' }
+  ruecken_unten: { label: 'Unterer Rücken', bones: 'Lendenwirbelsäule, Kreuzbein, hinterer Beckenring', vessels: 'Aorta abdominalis/iliakale Gefäße in tiefer Nachbarschaft' },
+  gesaess_rechts: { label: 'Gesäß rechts', bones: 'hinterer Beckenring, Hüftgelenk, proximaler Femur', vessels: 'A./V. glutea, tiefer Verlauf des N. ischiadicus' },
+  gesaess_links: { label: 'Gesäß links', bones: 'hinterer Beckenring, Hüftgelenk, proximaler Femur', vessels: 'A./V. glutea, tiefer Verlauf des N. ischiadicus' }
 };
 
 const traumaInjuryTypes = ['Wunde', 'Blutung', 'Frakturverdacht', 'Luxationsverdacht', 'Prellung/Hämatom', 'Verbrennung', 'Schwellung', 'Druckschmerz', 'Fehlstellung', 'Amputation', 'Fremdkörper'];
@@ -3011,29 +3037,53 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   function bodyMap(side) {
     const selectedIds = new Set(traumaFindings().map((item) => item.id));
     const region = (key, element) => (
-      <g className={`body-region ${selectedIds.has(`${side}:${key}`) ? 'marked' : ''}`} onClick={() => selectTraumaRegion(key, side)} role="button" tabIndex="0" key={key}>
+      <g className={`body-region ${selectedIds.has(`${side}:${key}`) ? 'marked' : ''}`} onClick={() => selectTraumaRegion(key, side)} onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          selectTraumaRegion(key, side);
+        }
+      }} role="button" tabIndex="0" key={key}>
         {element}
         <title>{traumaBodyRegions[key]?.label}</title>
       </g>
     );
     return <div className="body-map-view">
       <strong>{side === 'vorne' ? 'Vorne' : 'Hinten'}</strong>
-      <svg viewBox="0 0 180 420" aria-label={`Körperskizze ${side}`}>
-        {region('kopf', <circle cx="90" cy="35" r="25" />)}
-        {region('hals', <rect x="78" y="60" width="24" height="24" rx="8" />)}
+      <svg viewBox="0 0 240 500" aria-label={`Körperskizze ${side}`}>
+        {side === 'vorne'
+          ? region('gesicht', <path d="M92 24 Q120 5 148 24 L145 62 Q137 84 120 90 Q103 84 95 62 Z" />)
+          : region('hinterkopf', <path d="M92 24 Q120 5 148 24 L145 65 Q137 86 120 90 Q103 86 95 65 Z" />)}
+        {region('hals', <path d="M108 88 L132 88 L136 112 Q120 122 104 112 Z" />)}
+        {region('schulter_rechts', <path d="M104 108 L67 120 Q54 128 48 145 L78 154 L105 133 Z" />)}
+        {region('schulter_links', <path d="M136 108 L173 120 Q186 128 192 145 L162 154 L135 133 Z" />)}
         {side === 'vorne' ? <>
-          {region('thorax', <path d="M55 85 Q90 70 125 85 L120 190 Q90 205 60 190 Z" />)}
-          {region('abdomen', <rect x="63" y="180" width="54" height="76" rx="18" />)}
-          {region('becken', <path d="M60 245 Q90 270 120 245 L125 290 Q90 305 55 290 Z" />)}
+          {region('thorax_rechts', <path d="M78 125 Q98 112 118 118 L118 218 Q96 220 82 205 Z" />)}
+          {region('thorax_links', <path d="M122 118 Q142 112 162 125 L158 205 Q144 220 122 218 Z" />)}
+          {region('abdomen_rechts', <path d="M83 208 Q100 216 118 214 L118 286 Q98 288 86 276 Z" />)}
+          {region('abdomen_links', <path d="M122 214 Q140 216 157 208 L154 276 Q142 288 122 286 Z" />)}
+          {region('becken', <path d="M85 274 Q120 292 155 274 L164 326 Q120 348 76 326 Z" />)}
         </> : <>
-          {region('ruecken_oben', <path d="M55 85 Q90 70 125 85 L120 180 Q90 195 60 180 Z" />)}
-          {region('ruecken_unten', <rect x="63" y="170" width="54" height="86" rx="18" />)}
-          {region('becken', <path d="M60 245 Q90 270 120 245 L125 290 Q90 305 55 290 Z" />)}
+          {region('ruecken_oben', <path d="M78 125 Q120 105 162 125 L157 218 Q120 232 83 218 Z" />)}
+          {region('ruecken_unten', <path d="M83 211 Q120 225 157 211 L154 282 Q120 296 86 282 Z" />)}
+          {region('gesaess_rechts', <path d="M86 276 Q101 286 118 284 L118 337 Q94 344 76 326 Z" />)}
+          {region('gesaess_links', <path d="M122 284 Q139 286 154 276 L164 326 Q146 344 122 337 Z" />)}
         </>}
-        {region('arm_rechts', <path d="M55 90 L35 105 L12 235 L35 240 L65 125 Z" />)}
-        {region('arm_links', <path d="M125 90 L145 105 L168 235 L145 240 L115 125 Z" />)}
-        {region('bein_rechts', <path d="M58 280 L88 285 L80 410 L48 410 Z" />)}
-        {region('bein_links', <path d="M92 285 L122 280 L132 410 L100 410 Z" />)}
+        {region('oberarm_rechts', <path d="M52 139 L78 148 L64 231 L38 225 Z" />)}
+        {region('ellenbogen_rechts', <ellipse cx="49" cy="237" rx="16" ry="14" />)}
+        {region('unterarm_rechts', <path d="M38 247 L62 246 L47 337 L22 332 Z" />)}
+        {region('hand_rechts', <path d="M21 329 L48 334 L46 374 Q32 389 17 371 Z" />)}
+        {region('oberarm_links', <path d="M162 148 L188 139 L202 225 L176 231 Z" />)}
+        {region('ellenbogen_links', <ellipse cx="191" cy="237" rx="16" ry="14" />)}
+        {region('unterarm_links', <path d="M178 246 L202 247 L218 332 L193 337 Z" />)}
+        {region('hand_links', <path d="M192 334 L219 329 L223 371 Q208 389 194 374 Z" />)}
+        {region('oberschenkel_rechts', <path d="M77 323 Q96 338 117 334 L112 409 L72 409 Z" />)}
+        {region('knie_rechts', <ellipse cx="91" cy="418" rx="21" ry="15" />)}
+        {region('unterschenkel_rechts', <path d="M72 427 L110 427 L104 487 L76 487 Z" />)}
+        {region('fuss_rechts', <path d="M75 482 L104 482 L112 496 L65 496 Z" />)}
+        {region('oberschenkel_links', <path d="M123 334 Q144 338 163 323 L168 409 L128 409 Z" />)}
+        {region('knie_links', <ellipse cx="149" cy="418" rx="21" ry="15" />)}
+        {region('unterschenkel_links', <path d="M130 427 L168 427 L164 487 L136 487 Z" />)}
+        {region('fuss_links', <path d="M136 482 L165 482 L175 496 L128 496 Z" />)}
       </svg>
     </div>;
   }
