@@ -477,7 +477,7 @@ function generateLocalProtocolText(patient) {
     ['Zeitverlauf', o.zeitverlauf || o.time],
     ['Dauer', o.dauer],
   ]);
-  text += addProtocolBlock('AMLS / VERDACHTSDIAGNOSTIK', [
+  text += addProtocolBlock('DIAGNOSEHILFE / VERDACHTSDIAGNOSTIK', [
     ['Leitsymptom', amls.leitsymptom],
     ['Arbeitsdiagnose', amls.arbeitsdiagnose],
     ['Notizen/Begründung', amls.notizen],
@@ -486,7 +486,7 @@ function generateLocalProtocolText(patient) {
     const candidate = typeof item === 'string' ? { diagnose: item } : item || {};
     return [candidate.diagnose || candidate.name, candidate.hinweis || candidate.rationale].filter(hasValue).join(': ');
   });
-  text += renderListBlock('AMLS-Ausschlüsse / zurückgestellt', amls.excluded, (item) => {
+  text += renderListBlock('Zurückgestellte Diagnosen', amls.excluded, (item) => {
     const excluded = typeof item === 'string' ? { diagnose: item } : item || {};
     return [excluded.diagnose || excluded.name, excluded.begruendung || excluded.rationale].filter(hasValue).join(': ');
   });
@@ -3553,7 +3553,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         body: JSON.stringify({ patient })
       }, session.token);
       setAmlsSuggestions(result.candidates || []);
-      setStatusText('AMLS-Kandidaten wurden aus den Befunden abgeleitet.');
+      setStatusText('Differenzialdiagnosen wurden aus Befunden, Vitalwerten und Vorerkrankungen abgeleitet.');
     } catch (err) {
       setError(err.message);
     }
@@ -3574,7 +3574,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         }
       };
     });
-    setStatusText(`${name} wurde in den AMLS-Trichter übernommen.`);
+    setStatusText(`${name} wurde in die Diagnosehilfe übernommen.`);
   }
 
   function toggleAmlsExclusion(item) {
@@ -3582,7 +3582,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     if (!name) return;
     const isExcluded = amlsExcludedNames.has(name);
     if (!isExcluded && amlsRemainingCandidates.length <= 1) {
-      setStatusText('Der letzte Kandidat bleibt im Trichter. Du kannst ihn als Arbeitsdiagnose übernehmen.');
+      setStatusText('Der letzte Kandidat bleibt erhalten. Du kannst ihn als Arbeitsdiagnose übernehmen.');
       return;
     }
     setPatient((current) => {
@@ -3600,7 +3600,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         }
       };
     });
-    setStatusText(isExcluded ? `${name} wurde zurück in den Trichter geholt.` : `${name} wurde im AMLS-Trichter zurückgestellt.`);
+    setStatusText(isExcluded ? `${name} wurde wieder aufgenommen.` : `${name} wurde zurückgestellt.`);
   }
 
   function adoptAmlsDiagnosis(name) {
@@ -3871,7 +3871,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           className={protocolSection === 'amls' ? 'active' : ''}
           onClick={() => setProtocolSection('amls')}
         >
-          AMLS
+          Diagnosehilfe
         </button>
         <button
           type="button"
@@ -4185,8 +4185,8 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
       {protocolSection === 'amls' && <section className="work-panel">
         <div className="section-head">
-          <h2>AMLS-Trichter</h2>
-          <span>Differenzialdiagnosen prüfen und begründen</span>
+          <h2>Diagnosehilfe</h2>
+          <span>Aus Vitalwerten, Anamnese und Vorerkrankungen abgeleitete Differenzialdiagnosen</span>
         </div>
 
         <div className="amls-summary">
@@ -4208,7 +4208,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <span>{amlsReadiness.text}</span>
         </div>
         <div className="amls-funnel">
-          <div>Ausgangstrichter · {amlsVisibleCandidates.length} Kandidaten · passend {amlsMatchingCount} · prüfen {amlsCheckCount} · zurückgestellt {amlsExcluded.length}</div>
+          <div>Diagnoseübersicht · {amlsVisibleCandidates.length} Kandidaten · passend {amlsMatchingCount} · gelb prüfen {amlsCheckCount} · zurückgestellt {amlsExcluded.length}</div>
           <span />
           <strong>{amlsRemainingCandidates.length} verbleibend</strong>
         </div>
@@ -4237,7 +4237,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         <div className="list-head">
           <h3>Differenzialdiagnosen</h3>
           <div className="list-actions">
-            <button type="button" onClick={loadAmlsSuggestions}>Trichter aktualisieren</button>
+            <button type="button" onClick={loadAmlsSuggestions}>Diagnosehilfe aktualisieren</button>
             <button type="button" onClick={addAmlsCandidate}>Kandidat hinzufügen</button>
           </div>
         </div>
@@ -4259,11 +4259,11 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
               </button>
             );
           })}
-          {amlsVisibleCandidates.length === 0 && <p className="muted">Noch keine Kandidaten. Trichter aktualisieren oder eigene Diagnosen ergänzen.</p>}
+          {amlsVisibleCandidates.length === 0 && <p className="muted">Noch keine Kandidaten. Diagnosehilfe aktualisieren oder eigene Diagnosen ergänzen.</p>}
         </div>
         {amlsRemainingCandidates.length === 1 && (
           <div className="amls-final">
-            <strong>Letzter Kandidat im Trichter: {amlsRemainingCandidates[0].name}</strong>
+            <strong>Letzter verbleibender Kandidat: {amlsRemainingCandidates[0].name}</strong>
             <button type="button" onClick={() => adoptAmlsDiagnosis(amlsRemainingCandidates[0].name)}>
               Als Arbeitsdiagnose übernehmen
             </button>
@@ -4318,8 +4318,8 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         </div>
 
         <div className="protocol-toolbar amls-actions">
-          <button type="button" onClick={resetAmlsFunnel}><RotateCcw size={16} /> AMLS zurücksetzen</button>
-          <button type="button" onClick={generateProtocol}>Protokoll mit AMLS generieren</button>
+          <button type="button" onClick={resetAmlsFunnel}><RotateCcw size={16} /> Diagnosehilfe zurücksetzen</button>
+          <button type="button" onClick={generateProtocol}>Protokoll mit Diagnosehilfe generieren</button>
         </div>
       </section>}
 

@@ -637,6 +637,9 @@ def build_suspicion_assessment(patient):
     text = " ".join([
         str(samplers.get("symptome") or ""),
         str(samplers.get("ereignis") or ""),
+        str(samplers.get("vorgeschichte") or ""),
+        str(samplers.get("medikamente") or ""),
+        str(samplers.get("risiken_sonstige") or ""),
         str(opqrst.get("region") or ""),
         str(opqrst.get("quality") or ""),
         str(vital.get("kurzbericht") or ""),
@@ -754,6 +757,16 @@ def build_amls_candidates(patient):
     if any(term in text for term in ["bauch", "abdomen", "kolik", "flanke"]):
         add("Akutes Abdomen", "Abdominell", "Abdominelle Beschwerden dokumentiert")
         add("Atypisches akutes Koronarsyndrom", "Kardial", "Oberbauchbeschwerden können kardial bedingt sein")
+    if samplers.get("diabetes") or "diabetes" in text:
+        add("Diabetische Stoffwechselentgleisung", "Metabolisch", "Diabetes in der Vorgeschichte/Risikoangabe")
+    if samplers.get("antikoagulation") or any(term in text for term in ["antikoag", "marcumar", "apixaban", "rivaroxaban"]):
+        add("Blutung unter Antikoagulation", "Hämatologisch", "Antikoagulation dokumentiert")
+    if samplers.get("chronische_erkrankung_kind") or samplers.get("angeborene_erkrankung"):
+        add("Dekompensation der Grunderkrankung", "Pädiatrisch", "Relevante kindliche Vor- oder Grunderkrankung dokumentiert")
+    if samplers.get("immunsuppression_kind"):
+        add("Schwere Infektion bei Immunsuppression", "Pädiatrisch/Infektiös", "Immunsuppression als Risikofaktor dokumentiert")
+    if samplers.get("fruehgeburtlichkeit"):
+        add("Komplikation bei Frühgeburtlichkeit", "Pädiatrisch", "Frühgeburtlichkeit dokumentiert")
 
     if len(candidates) < 4:
         for name, category in [
@@ -764,12 +777,12 @@ def build_amls_candidates(patient):
             ("Infektion / Sepsis", "Infektiös"),
             ("Intoxikation", "Toxikologisch"),
         ]:
-            add(name, category, "Breiter AMLS-Sicherheitscheck bei unspezifischer Datenlage")
+            add(name, category, "Breiter Sicherheitscheck bei unspezifischer Datenlage")
 
     for item in amls.get("custom_candidates", []):
         name = item.get("diagnose") if isinstance(item, dict) else item
         if valid(name):
-            add(str(name), "Eigene Ergänzung", "Manuell zum Trichter hinzugefügt")
+            add(str(name), "Eigene Ergänzung", "Manuell zur Diagnosehilfe hinzugefügt")
 
     excluded_names = {
         str(item.get("diagnose") or item.get("name") or "").strip() if isinstance(item, dict) else str(item).strip()
@@ -1151,7 +1164,7 @@ def generate_protocol_text(patient):
         ("Time / Verlauf", o.get("zeitverlauf") or o.get("time")),
         ("Dauer", o.get("dauer")),
     ])
-    text += add_lines("AMLS / VERDACHTSDIAGNOSTIK", [
+    text += add_lines("DIAGNOSEHILFE / VERDACHTSDIAGNOSTIK", [
         ("Leitsymptom", amls.get("leitsymptom")),
         ("Arbeitsdiagnose", amls.get("arbeitsdiagnose")),
         ("Notizen / Begründung", amls.get("notizen")),
@@ -1172,7 +1185,7 @@ def generate_protocol_text(patient):
         lines = [amls_item_text(item, "begruendung") for item in excluded]
         lines = [line for line in lines if valid(line)]
         if lines:
-            text += "AMLS-Ausschlüsse / zurückgestellte Diagnosen\n" + ("=" * 50) + "\n"
+            text += "Zurückgestellte Diagnosen\n" + ("=" * 50) + "\n"
             for line in lines:
                 text += f"- {line}\n"
             text += "\n"
