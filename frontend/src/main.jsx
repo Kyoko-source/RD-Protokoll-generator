@@ -2602,6 +2602,7 @@ const emptyPatient = {
 };
 
 function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSync, initialSection = 'vitalwerte', standaloneRefusal = false }) {
+  const initialLocalDraft = loadLocalDraft(employee?.id);
   const [patient, setPatient] = useState(emptyPatient);
   const [protocolSection, setProtocolSection] = useState(initialSection);
   const [xabcdeSection, setXabcdeSection] = useState('A');
@@ -2613,7 +2614,8 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const [generatedProtocol, setGeneratedProtocol] = useState('');
   const [qualityResult, setQualityResult] = useState(null);
   const [forceFinish, setForceFinish] = useState(false);
-  const [localDraft, setLocalDraft] = useState(() => loadLocalDraft(employee?.id));
+  const [localDraft, setLocalDraft] = useState(initialLocalDraft);
+  const [localDraftDecisionPending, setLocalDraftDecisionPending] = useState(Boolean(initialLocalDraft?.patient));
   const [draftReady, setDraftReady] = useState(false);
   const [amlsSuggestions, setAmlsSuggestions] = useState([]);
   const [calculator, setCalculator] = useState({ sop: 'Anaphylaxie (SOPKB0105)', age: '30', weight: '70', pregnant: 'Nein', bz: '55', rr_sys: '160', nrs: '7' });
@@ -2689,6 +2691,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         if (fallback?.patient) {
           setPatient({ ...emptyPatient, ...fallback.patient });
           setLocalDraft(fallback);
+          setLocalDraftDecisionPending(false);
           setStatusText('Backend nicht erreichbar. Lokaler Entwurf wurde geladen.');
         } else {
           setError(err.message);
@@ -2698,12 +2701,12 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   }, [session.token, employee?.id]);
 
   useEffect(() => {
-    if (!draftReady) return;
+    if (!draftReady || localDraftDecisionPending) return;
     const saved = saveLocalDraft(employee?.id, patient);
     if (saved) {
       setLocalDraft(saved);
     }
-  }, [patient, draftReady, employee?.id]);
+  }, [patient, draftReady, localDraftDecisionPending, employee?.id]);
 
   useEffect(() => {
     if (protocolSection === 'amls' && amlsSuggestions.length === 0) {
@@ -2716,6 +2719,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     if (draft?.patient) {
       setPatient({ ...emptyPatient, ...draft.patient });
       setLocalDraft(draft);
+      setLocalDraftDecisionPending(false);
       setStatusText(`Lokaler Entwurf wiederhergestellt: ${new Date(draft.updatedAt).toLocaleString('de-DE')}`);
     }
   }
@@ -2723,6 +2727,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   function discardLocalDraft() {
     clearLocalDraft(employee?.id);
     setLocalDraft(null);
+    setLocalDraftDecisionPending(false);
     setStatusText('Lokaler Entwurf wurde verworfen.');
   }
 
@@ -3756,7 +3761,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
       {error && <div className="error-box">{error}</div>}
       {statusText && <div className="success-box">{statusText}</div>}
-      {localDraft && (
+      {localDraftDecisionPending && localDraft && (
         <section className="offline-draft-box">
           <div>
             <strong>Lokale Sicherung vorhanden</strong>
