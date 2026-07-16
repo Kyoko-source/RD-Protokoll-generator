@@ -5,6 +5,7 @@ import {
   AlertTriangle,
   ArrowLeft,
   Building2,
+  Brain,
   Calculator,
   Cable,
   CheckCircle2,
@@ -419,6 +420,7 @@ function sinnhaftRows(patient) {
   const x = patient.xabcde || {};
   const s = patient.samplers || {};
   const o = patient.opqrst || {};
+  const psyche = patient.psyche || {};
   const amls = patient.amls || {};
   const measures = patient.massnahmen || {};
   const reanimation = patient.reanimation || {};
@@ -566,6 +568,22 @@ function generateLocalProtocolText(patient) {
     ['Severity Beschreibung', o.severity_desc],
     ['Zeitverlauf', o.zeitverlauf || o.time],
     ['Dauer', o.dauer],
+  ]);
+  text += addProtocolBlock('PSYCHE / PSYCHKG NRW', [
+    ['Psychischer Zustand', psyche.zustand],
+    ['Orientierung', psyche.orientierung],
+    ['Verhalten / Kooperation', psyche.kooperation],
+    ['Suizidalität', psyche.suizidalitaet],
+    ['Eigengefährdung', psyche.eigengefaehrdung],
+    ['Fremdgefährdung', psyche.fremdgefaehrdung],
+    ['Einwilligungsfähigkeit', psyche.einwilligungsfaehigkeit],
+    ['Aufnahme / Unterbringungsweg', psyche.unterbringungsweg],
+    ['Veranlasst durch', psyche.veranlasst_durch],
+    ['Ärztliches Zeugnis / Beschluss', psyche.nachweis],
+    ['Zielklinik', psyche.zielklinik],
+    ['Begleitung / Sicherung', psyche.begleitung],
+    ['Begründung / konkrete Beobachtungen', psyche.begruendung],
+    ['Weitere Notizen', psyche.notizen],
   ]);
   text += addProtocolBlock('DIAGNOSEHILFE / VERDACHTSDIAGNOSTIK', [
     ['Leitsymptom', amls.leitsymptom],
@@ -2715,6 +2733,7 @@ const emptyPatient = {
   xabcde: {},
   samplers: {},
   opqrst: {},
+  psyche: {},
   einweisung: {},
   amls: { excluded: [], custom_candidates: [], arbeitsdiagnose: '', leitsymptom: '', notizen: '' },
   massnahmen: { timeline: [], medikation: [] },
@@ -2798,6 +2817,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const xabcde = patient.xabcde || {};
   const samplers = patient.samplers || {};
   const opqrst = patient.opqrst || {};
+  const psyche = patient.psyche || {};
   const massnahmen = patient.massnahmen || { timeline: [], medikation: [] };
   const reanimation = patient.reanimation || { shocks: [] };
   const amls = patient.amls || {};
@@ -2865,6 +2885,15 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         && opqrstSections.every((section) => opqrstSectionComplete(section.key))
     },
     { key: 'amls', label: 'Diagnosehilfe', icon: Search, complete: hasValue(amls.arbeitsdiagnose) },
+    {
+      key: 'psyche',
+      label: 'Psyche',
+      icon: Brain,
+      complete: hasValue(psyche.zustand)
+        && hasValue(psyche.eigengefaehrdung)
+        && hasValue(psyche.fremdgefaehrdung)
+        && hasValue(psyche.unterbringungsweg)
+    },
     { key: 'rechner', label: 'Rechner', icon: Calculator, complete: Boolean(calculatorResult) },
     {
       key: 'massnahmen',
@@ -3566,6 +3595,16 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       ...current,
       opqrst: {
         ...(current.opqrst || {}),
+        [key]: value
+      }
+    }));
+  }
+
+  function updatePsyche(key, value) {
+    setPatient((current) => ({
+      ...current,
+      psyche: {
+        ...(current.psyche || {}),
         [key]: value
       }
     }));
@@ -4691,6 +4730,168 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <button type="button" onClick={resetAmlsFunnel}><RotateCcw size={16} /> Diagnosehilfe zurücksetzen</button>
           <button type="button" onClick={generateProtocol}>Protokoll mit Diagnosehilfe generieren</button>
         </div>
+      </section>}
+
+      {protocolSection === 'psyche' && <section className="work-panel psyche-panel">
+        <div className="section-head">
+          <h2>Psyche</h2>
+          <span>Psychischer Zustand · Gefährdung · PsychKG NRW</span>
+        </div>
+
+        <div className="psyche-legal-note">
+          <Brain size={20} />
+          <div>
+            <strong>Dokumentationshilfe – keine eigenständige Unterbringungsanordnung</strong>
+            <span>Konkrete Beobachtungen festhalten. Eine Unterbringung nach PsychKG NRW wird durch Ordnungsbehörde beziehungsweise Amtsgericht veranlasst; bei Gefahr im Verzug gelten die Voraussetzungen des § 14 PsychKG NRW.</span>
+          </div>
+        </div>
+
+        <fieldset>
+          <legend>Psychischer Befund</legend>
+          <div className="form-grid">
+            <label>
+              Psychischer Zustand
+              <select value={psyche.zustand || ''} onChange={(event) => updatePsyche('zustand', event.target.value)}>
+                <option value="">Bitte auswählen</option>
+                <option value="unauffällig">unauffällig</option>
+                <option value="ängstlich / angespannt">ängstlich / angespannt</option>
+                <option value="depressiv">depressiv</option>
+                <option value="manisch / enthemmt">manisch / enthemmt</option>
+                <option value="psychotisch / wahnhaft">psychotisch / wahnhaft</option>
+                <option value="agitiert / aggressiv">agitiert / aggressiv</option>
+                <option value="intoxikiert / substanzbeeinflusst">intoxikiert / substanzbeeinflusst</option>
+                <option value="desorientiert / verwirrt">desorientiert / verwirrt</option>
+                <option value="sonstiger auffälliger Zustand">sonstiger auffälliger Zustand</option>
+              </select>
+            </label>
+            <label>
+              Orientierung
+              <select value={psyche.orientierung || ''} onChange={(event) => updatePsyche('orientierung', event.target.value)}>
+                <option value="">Bitte auswählen</option>
+                <option value="voll orientiert">voll orientiert</option>
+                <option value="teilweise desorientiert">teilweise desorientiert</option>
+                <option value="nicht orientiert">nicht orientiert</option>
+                <option value="nicht sicher beurteilbar">nicht sicher beurteilbar</option>
+              </select>
+            </label>
+            <label>
+              Verhalten / Kooperation
+              <select value={psyche.kooperation || ''} onChange={(event) => updatePsyche('kooperation', event.target.value)}>
+                <option value="">Bitte auswählen</option>
+                <option value="kooperativ">kooperativ</option>
+                <option value="eingeschränkt kooperativ">eingeschränkt kooperativ</option>
+                <option value="nicht kooperativ">nicht kooperativ</option>
+                <option value="wechselnd">wechselnd</option>
+                <option value="nicht beurteilbar">nicht beurteilbar</option>
+              </select>
+            </label>
+            <label>
+              Einwilligungsfähigkeit
+              <select value={psyche.einwilligungsfaehigkeit || ''} onChange={(event) => updatePsyche('einwilligungsfaehigkeit', event.target.value)}>
+                <option value="">Bitte auswählen</option>
+                <option value="gegeben eingeschätzt">gegeben eingeschätzt</option>
+                <option value="nicht gegeben eingeschätzt">nicht gegeben eingeschätzt</option>
+                <option value="zweifelhaft / ärztlich zu klären">zweifelhaft / ärztlich zu klären</option>
+                <option value="nicht beurteilbar">nicht beurteilbar</option>
+              </select>
+            </label>
+          </div>
+          <label className="wide-field">
+            Konkrete Beobachtungen / psychopathologischer Kurzbefund
+            <textarea value={psyche.begruendung || ''} onChange={(event) => updatePsyche('begruendung', event.target.value)} rows={4} placeholder="Beobachtbares Verhalten, Äußerungen, Affekt, Wahrnehmung, Anlass und zeitlicher Verlauf sachlich dokumentieren" />
+          </label>
+        </fieldset>
+
+        <fieldset>
+          <legend>Gefährdungsbeurteilung</legend>
+          <div className="form-grid">
+            <label>
+              Suizidalität
+              <select value={psyche.suizidalitaet || ''} onChange={(event) => updatePsyche('suizidalitaet', event.target.value)}>
+                <option value="">Bitte auswählen</option>
+                <option value="verneint / keine Hinweise">verneint / keine Hinweise</option>
+                <option value="passive Todeswünsche">passive Todeswünsche</option>
+                <option value="Suizidgedanken ohne konkreten Plan">Suizidgedanken ohne konkreten Plan</option>
+                <option value="konkreter Plan / Vorbereitung">konkreter Plan / Vorbereitung</option>
+                <option value="Suizidversuch erfolgt">Suizidversuch erfolgt</option>
+                <option value="nicht sicher beurteilbar">nicht sicher beurteilbar</option>
+              </select>
+            </label>
+            <label>
+              Eigengefährdung
+              <select value={psyche.eigengefaehrdung || ''} onChange={(event) => updatePsyche('eigengefaehrdung', event.target.value)}>
+                <option value="">Bitte auswählen</option>
+                <option value="keine Hinweise">keine Hinweise</option>
+                <option value="möglich">möglich</option>
+                <option value="gegenwärtig erheblich">gegenwärtig erheblich</option>
+                <option value="nicht sicher beurteilbar">nicht sicher beurteilbar</option>
+              </select>
+            </label>
+            <label>
+              Fremdgefährdung
+              <select value={psyche.fremdgefaehrdung || ''} onChange={(event) => updatePsyche('fremdgefaehrdung', event.target.value)}>
+                <option value="">Bitte auswählen</option>
+                <option value="keine Hinweise">keine Hinweise</option>
+                <option value="möglich">möglich</option>
+                <option value="gegenwärtig erhebliche Gefährdung bedeutender Rechtsgüter anderer">gegenwärtig erhebliche Gefährdung bedeutender Rechtsgüter anderer</option>
+                <option value="nicht sicher beurteilbar">nicht sicher beurteilbar</option>
+              </select>
+            </label>
+          </div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Aufnahme / Unterbringung</legend>
+          <div className="form-grid">
+            <label className="full-span">
+              Dokumentierter Aufnahme- oder Unterbringungsweg
+              <select value={psyche.unterbringungsweg || ''} onChange={(event) => updatePsyche('unterbringungsweg', event.target.value)}>
+                <option value="">Bitte auswählen</option>
+                <option value="Keine psychiatrische Einweisung / Unterbringung">Keine psychiatrische Einweisung / Unterbringung</option>
+                <option value="Freiwilliger Krankenhausaufenthalt (§ 26 PsychKG NRW)">Freiwilliger Krankenhausaufenthalt (§ 26 PsychKG NRW)</option>
+                <option value="Unterbringung auf Antrag der Ordnungsbehörde (§§ 10–12 PsychKG NRW)">Unterbringung auf Antrag der Ordnungsbehörde (§§ 10–12 PsychKG NRW)</option>
+                <option value="Sofortige Unterbringung bei Gefahr im Verzug (§ 14 PsychKG NRW)">Sofortige Unterbringung bei Gefahr im Verzug (§ 14 PsychKG NRW)</option>
+                <option value="Gerichtlich angeordnete Unterbringung (§§ 12–13 PsychKG NRW)">Gerichtlich angeordnete Unterbringung (§§ 12–13 PsychKG NRW)</option>
+                <option value="Anderer Rechtsweg / Grundlage">Anderer Rechtsweg / Grundlage</option>
+              </select>
+            </label>
+            <label>
+              Veranlasst durch
+              <select value={psyche.veranlasst_durch || ''} onChange={(event) => updatePsyche('veranlasst_durch', event.target.value)}>
+                <option value="">Bitte auswählen</option>
+                <option value="Patient/in selbst">Patient/in selbst</option>
+                <option value="Notarzt / Ärztin / Arzt">Notarzt / Ärztin / Arzt</option>
+                <option value="Ordnungsbehörde">Ordnungsbehörde</option>
+                <option value="Amtsgericht">Amtsgericht</option>
+                <option value="Polizei in Amtshilfe">Polizei in Amtshilfe</option>
+                <option value="nicht bekannt">nicht bekannt</option>
+              </select>
+            </label>
+            <label>
+              Ärztliches Zeugnis / Beschluss
+              <select value={psyche.nachweis || ''} onChange={(event) => updatePsyche('nachweis', event.target.value)}>
+                <option value="">Bitte auswählen</option>
+                <option value="liegt vor">liegt vor</option>
+                <option value="angekündigt / in Erstellung">angekündigt / in Erstellung</option>
+                <option value="liegt nicht vor">liegt nicht vor</option>
+                <option value="nicht geprüft / nicht bekannt">nicht geprüft / nicht bekannt</option>
+                <option value="bei freiwilliger Aufnahme nicht erforderlich">bei freiwilliger Aufnahme nicht erforderlich</option>
+              </select>
+            </label>
+            <label>
+              Zielklinik
+              <input value={psyche.zielklinik || ''} onChange={(event) => updatePsyche('zielklinik', event.target.value)} placeholder="Klinik / Fachabteilung" />
+            </label>
+            <label>
+              Begleitung / Sicherung
+              <input value={psyche.begleitung || ''} onChange={(event) => updatePsyche('begleitung', event.target.value)} placeholder="z. B. Ordnungsamt, Polizei, Notarzt" />
+            </label>
+            <label className="full-span">
+              Weitere Notizen
+              <textarea value={psyche.notizen || ''} onChange={(event) => updatePsyche('notizen', event.target.value)} rows={3} />
+            </label>
+          </div>
+        </fieldset>
       </section>}
 
       {protocolSection === 'rechner' && <section className="work-panel">

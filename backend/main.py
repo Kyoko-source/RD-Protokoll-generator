@@ -202,6 +202,7 @@ def default_patient_case():
         "xabcde": {},
         "samplers": {},
         "opqrst": {},
+        "psyche": {},
         "einweisung": {},
         "amls": {
             "excluded": [],
@@ -1124,6 +1125,7 @@ def generate_protocol_text(patient):
     x = patient.get("xabcde", {})
     s = patient.get("samplers", {})
     o = patient.get("opqrst", {})
+    psyche = patient.get("psyche", {}) or {}
     measures = patient.get("massnahmen", {})
     reanimation = patient.get("reanimation", {}) or {}
     if not isinstance(reanimation, dict):
@@ -1245,6 +1247,22 @@ def generate_protocol_text(patient):
         ("Severity Beschreibung", o.get("severity_desc")),
         ("Time / Verlauf", o.get("zeitverlauf") or o.get("time")),
         ("Dauer", o.get("dauer")),
+    ])
+    text += add_lines("PSYCHE / PSYCHKG NRW", [
+        ("Psychischer Zustand", psyche.get("zustand")),
+        ("Orientierung", psyche.get("orientierung")),
+        ("Verhalten / Kooperation", psyche.get("kooperation")),
+        ("Suizidalität", psyche.get("suizidalitaet")),
+        ("Eigengefährdung", psyche.get("eigengefaehrdung")),
+        ("Fremdgefährdung", psyche.get("fremdgefaehrdung")),
+        ("Einwilligungsfähigkeit", psyche.get("einwilligungsfaehigkeit")),
+        ("Aufnahme / Unterbringungsweg", psyche.get("unterbringungsweg")),
+        ("Veranlasst durch", psyche.get("veranlasst_durch")),
+        ("Ärztliches Zeugnis / Beschluss", psyche.get("nachweis")),
+        ("Zielklinik", psyche.get("zielklinik")),
+        ("Begleitung / Sicherung", psyche.get("begleitung")),
+        ("Begründung / konkrete Beobachtungen", psyche.get("begruendung")),
+        ("Weitere Notizen", psyche.get("notizen")),
     ])
     text += add_lines("DIAGNOSEHILFE / VERDACHTSDIAGNOSTIK", [
         ("Leitsymptom", amls.get("leitsymptom")),
