@@ -2964,11 +2964,20 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
   function selectTraumaRegion(region, side) {
     const id = `${side}:${region}`;
-    setSelectedTraumaRegion(id);
     setPatient((current) => {
       const currentX = current.xabcde || {};
       const findings = Array.isArray(currentX.trauma_befunde) ? currentX.trauma_befunde : [];
-      if (findings.some((item) => item.id === id)) return current;
+      if (findings.some((item) => item.id === id)) {
+        setSelectedTraumaRegion((selected) => selected === id ? '' : selected);
+        return {
+          ...current,
+          xabcde: {
+            ...currentX,
+            trauma_befunde: findings.filter((item) => item.id !== id)
+          }
+        };
+      }
+      setSelectedTraumaRegion(id);
       return {
         ...current,
         xabcde: {
