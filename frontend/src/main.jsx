@@ -7,11 +7,14 @@ import {
   Building2,
   Cable,
   CheckCircle2,
+  ChevronDown,
   Download,
   FileText,
   Home,
   Lock,
   LogOut,
+  Megaphone,
+  MessageSquare,
   PanelLeftClose,
   PanelLeftOpen,
   Printer,
@@ -869,14 +872,22 @@ function UserMenu({ session, employee, onLogout }) {
           setOpen((current) => !current);
         }}
       >
-        {employee?.name || 'Profil'}
+        <span className="user-avatar">{(employee?.name || 'P').trim().charAt(0).toUpperCase()}</span>
+        <span>{employee?.name || 'Profil'}</span>
+        <ChevronDown className={open ? 'user-menu-chevron open' : 'user-menu-chevron'} size={16} />
       </button>
       {open && (
         <div className="user-dropdown">
+          <div className="user-dropdown-head">
+            <div>
+              <span>Neuigkeiten & Feedback</span>
+              <strong>Was gibt es Neues?</strong>
+            </div>
+          </div>
           <div className="user-dropdown-tabs">
-            <button type="button" className={activePanel === 'patch' ? 'active' : ''} onClick={() => loadAnnouncements('patch')}>Patch Notes</button>
-            <button type="button" className={activePanel === 'planned' ? 'active' : ''} onClick={() => loadAnnouncements('planned')}>Geplante Updates</button>
-            <button type="button" className={activePanel === 'feedback' ? 'active' : ''} onClick={() => loadAnnouncements('feedback')}>Bugs/Wünsche</button>
+            <button type="button" className={activePanel === 'patch' ? 'active' : ''} onClick={() => loadAnnouncements('patch')}><Megaphone size={17} /><span>Patch Notes</span></button>
+            <button type="button" className={activePanel === 'planned' ? 'active' : ''} onClick={() => loadAnnouncements('planned')}><Wrench size={17} /><span>Geplant</span></button>
+            <button type="button" className={activePanel === 'feedback' ? 'active' : ''} onClick={() => loadAnnouncements('feedback')}><MessageSquare size={17} /><span>Feedback</span></button>
           </div>
           {error && <div className="error-box compact-box">{error}</div>}
           {statusText && <div className="success-box compact-box">{statusText}</div>}
@@ -920,7 +931,10 @@ function UserMenu({ session, employee, onLogout }) {
               </div>
             </div>
           )}
-          <button type="button" className="dropdown-logout" onClick={onLogout}>Abmelden</button>
+          <div className="user-dropdown-footer">
+            <span>Angemeldet als {employee?.name || 'Benutzer'}</span>
+            <button type="button" className="dropdown-logout" onClick={onLogout}><LogOut size={16} /> Abmelden</button>
+          </div>
         </div>
       )}
     </div>
