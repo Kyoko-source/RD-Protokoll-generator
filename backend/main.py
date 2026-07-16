@@ -187,6 +187,7 @@ class RetentionRequest(BaseModel):
 
 def default_patient_case():
     return {
+        "patient": {"patientengruppe": "", "alter_wert": "", "alter_einheit": "Jahre", "pat": {}, "paediatrie": {}},
         "vitalwerte": {},
         "xabcde": {},
         "samplers": {},
@@ -1044,6 +1045,7 @@ def assess_protocol_quality(patient):
 
 
 def generate_protocol_text(patient):
+    patient_data = patient.get("patient", {}) or {}
     vital = patient.get("vitalwerte", {})
     x = patient.get("xabcde", {})
     s = patient.get("samplers", {})
@@ -1061,6 +1063,22 @@ def generate_protocol_text(patient):
     text += "Enthält ausschließlich dokumentierte Angaben; vor Verwendung vollständig prüfen.\n\n"
     text += build_narrative_report(patient)
 
+    pat = patient_data.get("pat", {}) or {}
+    paediatrie = patient_data.get("paediatrie", {}) or {}
+    text += add_lines("PATIENT / PÄDIATRIE", [
+        ("Patientengruppe", patient_data.get("patientengruppe")),
+        ("Alter", f"{patient_data.get('alter_wert')} {patient_data.get('alter_einheit')}" if valid(patient_data.get("alter_wert")) else ""),
+        ("PAT Erscheinungsbild", pat.get("erscheinungsbild")),
+        ("PAT Atemarbeit", pat.get("atemarbeit")),
+        ("PAT Hautdurchblutung", pat.get("hautdurchblutung")),
+        ("PAT Beobachtung", pat.get("notiz")),
+        ("Kinder-GCS Augen", paediatrie.get("gcs_augen")),
+        ("Kinder-GCS Verbal", paediatrie.get("gcs_verbal")),
+        ("Kinder-GCS Motorisch", paediatrie.get("gcs_motorik")),
+        ("APGAR 1 Minute", paediatrie.get("apgar_1")),
+        ("APGAR 5 Minuten", paediatrie.get("apgar_5")),
+        ("APGAR 10 Minuten", paediatrie.get("apgar_10")),
+    ])
     text += add_lines("VITALWERTE & DEMOGRAPHIE", [
         ("Alter", vital.get("alter")),
         ("Geschlecht", vital.get("geschlecht")),

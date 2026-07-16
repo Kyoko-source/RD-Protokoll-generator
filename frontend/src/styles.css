@@ -1183,6 +1183,31 @@ form button,
   opacity: 0.52;
 }
 
+.pediatric-intake,
+.pediatric-assessment {
+  margin: 0 0 20px;
+  padding: 18px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(45, 124, 255, 0.08), rgba(18, 198, 178, 0.07));
+  border: 1px solid rgba(49, 203, 209, 0.2);
+}
+
+.pediatric-assessment {
+  margin-top: 18px;
+}
+
+.pediatric-assessment legend {
+  padding: 0 8px;
+  color: #9df1e5;
+  font-weight: 900;
+}
+
+.age-entry-grid {
+  display: grid;
+  grid-template-columns: 2fr 1fr;
+  gap: 14px;
+}
+
 .status-band div {
   min-height: 58px;
   display: flex;
@@ -2908,6 +2933,10 @@ legend {
   }
 
   .patient-type-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .age-entry-grid {
     grid-template-columns: 1fr;
   }
 
