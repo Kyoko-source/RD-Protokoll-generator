@@ -2173,7 +2173,8 @@ form button,
 
 .admin-list,
 .privacy-list,
-.audit-list {
+.audit-list,
+.login-event-list {
   display: grid;
   gap: 10px;
 }
@@ -2237,6 +2238,31 @@ form button,
   border-radius: 12px;
   background: rgba(4, 12, 24, 0.28);
   border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.login-event-row {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.8fr) minmax(220px, 1fr) minmax(260px, 1.2fr);
+  gap: 10px;
+  align-items: start;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(4, 12, 24, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.login-event-row div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.login-event-row span {
+  color: rgba(235, 244, 255, 0.62);
+  font-size: 0.9rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .privacy-actions {
@@ -3333,6 +3359,7 @@ legend {
   .import-result,
   .inline-form,
   .admin-row,
+  .login-event-row,
   .feedback-admin-row,
   .announcement-form,
   .case-row-actions,

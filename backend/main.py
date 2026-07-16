@@ -9,7 +9,7 @@ from pathlib import Path
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
-from fastapi import Depends, FastAPI, Header, HTTPException, status
+from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
@@ -32,6 +32,7 @@ from storage import (
     list_audit_events,
     list_expired_finished_cases,
     list_finished_cases,
+    list_login_events,
     load_case_draft_store,
     load_employee_store,
     save_case_draft_store,
@@ -39,6 +40,7 @@ from storage import (
     save_finished_case,
     set_app_setting,
     write_audit_event,
+    write_login_event,
 )
 
 APP_TIMEZONE = ZoneInfo(os.getenv("NANA_TIMEZONE", "Europe/Berlin"))
@@ -95,16 +97,25 @@ app.add_middleware(
 class LoginRequest(BaseModel):
     employee_id: str
     password: str
+    device_id: str = ""
+    device_name: str = ""
+    user_agent: str = ""
 
 
 class PasswordChangeRequest(BaseModel):
     token: str
     new_password: str
+    device_id: str = ""
+    device_name: str = ""
+    user_agent: str = ""
 
 
 class FirstAdminRequest(BaseModel):
     name: str
     password: str
+    device_id: str = ""
+    device_name: str = ""
+    user_agent: str = ""
 
 
 class DraftRequest(BaseModel):
@@ -1774,6 +1785,34 @@ def audit(action, employee=None, entity_type="", entity_id="", details=None):
     })
 
 
+def short_text(value, limit=240):
+    return str(value or "").strip()[:limit]
+
+
+def client_ip(request: Request):
+    forwarded_for = request.headers.get("x-forwarded-for", "")
+    if forwarded_for:
+        return short_text(forwarded_for.split(",")[0], 80)
+    real_ip = request.headers.get("x-real-ip", "")
+    if real_ip:
+        return short_text(real_ip, 80)
+    return short_text(request.client.host if request.client else "", 80)
+
+
+def record_login_event(employee, payload, request: Request, source="login"):
+    user_agent = short_text(getattr(payload, "user_agent", "") or request.headers.get("user-agent", ""), 500)
+    write_login_event({
+        "timestamp": local_now().isoformat(timespec="seconds"),
+        "employee_id": employee.get("id", ""),
+        "employee_name": employee.get("name", ""),
+        "device_id": short_text(getattr(payload, "device_id", ""), 120),
+        "device_name": short_text(getattr(payload, "device_name", ""), 160),
+        "user_agent": user_agent,
+        "ip_address": client_ip(request),
+        "source": short_text(source, 40),
+    })
+
+
 def public_employee(employee):
     return {
         "id": employee.get("id", ""),
@@ -1855,7 +1894,7 @@ def employees():
 
 
 @app.post("/api/auth/login")
-def login(payload: LoginRequest):
+def login(payload: LoginRequest, request: Request):
     employee = find_employee(payload.employee_id)
     if not employee:
         audit("api_login_failed", details={"reason": "unknown_employee"})
@@ -1879,12 +1918,13 @@ def login(payload: LoginRequest):
 
     token = new_token()
     sessions[token] = {"employee_id": employee["id"], "expires_at": expires_at(SESSION_MINUTES)}
+    record_login_event(employee, payload, request, source="login")
     audit("api_login_success", employee=employee, details={"role": employee.get("role", "employee")})
     return {"status": "authenticated", "token": token, "employee": public_employee(employee)}
 
 
 @app.post("/api/auth/setup-first-admin")
-def setup_first_admin(payload: FirstAdminRequest):
+def setup_first_admin(payload: FirstAdminRequest, request: Request):
     store = load_employee_store()
     if store.get("employees"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Erster Admin existiert bereits.")
@@ -1908,13 +1948,14 @@ def setup_first_admin(payload: FirstAdminRequest):
 
     token = new_token()
     sessions[token] = {"employee_id": employee["id"], "expires_at": expires_at(SESSION_MINUTES)}
+    record_login_event(employee, payload, request, source="first_admin")
     audit("api_first_admin_created", employee=employee)
     audit("api_login_success", employee=employee, details={"role": "admin"})
     return {"status": "authenticated", "token": token, "employee": public_employee(employee)}
 
 
 @app.post("/api/auth/set-password")
-def set_password(payload: PasswordChangeRequest):
+def set_password(payload: PasswordChangeRequest, request: Request):
     pending = password_change_tokens.get(payload.token)
     if not pending or is_expired(pending.get("expires_at")):
         password_change_tokens.pop(payload.token, None)
@@ -1940,6 +1981,7 @@ def set_password(payload: PasswordChangeRequest):
 
     token = new_token()
     sessions[token] = {"employee_id": employee["id"], "expires_at": expires_at(SESSION_MINUTES)}
+    record_login_event(employee, payload, request, source="password_set")
     audit("api_initial_password_set", employee=employee)
     audit("api_login_success", employee=employee, details={"role": employee.get("role", "employee")})
     return {"status": "authenticated", "token": token, "employee": public_employee(employee)}
@@ -2337,6 +2379,11 @@ def print_audit(payload: PrintAuditRequest, employee=Depends(current_employee)):
 @app.get("/api/admin/audit")
 def audit_log(employee=Depends(require_admin)):
     return {"events": list_audit_events(limit=100)}
+
+
+@app.get("/api/admin/login-events")
+def admin_login_events(employee=Depends(require_admin)):
+    return {"events": list_login_events(limit=100)}
 
 
 @app.get("/api/admin/quality-rules")

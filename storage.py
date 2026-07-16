@@ -73,6 +73,21 @@ def init_database():
             )
             """
         )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS login_events (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                timestamp TEXT NOT NULL,
+                employee_id TEXT NOT NULL DEFAULT '',
+                employee_name TEXT NOT NULL DEFAULT '',
+                device_id TEXT NOT NULL DEFAULT '',
+                device_name TEXT NOT NULL DEFAULT '',
+                user_agent TEXT NOT NULL DEFAULT '',
+                ip_address TEXT NOT NULL DEFAULT '',
+                source TEXT NOT NULL DEFAULT 'login'
+            )
+            """
+        )
         existing_case_columns = {
             row["name"] for row in connection.execute("PRAGMA table_info(finished_cases)").fetchall()
         }
@@ -598,6 +613,61 @@ def list_audit_events(limit=100):
             "details": details,
         })
     return events
+
+
+def write_login_event(event):
+    init_database()
+    with _connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO login_events (
+                timestamp, employee_id, employee_name, device_id,
+                device_name, user_agent, ip_address, source
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                event.get("timestamp", ""),
+                event.get("employee_id", ""),
+                event.get("employee_name", ""),
+                event.get("device_id", ""),
+                event.get("device_name", ""),
+                event.get("user_agent", ""),
+                event.get("ip_address", ""),
+                event.get("source", "login"),
+            ),
+        )
+        connection.commit()
+
+
+def list_login_events(limit=100):
+    init_database()
+    safe_limit = max(1, min(int(limit or 100), 500))
+    with _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT timestamp, employee_id, employee_name, device_id,
+                   device_name, user_agent, ip_address, source
+            FROM login_events
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            (safe_limit,),
+        ).fetchall()
+
+    return [
+        {
+            "timestamp": row["timestamp"],
+            "employee_id": row["employee_id"],
+            "employee_name": row["employee_name"],
+            "device_id": row["device_id"],
+            "device_name": row["device_name"],
+            "user_agent": row["user_agent"],
+            "ip_address": row["ip_address"],
+            "source": row["source"],
+        }
+        for row in rows
+    ]
 
 
 def migrate_json_files(employee_file="employees.json", draft_file="case_drafts.json"):

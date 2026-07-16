@@ -100,6 +100,26 @@ function clearLocalDraft(employeeId) {
   }
 }
 
+function browserDeviceId() {
+  const key = 'nana_browser_device_id';
+  let value = localStorage.getItem(key);
+  if (!value) {
+    value = `web-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
+    localStorage.setItem(key, value);
+  }
+  return value;
+}
+
+function browserDeviceInfo() {
+  const platform = navigator.userAgentData?.platform || navigator.platform || 'unbekanntes System';
+  const touch = navigator.maxTouchPoints > 0 ? 'Touch' : 'Desktop';
+  return {
+    device_id: browserDeviceId(),
+    device_name: `${platform} · ${touch} · ${window.screen?.width || '?'}x${window.screen?.height || '?'}`,
+    user_agent: navigator.userAgent || ''
+  };
+}
+
 function hasValue(value) {
   return ![undefined, null, '', 'Keine Angabe', 'Selber eintragen'].includes(value) && !(Array.isArray(value) && value.length === 0);
 }
@@ -1030,7 +1050,7 @@ function Login({ onLogin }) {
     try {
       const result = await api('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ employee_id: employeeId, password })
+        body: JSON.stringify({ employee_id: employeeId, password, ...browserDeviceInfo() })
       });
       if (result.status === 'password_change_required') {
         setPendingChange(result);
@@ -1048,7 +1068,7 @@ function Login({ onLogin }) {
     try {
       const result = await api('/api/auth/setup-first-admin', {
         method: 'POST',
-        body: JSON.stringify({ name: adminName, password: adminPassword })
+        body: JSON.stringify({ name: adminName, password: adminPassword, ...browserDeviceInfo() })
       });
       onLogin(result);
     } catch (err) {
@@ -1062,7 +1082,7 @@ function Login({ onLogin }) {
     try {
       const result = await api('/api/auth/set-password', {
         method: 'POST',
-        body: JSON.stringify({ token: pendingChange.token, new_password: newPassword })
+        body: JSON.stringify({ token: pendingChange.token, new_password: newPassword, ...browserDeviceInfo() })
       });
       onLogin(result);
     } catch (err) {
@@ -2087,6 +2107,7 @@ function DevicesView({ session, employee, onBack, onLogout }) {
 function AdminView({ session, employee, onBack, onLogout }) {
   const [employees, setEmployees] = useState([]);
   const [auditEvents, setAuditEvents] = useState([]);
+  const [loginEvents, setLoginEvents] = useState([]);
   const [privacy, setPrivacy] = useState(null);
   const [qualityRules, setQualityRules] = useState([]);
   const [cases, setCases] = useState([]);
@@ -2106,9 +2127,10 @@ function AdminView({ session, employee, onBack, onLogout }) {
   async function loadAdminData() {
     setError('');
     try {
-      const [employeeData, auditData, privacyData, caseData, announcementAdminData] = await Promise.all([
+      const [employeeData, auditData, loginData, privacyData, caseData, announcementAdminData] = await Promise.all([
         api('/api/admin/employees', {}, session.token),
         api('/api/admin/audit', {}, session.token),
+        api('/api/admin/login-events', {}, session.token),
         api('/api/admin/privacy', {}, session.token),
         api('/api/cases', {}, session.token),
         api('/api/admin/announcements', {}, session.token)
@@ -2116,6 +2138,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
       const qualityData = await api('/api/admin/quality-rules', {}, session.token).catch(() => ({ rules: [] }));
       setEmployees(employeeData.employees || []);
       setAuditEvents(auditData.events || []);
+      setLoginEvents(loginData.events || []);
       setPrivacy(privacyData);
       setQualityRules(qualityData.rules || []);
       setRetentionDays(privacyData.retention_days || 3650);
@@ -2561,6 +2584,33 @@ function AdminView({ session, employee, onBack, onLogout }) {
             <div className="audit-row" key={`${event.timestamp}-${index}`}>
               <strong>{event.action}</strong>
               <span>{event.timestamp} · {event.employee_name || 'System'} · {event.entity_type || '-'}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      <section className="work-panel">
+        <div className="section-head">
+          <h2>Login-Historie</h2>
+          <span>{loginEvents.length} Anmeldungen</span>
+        </div>
+        <div className="login-event-list">
+          {loginEvents.length === 0 ? (
+            <p className="muted">Noch keine Login-Daten vorhanden.</p>
+          ) : loginEvents.slice(0, 20).map((event, index) => (
+            <div className="login-event-row" key={`${event.timestamp}-${event.device_id}-${index}`}>
+              <div>
+                <strong>{event.employee_name || 'Unbekannter Account'}</strong>
+                <span>{event.timestamp} · {event.source || 'login'}</span>
+              </div>
+              <div>
+                <strong>{event.device_name || 'Unbekanntes Gerät'}</strong>
+                <span>{event.device_id || '-'}</span>
+              </div>
+              <div>
+                <strong>{event.ip_address || 'Keine IP'}</strong>
+                <span title={event.user_agent || ''}>{event.user_agent || 'Kein Browser-Agent'}</span>
+              </div>
             </div>
           ))}
         </div>
