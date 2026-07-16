@@ -12,6 +12,8 @@ import {
   Home,
   Lock,
   LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
   Printer,
   RotateCcw,
   Save,
@@ -2682,6 +2684,9 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const initialLocalDraft = loadLocalDraft(employee?.id);
   const [patient, setPatient] = useState(emptyPatient);
   const [protocolSection, setProtocolSection] = useState(initialSection);
+  const [protocolNavCollapsed, setProtocolNavCollapsed] = useState(
+    () => localStorage.getItem('nana_protocol_nav_collapsed') === 'true'
+  );
   const [xabcdeSection, setXabcdeSection] = useState('A');
   const [samplersSection, setSamplersSection] = useState('S1');
   const [opqrstSection, setOpqrstSection] = useState('O');
@@ -2718,6 +2723,14 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       witness: ''
     };
   });
+
+  function toggleProtocolNav() {
+    setProtocolNavCollapsed((collapsed) => {
+      const next = !collapsed;
+      localStorage.setItem('nana_protocol_nav_collapsed', String(next));
+      return next;
+    });
+  }
   const vitalwerte = patient.vitalwerte || {};
   const patientData = patient.patient || {};
   const isChild = patientData.patientengruppe === 'Kind';
@@ -4059,7 +4072,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   }
 
   return (
-    <main className="app-shell">
+    <main className={`app-shell${!standaloneRefusal ? ' protocol-shell' : ''}${protocolNavCollapsed ? ' protocol-nav-collapsed' : ''}`}>
       <header className="topbar">
         <div>
           <div className="app-name">NANA</div>
@@ -4089,7 +4102,18 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         </section>
       )}
 
-      {!standaloneRefusal && <section className="protocol-tabs">
+      {!standaloneRefusal && <nav className="protocol-tabs" aria-label="Protokollbereiche">
+        <button
+          type="button"
+          className="protocol-nav-toggle"
+          onClick={toggleProtocolNav}
+          aria-expanded={!protocolNavCollapsed}
+          aria-label={protocolNavCollapsed ? 'Seitennavigation ausklappen' : 'Seitennavigation einklappen'}
+          title={protocolNavCollapsed ? 'Navigation ausklappen' : 'Navigation einklappen'}
+        >
+          {protocolNavCollapsed ? <PanelLeftOpen size={20} /> : <PanelLeftClose size={20} />}
+          <span>Navigation</span>
+        </button>
         <button
           type="button"
           className={protocolSection === 'patient' ? 'active' : ''}
@@ -4167,7 +4191,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         >
           Dokumentation
         </button>
-      </section>}
+      </nav>}
 
       {protocolSection === 'patient' && <section className="work-panel patient-panel">
         <div className="section-head">

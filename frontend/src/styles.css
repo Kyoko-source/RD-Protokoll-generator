@@ -1091,24 +1091,66 @@ form button,
 }
 
 .protocol-tabs {
-  display: inline-flex;
-  flex-wrap: wrap;
+  position: fixed;
+  z-index: 40;
+  inset: 16px auto 16px 16px;
+  width: 220px;
+  display: flex;
+  flex-direction: column;
   gap: 8px;
   padding: 6px;
-  margin-bottom: 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.06);
+  overflow-y: auto;
+  border-radius: 16px;
+  background: rgba(12, 25, 48, 0.94);
   border: 1px solid rgba(255, 255, 255, 0.10);
+  box-shadow: 18px 0 42px rgba(0, 0, 0, 0.24);
+  backdrop-filter: blur(18px);
+  transition: width 180ms ease;
+}
+
+.protocol-shell {
+  padding-left: max(260px, calc((100vw - 1440px) / 2));
+  transition: padding-left 180ms ease;
+}
+
+.protocol-shell.protocol-nav-collapsed {
+  padding-left: 88px;
+}
+
+.protocol-nav-collapsed .protocol-tabs {
+  width: 54px;
 }
 
 .protocol-tabs button {
+  flex: 0 0 auto;
+  width: 100%;
   min-height: 42px;
   padding: 0 18px;
+  text-align: left;
+  white-space: nowrap;
   border-radius: 10px;
   color: rgba(239, 248, 255, 0.76);
   background: transparent;
   font-weight: 880;
   cursor: pointer;
+}
+
+.protocol-tabs .protocol-nav-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: rgba(239, 248, 255, 0.92);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.protocol-nav-collapsed .protocol-tabs button:not(.protocol-nav-toggle),
+.protocol-nav-collapsed .protocol-nav-toggle span {
+  display: none;
+}
+
+.protocol-nav-collapsed .protocol-tabs .protocol-nav-toggle {
+  justify-content: center;
+  padding: 0;
 }
 
 .protocol-tabs button.active {
@@ -2962,6 +3004,33 @@ legend {
 }
 
 @media (max-width: 880px) {
+  .protocol-shell,
+  .protocol-shell.protocol-nav-collapsed {
+    padding-left: clamp(16px, 4vw, 56px);
+  }
+
+  .protocol-tabs,
+  .protocol-nav-collapsed .protocol-tabs {
+    position: static;
+    width: 100%;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    margin-bottom: 16px;
+    overflow: visible;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .protocol-nav-collapsed .protocol-tabs button:not(.protocol-nav-toggle),
+  .protocol-nav-collapsed .protocol-nav-toggle span {
+    display: block;
+  }
+
+  .protocol-tabs .protocol-nav-toggle,
+  .protocol-nav-collapsed .protocol-tabs .protocol-nav-toggle {
+    display: none;
+  }
+
   .login-shell,
   .system-status,
   .offline-draft-box,
@@ -3051,11 +3120,6 @@ legend {
   .amls-final {
     align-items: stretch;
     flex-direction: column;
-  }
-
-  .protocol-tabs {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   .patient-type-grid {
