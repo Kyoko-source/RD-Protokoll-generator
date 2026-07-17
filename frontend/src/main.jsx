@@ -4277,35 +4277,38 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
   async function generateProtocol() {
     setError('');
-    setStatusText('Protokoll wird erstellt...');
-    setGeneratedProtocol('Protokoll wird erstellt...');
-    setProtocolSection('protokoll');
     const localProtocol = generateLocalProtocolText(patient);
+    if (!String(localProtocol || '').trim()) {
+      setGeneratedProtocol('');
+      setProtocolSection('protokoll');
+      setStatusText('');
+      setError('Es wurden noch keine protokollierbaren Daten eingegeben.');
+      return;
+    }
+
+    setGeneratedProtocol(localProtocol);
+    setProtocolSection('protokoll');
+    markActionFeedback('generate-protocol', 'Protokoll wurde erzeugt.');
+
+    const controller = new AbortController();
+    const timeout = window.setTimeout(() => controller.abort(), 3500);
     try {
       const result = await api('/api/protocol/preview', {
         method: 'POST',
-        body: JSON.stringify({ patient })
+        body: JSON.stringify({ patient }),
+        signal: controller.signal
       }, session.token);
       const protocolText = result.protocol_text || '';
       const nextProtocol = protocolContainsVitalStatuses(protocolText, patient) ? protocolText : localProtocol;
-      if (!String(nextProtocol || '').trim()) {
-        setGeneratedProtocol('');
-        setStatusText('');
-        setError('Es wurden noch keine protokollierbaren Daten eingegeben.');
-        return;
+      if (String(nextProtocol || '').trim()) {
+        setGeneratedProtocol(nextProtocol);
       }
-      setGeneratedProtocol(nextProtocol);
-      markActionFeedback('generate-protocol', nextProtocol === protocolText ? 'Protokoll wurde erzeugt.' : 'Protokoll wurde aus den aktuellen Formularwerten erzeugt.');
     } catch (err) {
-      if (localProtocol) {
-        setGeneratedProtocol(localProtocol);
-        setStatusText('Protokoll wurde lokal erzeugt. Backend bitte neu starten, damit PDF/Archiv wieder die aktuelle API nutzen.');
-        setError(err.message);
-      } else {
-        setGeneratedProtocol('');
-        setStatusText('');
-        setError(err.message);
+      if (err?.name !== 'AbortError') {
+        setStatusText('Protokoll wurde lokal erzeugt.');
       }
+    } finally {
+      window.clearTimeout(timeout);
     }
   }
 
