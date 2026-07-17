@@ -123,6 +123,10 @@ class LoginRequest(BaseModel):
     user_agent: str = ""
 
 
+class ReauthRequest(LoginRequest):
+    restore_shift: bool = True
+
+
 class PasswordChangeRequest(BaseModel):
     token: str
     new_password: str
@@ -1249,6 +1253,7 @@ def assess_protocol_quality(patient):
 
 def generate_protocol_text(patient):
     patient_data = patient.get("patient", {}) or {}
+    crew = patient.get("besatzung", {}) or {}
     vital = patient.get("vitalwerte", {})
     x = patient.get("xabcde", {})
     s = patient.get("samplers", {})
@@ -1266,6 +1271,13 @@ def generate_protocol_text(patient):
     text += f"Erstellt am {local_now().strftime('%d.%m.%Y um %H:%M:%S')} Uhr\n"
     text += "Enthält ausschließlich dokumentierte Angaben; vor Verwendung vollständig prüfen.\n\n"
     text += build_narrative_report(patient)
+
+    text += add_lines("BESATZUNG / SCHICHT", [
+        ("Dokumentation / Hauptnutzer", crew.get("verantwortlicher")),
+        ("Fahrer/in", crew.get("fahrer")),
+        ("Azubi", crew.get("azubi")),
+        ("Praktikant/in", crew.get("praktikant")),
+    ])
 
     pat = patient_data.get("pat", {}) or {}
     paediatrie = patient_data.get("paediatrie", {}) or {}
@@ -2042,6 +2054,27 @@ def login(payload: LoginRequest, request: Request):
     record_login_event(employee, payload, request, source="login")
     audit("api_login_success", employee=employee, details={"role": employee.get("role", "employee")})
     return {"status": "authenticated", "token": token, "employee": public_employee(employee)}
+
+
+@app.post("/api/auth/reauth")
+def reauth(payload: ReauthRequest, request: Request):
+    employee = find_employee(payload.employee_id)
+    if not employee:
+        audit("api_reauth_failed", details={"reason": "unknown_employee"})
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Schicht konnte nicht wiederhergestellt werden.")
+
+    if employee.get("must_change_password"):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bitte einmal vollständig mit dem Einmalpasswort anmelden.")
+
+    if not verify_password(payload.password, employee.get("password_hash")):
+        audit("api_reauth_failed", employee=employee, details={"reason": "wrong_password"})
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Passwort ist falsch.")
+
+    token = new_token()
+    sessions[token] = {"employee_id": employee["id"], "expires_at": expires_at(SESSION_MINUTES)}
+    record_login_event(employee, payload, request, source="reauth")
+    audit("api_reauth_success", employee=employee, details={"restore_shift": bool(payload.restore_shift)})
+    return {"status": "authenticated", "token": token, "employee": public_employee(employee), "restored": True}
 
 
 @app.post("/api/auth/setup-first-admin")

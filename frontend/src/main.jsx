@@ -505,6 +505,7 @@ function sinnhaftRows(patient) {
 }
 
 function generateLocalProtocolText(patient) {
+  const crew = patient.besatzung || {};
   const vital = patient.vitalwerte || {};
   const x = patient.xabcde || {};
   const s = patient.samplers || {};
@@ -517,6 +518,12 @@ function generateLocalProtocolText(patient) {
   text += '==================================================\n';
   text += `Lokal erzeugt am ${new Date().toLocaleString('de-DE')}\n`;
   text += 'Enthält ausschließlich dokumentierte Angaben; vor Verwendung vollständig prüfen.\n\n';
+  text += addProtocolBlock('BESATZUNG / SCHICHT', [
+    ['Dokumentation / Hauptnutzer', crew.verantwortlicher],
+    ['Fahrer/in', crew.fahrer],
+    ['Azubi', crew.azubi],
+    ['Praktikant/in', crew.praktikant],
+  ]);
   const symptom = symptomSummary(vital, s, o);
   text += addProtocolParagraph('EINSATZBERICHT', [
     hasValue(symptom)
@@ -801,6 +808,9 @@ function api(path, options = {}, token = '') {
     .then(async (response) => {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
+        if (response.status === 401) {
+          window.dispatchEvent(new CustomEvent('nana-session-expired', { detail: { message: data.detail || 'Sitzung abgelaufen.' } }));
+        }
         if (response.status === 404 && data.detail === 'Not Found') {
           throw new Error(`API-Endpunkt nicht gefunden: ${API_BASE || window.location.origin}${path}. Bitte NANA neu starten, damit Backend und App dieselbe Version nutzen.`);
         }
@@ -824,6 +834,9 @@ async function fileRequest(path, options = {}, token = '') {
   const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
+    if (response.status === 401) {
+      window.dispatchEvent(new CustomEvent('nana-session-expired', { detail: { message: data.detail || 'Sitzung abgelaufen.' } }));
+    }
     if (response.status === 404 && data.detail === 'Not Found') {
       throw new Error(`API-Endpunkt nicht gefunden: ${API_BASE || window.location.origin}${path}. Bitte NANA neu starten.`);
     }
@@ -1305,6 +1318,65 @@ function Login({ onLogin }) {
           </form>
         )}
 
+        {error && <div className="error-box">{error}</div>}
+      </section>
+    </main>
+  );
+}
+
+function ReauthLock({ lockedSession, onRestore, onSwitchUser }) {
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const employee = lockedSession?.employee || {};
+
+  async function submitReauth(event) {
+    event.preventDefault();
+    setError('');
+    try {
+      const result = await api('/api/auth/reauth', {
+        method: 'POST',
+        body: JSON.stringify({ employee_id: employee.id, password, restore_shift: true, ...browserDeviceInfo() })
+      });
+      onRestore(result);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <main className="login-shell">
+      <section className="brand-panel">
+        <div className="brand-mark">
+          <span>NANA</span>
+        </div>
+        <p>Schicht gesperrt. Der Entwurf bleibt erhalten und wird nach Passwortprüfung wieder geöffnet.</p>
+      </section>
+
+      <section className="login-panel reauth-panel">
+        <div className="panel-title">
+          <Lock size={22} />
+          <h1>Schicht wiederherstellen</h1>
+        </div>
+        <div className="reauth-user">
+          <span className="user-avatar">{(employee.name || 'P').trim().charAt(0).toUpperCase()}</span>
+          <div>
+            <strong>{employee.name || 'Mitarbeiter'}</strong>
+            <span>{qualificationLabel(employee.qualification)}</span>
+          </div>
+        </div>
+        <form onSubmit={submitReauth}>
+          <label>
+            Passwort
+            <input
+              type="password"
+              value={password}
+              onChange={(event) => setPassword(event.target.value)}
+              autoFocus
+            />
+          </label>
+          <button type="submit">Schicht wiederherstellen</button>
+        </form>
+        <button type="button" className="secondary-login-action" onClick={onSwitchUser}>Benutzer wechseln</button>
         {error && <div className="error-box">{error}</div>}
       </section>
     </main>
@@ -3230,8 +3302,19 @@ const emptyPatient = {
   transport: {},
   einsatz: {},
   anfahrt: {},
+  besatzung: { verantwortlicher: '', fahrer: '', azubi: '', praktikant: '' },
   uebergabe: {}
 };
+
+function patientWithCrewDefaults(patient, employee) {
+  const nextPatient = { ...emptyPatient, ...(patient || {}) };
+  nextPatient.besatzung = {
+    ...(emptyPatient.besatzung || {}),
+    ...(nextPatient.besatzung || {}),
+    verantwortlicher: nextPatient.besatzung?.verantwortlicher || employee?.name || ''
+  };
+  return nextPatient;
+}
 
 function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSync, initialSection = 'patient', standaloneRefusal = false }) {
   const initialLocalDraft = loadLocalDraft(employee?.id);
@@ -3305,6 +3388,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   const pediatricGcsComplete = pediatricGcsValues.every((value) => value > 0);
   const pediatricGcsTotal = pediatricGcsComplete ? pediatricGcsValues.reduce((sum, value) => sum + value, 0) : null;
   const xabcde = patient.xabcde || {};
+  const crew = patient.besatzung || {};
   const samplers = patient.samplers || {};
   const opqrst = patient.opqrst || {};
   const psyche = patient.psyche || {};
@@ -3409,7 +3493,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   useEffect(() => {
     api('/api/draft', {}, session.token)
       .then((data) => {
-        setPatient({ ...emptyPatient, ...(data.patient || {}) });
+        setPatient(patientWithCrewDefaults(data.patient, employee));
         setDraftReady(true);
         const syncTime = data.updated_at || new Date().toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' });
         onSync?.(syncTime);
@@ -3417,7 +3501,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       .catch((err) => {
         const fallback = loadLocalDraft(employee?.id);
         if (fallback?.patient) {
-          setPatient({ ...emptyPatient, ...fallback.patient });
+          setPatient(patientWithCrewDefaults(fallback.patient, employee));
           setLocalDraft(fallback);
           setLocalDraftDecisionPending(false);
           setStatusText('Backend nicht erreichbar. Lokaler Entwurf wurde geladen.');
@@ -3451,7 +3535,7 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   function restoreLocalDraft() {
     const draft = loadLocalDraft(employee?.id);
     if (draft?.patient) {
-      setPatient({ ...emptyPatient, ...draft.patient });
+      setPatient(patientWithCrewDefaults(draft.patient, employee));
       setLocalDraft(draft);
       setLocalDraftDecisionPending(false);
       setStatusText(`Lokaler Entwurf wiederhergestellt: ${new Date(draft.updatedAt).toLocaleString('de-DE')}`);
@@ -3480,6 +3564,16 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       ...current,
       patient: {
         ...(current.patient || {}),
+        [key]: value
+      }
+    }));
+  }
+
+  function updateCrew(key, value) {
+    setPatient((current) => ({
+      ...current,
+      besatzung: {
+        ...(current.besatzung || {}),
         [key]: value
       }
     }));
@@ -4791,6 +4885,31 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
           <span>Patientengruppe und Stammdaten</span>
         </div>
 
+        <section className="crew-box">
+          <div className="section-head compact-head">
+            <h3>Besatzung</h3>
+            <span>für Protokoll und Archiv</span>
+          </div>
+          <div className="form-grid crew-grid">
+            <label>
+              Dokumentation / Hauptnutzer
+              <input value={crew.verantwortlicher || employee?.name || ''} onChange={(event) => updateCrew('verantwortlicher', event.target.value)} />
+            </label>
+            <label>
+              Fahrer/in
+              <input value={crew.fahrer || ''} onChange={(event) => updateCrew('fahrer', event.target.value)} placeholder="Name Fahrer/in" />
+            </label>
+            <label>
+              Azubi
+              <input value={crew.azubi || ''} onChange={(event) => updateCrew('azubi', event.target.value)} placeholder="optional" />
+            </label>
+            <label>
+              Praktikant/in
+              <input value={crew.praktikant || ''} onChange={(event) => updateCrew('praktikant', event.target.value)} placeholder="optional" />
+            </label>
+          </div>
+        </section>
+
         <div className="patient-type-grid" role="group" aria-label="Patientengruppe">
           <button
             type="button"
@@ -5942,6 +6061,10 @@ function App() {
     const raw = localStorage.getItem('nana_session');
     return raw ? JSON.parse(raw) : null;
   });
+  const [lockedSession, setLockedSession] = useState(() => {
+    const raw = localStorage.getItem('nana_locked_session');
+    return raw ? JSON.parse(raw) : null;
+  });
   const [pendingSession, setPendingSession] = useState(null);
   const [online, setOnline] = useState(() => navigator.onLine);
   const [backendOnline, setBackendOnline] = useState(true);
@@ -5952,11 +6075,40 @@ function App() {
   function handleLogin(result) {
     const nextSession = { token: result.token, employee: result.employee, lastActivity: Date.now() };
     localStorage.setItem('nana_session', JSON.stringify(nextSession));
+    localStorage.removeItem('nana_locked_session');
+    setLockedSession(null);
     setPendingSession(nextSession);
+  }
+
+  function handleRestoreSession(result) {
+    const nextSession = { token: result.token, employee: result.employee, lastActivity: Date.now() };
+    localStorage.setItem('nana_session', JSON.stringify(nextSession));
+    localStorage.removeItem('nana_locked_session');
+    setLockedSession(null);
+    setSession(nextSession);
+  }
+
+  function lockCurrentSession(currentSession = session) {
+    if (!currentSession?.employee) {
+      handleLogout();
+      return;
+    }
+    const nextLocked = {
+      employee: currentSession.employee,
+      lockedAt: Date.now(),
+      lastActivity: currentSession.lastActivity || Date.now()
+    };
+    localStorage.setItem('nana_locked_session', JSON.stringify(nextLocked));
+    localStorage.removeItem('nana_session');
+    setLockedSession(nextLocked);
+    setPendingSession(null);
+    setSession(null);
   }
 
   function handleLogout() {
     localStorage.removeItem('nana_session');
+    localStorage.removeItem('nana_locked_session');
+    setLockedSession(null);
     setPendingSession(null);
     setSession(null);
   }
@@ -5981,8 +6133,7 @@ function App() {
       const raw = localStorage.getItem('nana_session');
       const current = raw ? JSON.parse(raw) : null;
       if (!current?.lastActivity || Date.now() - current.lastActivity > SESSION_TIMEOUT_MS) {
-        api('/api/auth/logout', { method: 'POST' }, current?.token || '').catch(() => {});
-        handleLogout();
+        lockCurrentSession(current || session);
       }
     }
 
@@ -5993,6 +6144,16 @@ function App() {
       events.forEach((eventName) => window.removeEventListener(eventName, markActivity));
       window.clearInterval(interval);
     };
+  }, [session]);
+
+  useEffect(() => {
+    function handleSessionExpired() {
+      if (session?.employee) {
+        lockCurrentSession(session);
+      }
+    }
+    window.addEventListener('nana-session-expired', handleSessionExpired);
+    return () => window.removeEventListener('nana-session-expired', handleSessionExpired);
   }, [session]);
 
   useEffect(() => {
@@ -6051,6 +6212,10 @@ function App() {
 
   if (pendingSession) {
     return <LoginTransition session={pendingSession} onComplete={completeLoginTransition} />;
+  }
+
+  if (lockedSession) {
+    return <ReauthLock lockedSession={lockedSession} onRestore={handleRestoreSession} onSwitchUser={handleLogout} />;
   }
 
   return session

@@ -77,6 +77,47 @@ button {
   padding: 28px;
 }
 
+.reauth-panel {
+  align-self: center;
+}
+
+.reauth-user {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.reauth-user div {
+  display: grid;
+  gap: 2px;
+}
+
+.reauth-user strong {
+  color: #f8fbff;
+}
+
+.reauth-user span:not(.user-avatar) {
+  color: rgba(235, 244, 255, 0.66);
+  font-weight: 760;
+}
+
+.secondary-login-action {
+  width: 100%;
+  min-height: 42px;
+  margin-top: 12px;
+  border-radius: 12px;
+  color: rgba(239, 248, 255, 0.84);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 850;
+  cursor: pointer;
+}
+
 .panel-title {
   display: flex;
   align-items: center;
@@ -817,6 +858,24 @@ form button,
   border: 1px solid rgba(255, 255, 255, 0.12);
   font-weight: 850;
   cursor: pointer;
+}
+
+.crew-box {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 18px;
+  padding: 16px;
+  border-radius: 16px;
+  background: rgba(4, 12, 24, 0.28);
+  border: 1px solid rgba(94, 234, 212, 0.16);
+}
+
+.crew-box .compact-head {
+  margin-bottom: 0;
+}
+
+.crew-grid {
+  grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
 .topbar {
@@ -3638,6 +3697,7 @@ legend {
   .quality-summary,
   .rules-grid,
   .form-grid,
+  .crew-grid,
   .handover-layout,
   .approach-layout,
   .vital-pair-grid,
