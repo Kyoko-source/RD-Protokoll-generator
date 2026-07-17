@@ -1043,6 +1043,7 @@ function UserMenu({ session, employee, onLogout }) {
               <Megaphone size={17} /><span>Patch Notes</span>{hasUnseenPatch && <em>Neu</em>}
             </button>
             <button type="button" className={activePanel === 'planned' ? 'active' : ''} onClick={() => loadAnnouncements('planned')}><Wrench size={17} /><span>Geplant</span></button>
+            <button type="button" className={activePanel === 'privacy' ? 'active' : ''} onClick={() => loadAnnouncements('privacy')}><ShieldCheck size={17} /><span>Datenschutz</span></button>
             <button type="button" className={activePanel === 'feedback' ? 'active' : ''} onClick={() => loadAnnouncements('feedback')}><MessageSquare size={17} /><span>Feedback</span></button>
           </div>
           {error && <div className="error-box compact-box">{error}</div>}
@@ -1059,6 +1060,73 @@ function UserMenu({ session, employee, onLogout }) {
                   <p>{item.body}</p>
                 </article>
               ))}
+            </div>
+          )}
+
+          {activePanel === 'privacy' && (
+            <div className="privacy-concept">
+              <article className="privacy-concept-hero">
+                <strong>Datenschutzkonzept NANA</strong>
+                <span>Arbeitsstand fuer Betrieb, Pilotierung und Freigabe durch Datenschutzbeauftragte/Träger.</span>
+              </article>
+              <div className="privacy-concept-grid">
+                <article>
+                  <h3>1. Zweck und Geltungsbereich</h3>
+                  <p>NANA dient der rettungsdienstlichen Einsatzdokumentation, Nachbearbeitung, Qualitätssicherung und dem kontrollierten Export von Einsatzprotokollen. Das Konzept gilt fuer Web-App, Backend, Datenbank, PDF-/Druckfunktionen, Leitstellenimport, Kartenlinks, Benutzerverwaltung und Auditierung.</p>
+                </article>
+                <article>
+                  <h3>2. Verantwortlichkeiten</h3>
+                  <p>Der jeweilige Betreiber/Träger ist Verantwortlicher im Sinne der DSGVO. NANA verarbeitet Daten nur als eingesetztes Werkzeug. Administratoren verwalten Konten, Rollen, Aufbewahrung und technische Einstellungen; Einsatzkräfte dokumentieren nur einsatzbezogene Daten.</p>
+                </article>
+                <article>
+                  <h3>3. Datenkategorien</h3>
+                  <p>Verarbeitet werden Einsatzdaten, medizinische Gesundheitsdaten, Vitalwerte, Maßnahmen, Übergabeinformationen, Besatzung, technische Sitzungsdaten, Auditereignisse und Exportnachweise. Patientennamen und private Adressdaten bleiben im Pilotbetrieb bewusst deaktiviert bzw. werden serverseitig gefiltert.</p>
+                </article>
+                <article>
+                  <h3>4. Rechtsgrundlagen</h3>
+                  <p>Die konkrete Rechtsgrundlage ist vom Betreiber festzulegen. Relevante Prüfanker sind DSGVO Art. 5, Art. 6, Art. 9 fuer Gesundheitsdaten, Art. 25 Datenschutz durch Technikgestaltung und Art. 32 Sicherheit der Verarbeitung. Eine medizinisch-organisatorische Freigabe ist vor Wirkbetrieb erforderlich.</p>
+                </article>
+                <article>
+                  <h3>5. Datenminimierung</h3>
+                  <p>Es werden nur Daten erhoben, die fuer Dokumentation, Patientensicherheit, Übergabe, Nachvollziehbarkeit oder rechtliche Pflichten erforderlich sind. Kartenlinks erhalten nur Einsatzort oder Koordinaten, keine Patientendaten, Einsatznummern oder medizinischen Angaben.</p>
+                </article>
+                <article>
+                  <h3>6. Zugriff und Rollen</h3>
+                  <p>Der Zugriff erfolgt personenbezogen mit Passwort. Rollen trennen normale Mitarbeitende, Azubis, BuFDi/Praktikanten und Admins. Transportführerwechsel verlangt Passwort des neuen TF, damit die aktive Session und Verantwortlichkeit nachvollziehbar wechseln.</p>
+                </article>
+                <article>
+                  <h3>7. Technische Maßnahmen</h3>
+                  <p>Patienten- und Protokolldaten werden serverseitig verschlüsselt gespeichert. Passwörter werden gehasht, Sitzungen laufen zeitlich ab, Reauthentifizierung stellt die Schicht wieder her. HTTPS, Server-Hardening, Backups, Updates und Zugriffsschutz sind verpflichtende Betriebsmaßnahmen.</p>
+                </article>
+                <article>
+                  <h3>8. Organisatorische Maßnahmen</h3>
+                  <p>Benutzer werden nur durch berechtigte Admins angelegt. Konten ausscheidender Personen sind zu deaktivieren. Exporte und Ausdrucke duerfen nur dienstlich genutzt werden. Schulung, Berechtigungskonzept, Meldewege und Verantwortlichkeiten muessen dokumentiert sein.</p>
+                </article>
+                <article>
+                  <h3>9. Schnittstellen</h3>
+                  <p>Leitstellenimporte sollen nur Einsatznummer, Stichwort, Straße, Hausnummer, Ort und Koordinaten enthalten. Eingehende Einsätze werden zuerst als wartender Einsatz angezeigt und erst nach bewusster Übernahme in den Entwurf geschrieben.</p>
+                </article>
+                <article>
+                  <h3>10. Protokollierung</h3>
+                  <p>Anmeldung, Reauthentifizierung, Import, Export, Druck, Fallabschluss und administrative Aktionen werden auditierbar protokolliert. Auditdaten enthalten notwendige Metadaten und sind vor unberechtigtem Zugriff zu schützen.</p>
+                </article>
+                <article>
+                  <h3>11. Aufbewahrung und Löschung</h3>
+                  <p>Aufbewahrungsfristen werden durch den Betreiber nach gesetzlichen und organisatorischen Vorgaben festgelegt. NANA unterstützt Retention-Einstellungen, Anonymisierung, Löschmarkierung und Bereinigung abgelaufener Fälle.</p>
+                </article>
+                <article>
+                  <h3>12. Betroffenenrechte</h3>
+                  <p>Auskunft, Berichtigung, Löschung, Einschränkung und Nachvollziehbarkeit muessen über Betreiberprozesse abgebildet werden. Medizinische Dokumentationspflichten und gesetzliche Aufbewahrung koennen Löschung im Einzelfall begrenzen.</p>
+                </article>
+                <article>
+                  <h3>13. Datenschutz-Folgenabschätzung</h3>
+                  <p>Wegen Gesundheitsdaten, Einsatzkontext und mobiler Nutzung ist vor produktivem Betrieb eine DSFA zu prüfen und voraussichtlich durchzuführen. Risiken: Fehlzugriff, Geräteverlust, falscher Export, externe Kartendienste, unklare Schnittstelleninhalte.</p>
+                </article>
+                <article>
+                  <h3>14. Freigabepunkte</h3>
+                  <p>Vor Echtbetrieb offen: Betreiber festlegen, AV-Verträge prüfen, TOMs abnehmen, Löschfristen bestätigen, Leitstellen-Schnittstelle vertraglich beschreiben, Kartenanbieter bewerten, Notfall-/Backupkonzept testen und Datenschutzinformation erstellen.</p>
+                </article>
+              </div>
             </div>
           )}
 

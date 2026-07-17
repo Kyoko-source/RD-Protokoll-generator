@@ -1041,7 +1041,7 @@ form button,
   position: absolute;
   right: 0;
   top: calc(100% + 10px);
-  width: min(440px, calc(100vw - 28px));
+  width: min(760px, calc(100vw - 28px));
   max-height: 76vh;
   overflow: auto;
   padding: 10px;
@@ -1078,7 +1078,7 @@ form button,
 
 .user-dropdown-tabs {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 4px;
   padding: 4px;
   margin-bottom: 10px;
@@ -1209,6 +1209,56 @@ form button,
 .compact-box {
   margin: 0 0 10px;
   padding: 10px;
+}
+
+.privacy-concept {
+  display: grid;
+  gap: 10px;
+}
+
+.privacy-concept-hero {
+  display: grid;
+  gap: 5px;
+  padding: 15px;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(15, 118, 110, 0.24), rgba(37, 99, 235, 0.12));
+  border: 1px solid rgba(94, 234, 212, 0.18);
+}
+
+.privacy-concept-hero strong {
+  color: #f8ffff;
+  font-size: 1.02rem;
+}
+
+.privacy-concept-hero span {
+  color: rgba(226, 236, 247, 0.72);
+  line-height: 1.4;
+}
+
+.privacy-concept-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.privacy-concept-grid article {
+  padding: 13px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.038);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.privacy-concept-grid h3 {
+  margin: 0 0 6px;
+  color: #dffcf8;
+  font-size: 0.9rem;
+}
+
+.privacy-concept-grid p {
+  margin: 0;
+  color: rgba(239, 248, 255, 0.84);
+  line-height: 1.45;
+  font-size: 0.84rem;
 }
 
 .user-dropdown-footer {
@@ -3771,6 +3821,7 @@ legend {
   .status-band,
   .dispatch-alert,
   .dispatch-alert-grid,
+  .privacy-concept-grid,
   .tile-grid,
   .quality-box,
   .quality-overview,
