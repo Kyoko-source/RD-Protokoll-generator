@@ -55,10 +55,31 @@ PASSWORD_CHANGE_MINUTES = 10
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 NANA_ENV = os.getenv("NANA_ENV", "development").strip().lower()
+NANA_RELEASE_SHA = os.getenv("NANA_RELEASE_SHA", "local").strip() or "local"
+NANA_RELEASE_DATE = os.getenv("NANA_RELEASE_DATE", "").strip()
 
 
 def production_mode():
     return NANA_ENV in {"production", "prod"}
+
+
+def release_datetime_label():
+    if NANA_RELEASE_DATE and NANA_RELEASE_DATE != "unknown":
+        try:
+            parsed = datetime.fromisoformat(NANA_RELEASE_DATE.replace("Z", "+00:00"))
+            return parsed.astimezone(APP_TIMEZONE).strftime("%d.%m.%Y %H:%M")
+        except ValueError:
+            return NANA_RELEASE_DATE
+    return local_now().strftime("%d.%m.%Y %H:%M")
+
+
+def release_patch_note_draft():
+    release_label = NANA_RELEASE_SHA if NANA_RELEASE_SHA not in {"", "local"} else "lokaler Build"
+    return {
+        "title": f"Update {release_label}",
+        "body": "Neue Version wurde auf dem Server bereitgestellt. Bitte die wichtigsten Änderungen ergänzen.",
+        "published_at": release_datetime_label(),
+    }
 
 
 def configured_cors_origins():
@@ -2067,6 +2088,17 @@ def admin_announcements(employee=Depends(require_admin)):
         "patch_notes": [public_announcement_item(item) for item in store.get("patch_notes", [])],
         "planned_updates": [public_announcement_item(item) for item in store.get("planned_updates", [])],
         "feedback": [public_feedback_item(item, include_identity=True) for item in store.get("feedback", [])],
+    }
+
+
+@app.get("/api/admin/release")
+def admin_release(employee=Depends(require_admin)):
+    draft = release_patch_note_draft()
+    return {
+        "sha": clean_text(NANA_RELEASE_SHA, 80),
+        "deployed_at": clean_text(NANA_RELEASE_DATE, 80),
+        "label": clean_text(draft["published_at"], 80),
+        "patch_note": draft,
     }
 
 

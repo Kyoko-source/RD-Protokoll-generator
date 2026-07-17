@@ -2189,6 +2189,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [qualityRules, setQualityRules] = useState([]);
   const [cases, setCases] = useState([]);
   const [announcementData, setAnnouncementData] = useState({ patch_notes: [], planned_updates: [], feedback: [] });
+  const [releaseInfo, setReleaseInfo] = useState(null);
   const [patchDraft, setPatchDraft] = useState({ title: '', body: '', published_at: '' });
   const [plannedDraft, setPlannedDraft] = useState({ title: '', body: '', published_at: '' });
   const [feedbackAnswers, setFeedbackAnswers] = useState({});
@@ -2213,13 +2214,14 @@ function AdminView({ session, employee, onBack, onLogout }) {
   async function loadAdminData() {
     setError('');
     try {
-      const [employeeData, auditData, loginData, privacyData, caseData, announcementAdminData] = await Promise.all([
+      const [employeeData, auditData, loginData, privacyData, caseData, announcementAdminData, releaseData] = await Promise.all([
         api('/api/admin/employees', {}, session.token),
         api('/api/admin/audit', {}, session.token),
         api('/api/admin/login-events', {}, session.token),
         api('/api/admin/privacy', {}, session.token),
         api('/api/cases', {}, session.token),
-        api('/api/admin/announcements', {}, session.token)
+        api('/api/admin/announcements', {}, session.token),
+        api('/api/admin/release', {}, session.token).catch(() => null)
       ]);
       const qualityData = await api('/api/admin/quality-rules', {}, session.token).catch(() => ({ rules: [] }));
       setEmployees(employeeData.employees || []);
@@ -2230,6 +2232,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
       setRetentionDays(privacyData.retention_days || 3650);
       setCases(caseData.cases || []);
       setAnnouncementData(announcementAdminData);
+      setReleaseInfo(releaseData);
       setFeedbackAnswers(Object.fromEntries((announcementAdminData.feedback || []).map((item) => [item.id, item.answer || ''])));
     } catch (err) {
       setError(err.message);
@@ -2364,6 +2367,26 @@ function AdminView({ session, employee, onBack, onLogout }) {
     }));
     if (kind === 'patch_notes') setPatchDraft({ title: '', body: '', published_at: '' });
     if (kind === 'planned_updates') setPlannedDraft({ title: '', body: '', published_at: '' });
+  }
+
+  function addDeployPatchNote() {
+    const draft = releaseInfo?.patch_note;
+    if (!draft) {
+      setError('Keine Deploy-Informationen verfügbar.');
+      return;
+    }
+    const exists = (announcementData.patch_notes || []).some((item) => item.title === draft.title);
+    if (exists) {
+      setPatchDraft(draft);
+      setStatusText('Patch Note für dieses Deploy ist bereits in der Liste. Entwurf wurde in die Felder übernommen.');
+      return;
+    }
+    setAnnouncementData((current) => ({
+      ...current,
+      patch_notes: [draft, ...(current.patch_notes || [])]
+    }));
+    setPatchDraft(draft);
+    setStatusText('Patch Note aus aktuellem Deploy vorbereitet. Text bitte ergänzen und speichern.');
   }
 
   function removeAnnouncement(kind, index) {
@@ -2543,6 +2566,13 @@ function AdminView({ session, employee, onBack, onLogout }) {
         <div className="admin-announcement-grid">
           <article>
             <h3>Patch Note hinzufügen</h3>
+            <div className="deploy-note-box">
+              <div>
+                <strong>Aktuelles Deploy</strong>
+                <span>{releaseInfo?.sha ? `${releaseInfo.sha} · ${releaseInfo.label || 'Zeit unbekannt'}` : 'Release-Stand wird geladen'}</span>
+              </div>
+              <button type="button" onClick={addDeployPatchNote}>Deploy übernehmen</button>
+            </div>
             <div className="inline-form announcement-form">
               <input value={patchDraft.published_at} onChange={(event) => setPatchDraft({ ...patchDraft, published_at: event.target.value })} placeholder="Datum/Uhrzeit, z.B. 14.07.2026 22:30" />
               <input value={patchDraft.title} onChange={(event) => setPatchDraft({ ...patchDraft, title: event.target.value })} placeholder="Titel" />

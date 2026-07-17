@@ -3,6 +3,9 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+      args:
+        NANA_RELEASE_SHA: ${NANA_RELEASE_SHA:-local}
+        NANA_RELEASE_DATE: ${NANA_RELEASE_DATE:-unknown}
     restart: unless-stopped
     env_file:
       - ./env.production
