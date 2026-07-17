@@ -410,8 +410,14 @@ function actionLines(measures) {
   const timeline = Array.isArray(measures.timeline) ? measures.timeline : [];
   const medication = Array.isArray(measures.medikation) ? measures.medikation : [];
   return [
-    ...timeline.map((item) => `${item.zeit || ''} - ${item.massnahme || ''}`.trim()),
-    ...medication.map((item) => `${item.zeit || ''} - ${item.medikament || ''} ${item.dosis || ''} ${item.weg || ''}`.trim())
+    ...timeline.map((item) => {
+      const row = item || {};
+      return `${row.zeit || ''} - ${row.massnahme || ''}`.trim();
+    }),
+    ...medication.map((item) => {
+      const row = item || {};
+      return `${row.zeit || ''} - ${row.medikament || row.name || ''} ${row.dosis || ''} ${row.weg || ''}`.trim();
+    })
   ].filter(hasValue);
 }
 
@@ -4277,18 +4283,23 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
   async function generateProtocol() {
     setError('');
-    const localProtocol = generateLocalProtocolText(patient);
-    if (!String(localProtocol || '').trim()) {
-      setGeneratedProtocol('');
-      setProtocolSection('protokoll');
-      setStatusText('');
-      setError('Es wurden noch keine protokollierbaren Daten eingegeben.');
-      return;
+    setProtocolSection('protokoll');
+
+    let localProtocol = '';
+    let localError = null;
+    try {
+      localProtocol = generateLocalProtocolText(patient);
+    } catch (err) {
+      localError = err;
     }
 
-    setGeneratedProtocol(localProtocol);
-    setProtocolSection('protokoll');
-    markActionFeedback('generate-protocol', 'Protokoll wurde erzeugt.');
+    if (String(localProtocol || '').trim()) {
+      setGeneratedProtocol(localProtocol);
+      markActionFeedback('generate-protocol', 'Protokoll wurde erzeugt.');
+    } else {
+      setGeneratedProtocol('Protokoll wird erstellt...');
+      setStatusText('Protokoll wird erstellt...');
+    }
 
     const controller = new AbortController();
     const timeout = window.setTimeout(() => controller.abort(), 3500);
@@ -4302,10 +4313,15 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       const nextProtocol = protocolContainsVitalStatuses(protocolText, patient) ? protocolText : localProtocol;
       if (String(nextProtocol || '').trim()) {
         setGeneratedProtocol(nextProtocol);
+        markActionFeedback('generate-protocol', nextProtocol === protocolText ? 'Protokoll wurde erzeugt.' : 'Protokoll wurde aus den aktuellen Formularwerten erzeugt.');
       }
     } catch (err) {
-      if (err?.name !== 'AbortError') {
+      if (localProtocol) {
         setStatusText('Protokoll wurde lokal erzeugt.');
+      } else {
+        setGeneratedProtocol('');
+        setStatusText('');
+        setError(localError ? `Lokale Vorschau fehlgeschlagen: ${localError.message || localError}` : err.message);
       }
     } finally {
       window.clearTimeout(timeout);
