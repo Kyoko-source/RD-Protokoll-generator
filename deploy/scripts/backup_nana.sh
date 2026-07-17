@@ -9,6 +9,13 @@ NANA_REQUIRE_ENCRYPTED_BACKUPS="${NANA_REQUIRE_ENCRYPTED_BACKUPS:-0}"
 
 cd "$APP_DIR"
 
+if [[ -f deploy/backup.env ]]; then
+  set -a
+  # shellcheck disable=SC1091
+  source deploy/backup.env
+  set +a
+fi
+
 mkdir -p "$BACKUP_DIR"
 chmod 700 "$BACKUP_DIR"
 

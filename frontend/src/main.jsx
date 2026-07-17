@@ -1364,7 +1364,7 @@ function Login({ onLogin }) {
               <input
                 type="password"
                 value={newPassword}
-                minLength={8}
+                minLength={12}
                 onChange={(event) => setNewPassword(event.target.value)}
                 autoFocus
               />
@@ -1388,7 +1388,7 @@ function Login({ onLogin }) {
               <input
                 type="password"
                 value={adminPassword}
-                minLength={8}
+                minLength={12}
                 onChange={(event) => setAdminPassword(event.target.value)}
               />
             </label>
@@ -1573,16 +1573,22 @@ function ApproachView({ session, employee, onBack, onLogout }) {
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
   const [draftSource, setDraftSource] = useState(null);
+  const [externalMapsEnabled, setExternalMapsEnabled] = useState(false);
   const [error, setError] = useState('');
   const links = approachLinks(location);
   const hasLocation = Boolean(location.trim());
-  const linkClass = hasLocation ? 'approach-link' : 'approach-link disabled';
+  const linksEnabled = hasLocation && externalMapsEnabled;
+  const linkClass = linksEnabled ? 'approach-link' : 'approach-link disabled';
 
   useEffect(() => {
     let cancelled = false;
-    api('/api/draft', {}, session.token)
-      .then((data) => {
+    Promise.all([
+      api('/api/draft', {}, session.token),
+      api('/api/privacy/settings', {}, session.token).catch(() => ({ external_maps_enabled: false }))
+    ])
+      .then(([data, settings]) => {
         if (cancelled) return;
+        setExternalMapsEnabled(Boolean(settings.external_maps_enabled));
         const nextLocation = approachLocationFromDraft(data.patient);
         const summary = approachSummaryFromDraft(data.patient);
         if (nextLocation && !location) setLocation(nextLocation);
@@ -1662,22 +1668,27 @@ function ApproachView({ session, employee, onBack, onLogout }) {
           </div>
         </div>
         <div className="approach-actions">
-          <a className={linkClass} href={hasLocation ? links.apple : undefined} target="_blank" rel="noreferrer">
+          <a className={linkClass} href={linksEnabled ? links.apple : undefined} target="_blank" rel="noreferrer">
             Apple Karten
           </a>
-          <a className={linkClass} href={hasLocation ? links.google : undefined} target="_blank" rel="noreferrer">
+          <a className={linkClass} href={linksEnabled ? links.google : undefined} target="_blank" rel="noreferrer">
             Google Maps
           </a>
-          <a className={linkClass} href={hasLocation ? links.streetView : undefined} target="_blank" rel="noreferrer">
+          <a className={linkClass} href={linksEnabled ? links.streetView : undefined} target="_blank" rel="noreferrer">
             Street View
           </a>
-          <a className={linkClass} href={hasLocation ? links.osm : undefined} target="_blank" rel="noreferrer">
+          <a className={linkClass} href={linksEnabled ? links.osm : undefined} target="_blank" rel="noreferrer">
             OpenStreetMap
           </a>
-          <a className={linkClass} href={hasLocation ? links.maxspeed : undefined} target="_blank" rel="noreferrer">
+          <a className={linkClass} href={linksEnabled ? links.maxspeed : undefined} target="_blank" rel="noreferrer">
             Tempolimit prüfen
           </a>
         </div>
+        {!externalMapsEnabled && (
+          <div className="notice-box">
+            Externe Kartendienste sind durch den Admin deaktiviert. Dadurch werden keine Einsatzorte an Apple, Google, OpenStreetMap oder Overpass übertragen.
+          </div>
+        )}
         <div className="notice-box">
           Beim Öffnen eines externen Kartendienstes wird nur der Einsatzort bzw. die Koordinate übergeben. Keine Patientendaten, Einsatznummern oder medizinischen Angaben mitsenden.
         </div>
@@ -2649,6 +2660,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [newQualification, setNewQualification] = useState('');
   const [retentionDays, setRetentionDays] = useState(3650);
   const [securityLogRetentionDays, setSecurityLogRetentionDays] = useState(180);
+  const [externalMapsEnabled, setExternalMapsEnabled] = useState(false);
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
@@ -2682,6 +2694,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
       setQualityRules(qualityData.rules || []);
       setRetentionDays(privacyData.retention_days || 3650);
       setSecurityLogRetentionDays(privacyData.security_log_retention_days || 180);
+      setExternalMapsEnabled(Boolean(privacyData.external_maps_enabled));
       setCases(caseData.cases || []);
       setAnnouncementData(announcementAdminData);
       setReleaseInfo(releaseData);
@@ -2762,7 +2775,8 @@ function AdminView({ session, employee, onBack, onLogout }) {
         method: 'PUT',
         body: JSON.stringify({
           retention_days: Number(retentionDays),
-          security_log_retention_days: Number(securityLogRetentionDays)
+          security_log_retention_days: Number(securityLogRetentionDays),
+          external_maps_enabled: externalMapsEnabled
         })
       }, session.token);
       setStatusText(`Aufbewahrung gesetzt: ${result.retention_days} Tage, Logs ${result.security_log_retention_days} Tage.`);
@@ -3004,6 +3018,10 @@ function AdminView({ session, employee, onBack, onLogout }) {
               <strong>Abgelaufene Fälle</strong>
               <span>{privacy?.expired_cases || 0} nach Aufbewahrungsfrist fällig</span>
             </div>
+            <div>
+              <strong>Externe Karten</strong>
+              <span>{privacy?.external_maps_enabled ? 'aktiviert' : 'deaktiviert'}</span>
+            </div>
           </div>
           <div className="inline-form">
             <label>
@@ -3013,6 +3031,14 @@ function AdminView({ session, employee, onBack, onLogout }) {
             <label>
               Sicherheitslogs
               <input value={securityLogRetentionDays} onChange={(event) => setSecurityLogRetentionDays(event.target.value)} inputMode="numeric" />
+            </label>
+            <label className="checkbox-line">
+              <input
+                type="checkbox"
+                checked={externalMapsEnabled}
+                onChange={(event) => setExternalMapsEnabled(event.target.checked)}
+              />
+              Externe Kartenlinks erlauben
             </label>
             <button type="button" onClick={saveRetention}>Aufbewahrung speichern</button>
           </div>

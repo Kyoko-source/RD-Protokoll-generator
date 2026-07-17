@@ -95,6 +95,9 @@ if production_mode() and not os.getenv("NANA_DATA_KEY", "").strip():
 
 sessions = {}
 password_change_tokens = {}
+auth_failures = {}
+AUTH_MAX_FAILURES = 5
+AUTH_LOCK_MINUTES = 15
 EMPLOYEE_ROLES = {"employee", "admin", "bufdi", "azubi", "praktikant"}
 EMPLOYEE_QUALIFICATIONS = {
     "",
@@ -231,6 +234,7 @@ class FeedbackUpdateRequest(BaseModel):
 class RetentionRequest(BaseModel):
     retention_days: int = 3650
     security_log_retention_days: int = 180
+    external_maps_enabled: bool = False
 
 
 def default_patient_case():
@@ -1947,6 +1951,40 @@ def anonymize_ip(value):
     return short_text(ip, 24)
 
 
+def auth_failure_key(employee_id, request: Request):
+    return f"{short_text(employee_id, 80).lower()}:{client_ip(request)}"
+
+
+def assert_auth_not_locked(employee_id, request: Request):
+    key = auth_failure_key(employee_id, request)
+    entry = auth_failures.get(key)
+    if not entry:
+        return
+    locked_until = entry.get("locked_until")
+    if locked_until and not is_expired(locked_until):
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Zu viele Fehlversuche. Bitte später erneut versuchen.",
+        )
+    if locked_until:
+        auth_failures.pop(key, None)
+
+
+def register_auth_failure(employee_id, request: Request):
+    key = auth_failure_key(employee_id, request)
+    entry = auth_failures.get(key, {"count": 0, "first_failed_at": local_now().isoformat(timespec="seconds")})
+    entry["count"] = int(entry.get("count", 0)) + 1
+    entry["last_failed_at"] = local_now().isoformat(timespec="seconds")
+    if entry["count"] >= AUTH_MAX_FAILURES:
+        entry["locked_until"] = expires_at(AUTH_LOCK_MINUTES)
+    auth_failures[key] = entry
+    return entry
+
+
+def clear_auth_failures(employee_id, request: Request):
+    auth_failures.pop(auth_failure_key(employee_id, request), None)
+
+
 def record_login_event(employee, payload, request: Request, source="login"):
     user_agent = short_text(getattr(payload, "user_agent", "") or request.headers.get("user-agent", ""), 500)
     write_login_event({
@@ -2043,27 +2081,37 @@ def employees():
 
 @app.post("/api/auth/login")
 def login(payload: LoginRequest, request: Request):
+    assert_auth_not_locked(payload.employee_id, request)
     employee = find_employee(payload.employee_id)
     if not employee:
+        register_auth_failure(payload.employee_id, request)
         audit("api_login_failed", details={"reason": "unknown_employee"})
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Anmeldung fehlgeschlagen.")
 
     if employee.get("must_change_password"):
         if not verify_password(payload.password, employee.get("temp_password_hash")):
+            failure = register_auth_failure(payload.employee_id, request)
             audit("api_login_failed", employee=employee, details={"reason": "wrong_temporary_password"})
+            if failure.get("locked_until"):
+                audit("api_login_locked", employee=employee, details={"locked_until": failure["locked_until"]})
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Einmalpasswort ist falsch.")
         change_token = new_token()
         password_change_tokens[change_token] = {
             "employee_id": employee["id"],
             "expires_at": expires_at(PASSWORD_CHANGE_MINUTES),
         }
+        clear_auth_failures(payload.employee_id, request)
         audit("api_temporary_password_accepted", employee=employee)
         return {"status": "password_change_required", "token": change_token, "employee": public_employee(employee)}
 
     if not verify_password(payload.password, employee.get("password_hash")):
+        failure = register_auth_failure(payload.employee_id, request)
         audit("api_login_failed", employee=employee, details={"reason": "wrong_password"})
+        if failure.get("locked_until"):
+            audit("api_login_locked", employee=employee, details={"locked_until": failure["locked_until"]})
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Passwort ist falsch.")
 
+    clear_auth_failures(payload.employee_id, request)
     token = new_token()
     sessions[token] = {"employee_id": employee["id"], "expires_at": expires_at(SESSION_MINUTES)}
     record_login_event(employee, payload, request, source="login")
@@ -2073,8 +2121,10 @@ def login(payload: LoginRequest, request: Request):
 
 @app.post("/api/auth/reauth")
 def reauth(payload: ReauthRequest, request: Request):
+    assert_auth_not_locked(payload.employee_id, request)
     employee = find_employee(payload.employee_id)
     if not employee:
+        register_auth_failure(payload.employee_id, request)
         audit("api_reauth_failed", details={"reason": "unknown_employee"})
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Schicht konnte nicht wiederhergestellt werden.")
 
@@ -2082,9 +2132,13 @@ def reauth(payload: ReauthRequest, request: Request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Bitte einmal vollständig mit dem Einmalpasswort anmelden.")
 
     if not verify_password(payload.password, employee.get("password_hash")):
+        failure = register_auth_failure(payload.employee_id, request)
         audit("api_reauth_failed", employee=employee, details={"reason": "wrong_password"})
+        if failure.get("locked_until"):
+            audit("api_reauth_locked", employee=employee, details={"locked_until": failure["locked_until"]})
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Passwort ist falsch.")
 
+    clear_auth_failures(payload.employee_id, request)
     token = new_token()
     sessions[token] = {"employee_id": employee["id"], "expires_at": expires_at(SESSION_MINUTES)}
     record_login_event(employee, payload, request, source="reauth")
@@ -2099,8 +2153,8 @@ def setup_first_admin(payload: FirstAdminRequest, request: Request):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Erster Admin existiert bereits.")
     if not payload.name.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name fehlt.")
-    if len(payload.password) < 8:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwort muss mindestens 8 Zeichen haben.")
+    if len(payload.password) < 12:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwort muss mindestens 12 Zeichen haben.")
 
     employee = {
         "id": new_token()[:16],
@@ -2129,8 +2183,8 @@ def set_password(payload: PasswordChangeRequest, request: Request):
     if not pending or is_expired(pending.get("expires_at")):
         password_change_tokens.pop(payload.token, None)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Passwortwechsel ist abgelaufen.")
-    if len(payload.new_password) < 8:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwort muss mindestens 8 Zeichen haben.")
+    if len(payload.new_password) < 12:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwort muss mindestens 12 Zeichen haben.")
 
     store = load_employee_store()
     employee = None
@@ -2167,6 +2221,11 @@ def logout(employee=Depends(current_employee), authorization: str | None = Heade
 @app.get("/api/me")
 def me(employee=Depends(current_employee)):
     return {"employee": public_employee(employee)}
+
+
+@app.get("/api/privacy/settings")
+def privacy_settings(employee=Depends(current_employee)):
+    return {"external_maps_enabled": bool(get_app_setting("external_maps_enabled", False))}
 
 
 @app.get("/api/dashboard")
@@ -2723,12 +2782,14 @@ def admin_privacy(employee=Depends(require_admin)):
     expired_cases = list_expired_finished_cases(today)
     retention_days = int(get_app_setting("retention_days", 3650) or 3650)
     security_log_retention_days = int(get_app_setting("security_log_retention_days", 180) or 180)
+    external_maps_enabled = bool(get_app_setting("external_maps_enabled", False))
     audit_count = len(list_audit_events(limit=500))
     encryption = encryption_status()
     return {
         "encryption": encryption,
         "retention_days": retention_days,
         "security_log_retention_days": security_log_retention_days,
+        "external_maps_enabled": external_maps_enabled,
         "session_minutes": SESSION_MINUTES,
         "audit_events": audit_count,
         "expired_cases": len(expired_cases),
@@ -2736,9 +2797,11 @@ def admin_privacy(employee=Depends(require_admin)):
             {"label": "Verschlüsselung Patientendaten", "status": "ok" if encryption.get("enabled") else "warning", "detail": encryption.get("provider", "")},
             {"label": "Externer Datenschlüssel", "status": "ok" if encryption.get("key_source") == "environment" else "warning", "detail": encryption.get("production_hint", "")},
             {"label": "Rollenbasierter Admin-Zugriff", "status": "ok", "detail": "Admin-Endpunkte sind rollenbeschränkt."},
+            {"label": "Login-Schutz", "status": "ok", "detail": f"{AUTH_MAX_FAILURES} Fehlversuche, dann {AUTH_LOCK_MINUTES} Minuten Sperre."},
             {"label": "Sitzungssperre", "status": "ok", "detail": f"Backend {SESSION_MINUTES} Minuten, Oberfläche 20 Minuten."},
             {"label": "Aufbewahrungsfrist", "status": "ok" if retention_days <= 3650 else "warning", "detail": f"{retention_days} Tage konfiguriert."},
             {"label": "Log-Aufbewahrung", "status": "ok" if security_log_retention_days <= 180 else "warning", "detail": f"{security_log_retention_days} Tage für Audit/Login-Metadaten."},
+            {"label": "Externe Kartenanbieter", "status": "warning" if external_maps_enabled else "ok", "detail": "aktiviert" if external_maps_enabled else "standardmäßig deaktiviert"},
             {"label": "Fällige Löschungen", "status": "ok" if not expired_cases else "warning", "detail": f"{len(expired_cases)} Einsatz/Einsätze abgelaufen."},
             {"label": "Audit-Trail", "status": "ok" if audit_count else "info", "detail": f"{audit_count} Ereignisse einsehbar."},
         ],
@@ -2751,8 +2814,18 @@ def update_privacy(payload: RetentionRequest, employee=Depends(require_admin)):
     log_days = max(1, min(int(payload.security_log_retention_days or 180), 3650))
     set_app_setting("retention_days", days)
     set_app_setting("security_log_retention_days", log_days)
-    audit("api_privacy_settings_updated", employee=employee, details={"retention_days": days, "security_log_retention_days": log_days})
-    return {"status": "saved", "retention_days": days, "security_log_retention_days": log_days}
+    set_app_setting("external_maps_enabled", bool(payload.external_maps_enabled))
+    audit("api_privacy_settings_updated", employee=employee, details={
+        "retention_days": days,
+        "security_log_retention_days": log_days,
+        "external_maps_enabled": bool(payload.external_maps_enabled),
+    })
+    return {
+        "status": "saved",
+        "retention_days": days,
+        "security_log_retention_days": log_days,
+        "external_maps_enabled": bool(payload.external_maps_enabled),
+    }
 
 
 @app.post("/api/admin/privacy/purge-expired")

@@ -10,6 +10,8 @@ nana.example.de {
         X-Content-Type-Options "nosniff"
         Referrer-Policy "no-referrer"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+        X-Frame-Options "DENY"
     }
 
     reverse_proxy nana:8000
