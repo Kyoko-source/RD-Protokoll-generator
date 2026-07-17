@@ -247,6 +247,7 @@ def default_patient_case():
         "reanimation": {"shocks": []},
         "transport": {},
         "einsatz": {},
+        "anfahrt": {},
         "uebergabe": {},
     }
 
@@ -343,6 +344,38 @@ def add_lines(title, rows):
 
 def compact_join(values, separator=", "):
     return separator.join(str(value).strip() for value in values if valid(value))
+
+
+def normalize_dispatch_coordinates(value):
+    if isinstance(value, dict):
+        lat = value.get("lat") or value.get("latitude")
+        lng = value.get("lng") or value.get("lon") or value.get("longitude")
+        if valid(lat) and valid(lng):
+            return f"{lat}, {lng}"
+    if isinstance(value, (list, tuple)) and len(value) >= 2:
+        return f"{value[0]}, {value[1]}"
+    return clean_text(value, 120)
+
+
+def approach_from_dispatch(imported):
+    imported = imported if isinstance(imported, dict) else {}
+    street = clean_text(imported.get("strasse"), 160)
+    house_number = clean_text(imported.get("hausnummer"), 40)
+    town = clean_text(imported.get("ort"), 120)
+    coordinates = normalize_dispatch_coordinates(imported.get("koordinaten"))
+    address = clean_text(imported.get("adresse"), 240)
+    if not address:
+        street_line = compact_join([street, house_number], " ")
+        address = compact_join([street_line, town])
+    approach = {
+        "street": street,
+        "house_number": house_number,
+        "town": town,
+        "coordinates": coordinates,
+        "address": address,
+        "source": "dispatch",
+    }
+    return {key: value for key, value in approach.items() if valid(value)}
 
 
 def add_paragraph(title, sentences):
@@ -2431,6 +2464,9 @@ def admin_interface_import(payload: InterfaceImportRequest, employee=Depends(req
     if source == "dispatch":
         imported = parse_dispatch_import(payload.payload)
         patient["einsatz"] = {**(patient.get("einsatz") or {}), **imported}
+        approach = approach_from_dispatch(imported)
+        if approach:
+            patient["anfahrt"] = {**(patient.get("anfahrt") or {}), **approach}
     elif source == "corpuls":
         imported = parse_corpuls_import(payload.payload)
         patient["vitalwerte"] = {**(patient.get("vitalwerte") or {}), **imported}
@@ -2442,9 +2478,16 @@ def admin_interface_import(payload: InterfaceImportRequest, employee=Depends(req
         "api_interface_imported",
         employee=employee,
         entity_type="case_draft",
-        details={"source": source, "fields": sorted(imported.keys())},
+        details={"source": source, "fields": sorted(imported.keys()), "approach_fields": sorted((patient.get("anfahrt") or {}).keys()) if source == "dispatch" else []},
     )
-    return {"status": "imported", "source": source, "imported": imported, "patient": patient, "updated_at": updated_at}
+    return {
+        "status": "imported",
+        "source": source,
+        "imported": imported,
+        "approach": patient.get("anfahrt", {}) if source == "dispatch" else {},
+        "patient": patient,
+        "updated_at": updated_at,
+    }
 
 
 @app.get("/api/admin/interfaces/export/draft/{export_format}")

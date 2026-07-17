@@ -1101,6 +1101,32 @@ function approachLinks(locationText) {
   };
 }
 
+function approachLocationFromDraft(patient) {
+  const approach = patient?.anfahrt || {};
+  const dispatch = patient?.einsatz || {};
+  const coordinates = approach.coordinates || dispatch.koordinaten || '';
+  if (coordinates) return String(coordinates);
+  const address = approach.address || dispatch.adresse || '';
+  if (address) return String(address);
+  const streetLine = [approach.street || dispatch.strasse, approach.house_number || dispatch.hausnummer]
+    .filter(hasValue)
+    .join(' ');
+  return [streetLine, approach.town || dispatch.ort].filter(hasValue).join(', ');
+}
+
+function approachSummaryFromDraft(patient) {
+  const approach = patient?.anfahrt || {};
+  const dispatch = patient?.einsatz || {};
+  return {
+    source: approach.source || (dispatch.adresse || dispatch.koordinaten ? 'dispatch' : ''),
+    address: approach.address || dispatch.adresse || '',
+    street: approach.street || dispatch.strasse || '',
+    houseNumber: approach.house_number || dispatch.hausnummer || '',
+    town: approach.town || dispatch.ort || '',
+    coordinates: approach.coordinates || dispatch.koordinaten || ''
+  };
+}
+
 const cancellationReasons = [
   'Nur Tragehilfe / technische Hilfeleistung',
   'Einsatz durch Leitstelle abgebrochen',
@@ -1371,12 +1397,32 @@ function LoginTransition({ session, onComplete }) {
   );
 }
 
-function ApproachView({ employee, onBack, onLogout }) {
+function ApproachView({ session, employee, onBack, onLogout }) {
   const [location, setLocation] = useState('');
   const [notes, setNotes] = useState('');
+  const [draftSource, setDraftSource] = useState(null);
+  const [error, setError] = useState('');
   const links = approachLinks(location);
   const hasLocation = Boolean(location.trim());
   const linkClass = hasLocation ? 'approach-link' : 'approach-link disabled';
+
+  useEffect(() => {
+    let cancelled = false;
+    api('/api/draft', {}, session.token)
+      .then((data) => {
+        if (cancelled) return;
+        const nextLocation = approachLocationFromDraft(data.patient);
+        const summary = approachSummaryFromDraft(data.patient);
+        if (nextLocation && !location) setLocation(nextLocation);
+        if (summary.source) setDraftSource(summary);
+      })
+      .catch((err) => {
+        if (!cancelled) setError(err.message);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [session.token]);
 
   return (
     <main className="app-shell">
@@ -1394,6 +1440,8 @@ function ApproachView({ employee, onBack, onLogout }) {
           </button>
         </div>
       </header>
+
+      {error && <div className="error-box">{error}</div>}
 
       <section className="work-panel approach-panel">
         <div className="section-head">
@@ -1432,6 +1480,12 @@ function ApproachView({ employee, onBack, onLogout }) {
             <MapPinned size={34} />
             <strong>{hasLocation ? links.query : 'Kein Einsatzort gesetzt'}</strong>
             <span>{links.coords ? `Koordinaten erkannt: ${links.coords.lat}, ${links.coords.lng}` : 'Bei Koordinaten kann Street View direkter geöffnet werden.'}</span>
+            {draftSource && (
+              <div className="approach-source">
+                <b>Aus Leitstelle übernommen</b>
+                <span>{[draftSource.street && `${draftSource.street} ${draftSource.houseNumber || ''}`.trim(), draftSource.town].filter(Boolean).join(', ') || draftSource.address || draftSource.coordinates}</span>
+              </div>
+            )}
             {notes && <p>{notes}</p>}
           </div>
         </div>
@@ -1451,6 +1505,9 @@ function ApproachView({ employee, onBack, onLogout }) {
           <a className={linkClass} href={hasLocation ? links.maxspeed : undefined} target="_blank" rel="noreferrer">
             Tempolimit prüfen
           </a>
+        </div>
+        <div className="notice-box">
+          Beim Öffnen eines externen Kartendienstes wird nur der Einsatzort bzw. die Koordinate übergeben. Keine Patientendaten, Einsatznummern oder medizinischen Angaben mitsenden.
         </div>
         <div className="notice-box">
           Orientierungshilfe. Aktuelle Beschilderung, Lage, Weisungen und Eigenschutz vor Ort haben Vorrang. Keine Patientendaten an externe Kartendienste übermitteln.
@@ -1526,7 +1583,7 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
   }
 
   if (view === 'approach') {
-    return <ApproachView employee={employee} onBack={() => setView('home')} onLogout={logout} />;
+    return <ApproachView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} />;
   }
 
   if (view === 'hospital') {
@@ -1749,7 +1806,7 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
               <textarea
                 value={payload}
                 onChange={(event) => setPayload(event.target.value)}
-                placeholder={'einsatznummer: 12345\nstichwort: Brustschmerz\nadresse: Musterstrasse 1\nort: Borken'}
+                placeholder={'einsatznummer: 12345\nstichwort: VU\nstrasse: Musterstrasse\nhausnummer: 1\nort: Borken\nkoordinaten: 51.8431, 6.8579'}
                 rows={12}
               />
             </label>

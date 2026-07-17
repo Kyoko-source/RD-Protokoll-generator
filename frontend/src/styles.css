@@ -1809,6 +1809,25 @@ form button,
   line-height: 1.45;
 }
 
+.approach-source {
+  display: grid;
+  gap: 4px;
+  margin-top: 4px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: rgba(45, 212, 191, 0.09);
+  border: 1px solid rgba(80, 215, 192, 0.18);
+}
+
+.approach-source b {
+  color: #cffafe;
+  font-size: 0.88rem;
+}
+
+.approach-source span {
+  color: rgba(239, 248, 255, 0.82);
+}
+
 .notice-box {
   margin-top: 16px;
   padding: 12px 14px;
