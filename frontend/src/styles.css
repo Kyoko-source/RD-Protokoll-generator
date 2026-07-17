@@ -878,6 +878,17 @@ form button,
   grid-template-columns: repeat(4, minmax(0, 1fr));
 }
 
+.crew-select-row {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(132px, 0.42fr);
+  gap: 8px;
+}
+
+.crew-select-row input,
+.crew-select-row select {
+  min-width: 0;
+}
+
 .crew-actions {
   display: flex;
   flex-wrap: wrap;
@@ -899,6 +910,49 @@ form button,
 }
 
 .crew-actions button:first-child {
+  color: #032f2c;
+  background: linear-gradient(135deg, #5eead4 0%, #67e8f9 100%);
+  border-color: transparent;
+}
+
+.crew-actions .crew-swap-button {
+  width: 48px;
+  padding: 0;
+}
+
+.crew-switch-panel {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(180px, 0.35fr) auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(94, 234, 212, 0.22);
+  background: rgba(3, 10, 22, 0.46);
+}
+
+.crew-switch-panel div {
+  display: grid;
+  gap: 3px;
+}
+
+.crew-switch-panel span {
+  color: rgba(235, 244, 255, 0.64);
+  font-weight: 760;
+}
+
+.crew-switch-panel button {
+  min-height: 42px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 850;
+  cursor: pointer;
+}
+
+.crew-switch-panel button[type="submit"] {
   color: #032f2c;
   background: linear-gradient(135deg, #5eead4 0%, #67e8f9 100%);
   border-color: transparent;
@@ -3724,6 +3778,7 @@ legend {
   .rules-grid,
   .form-grid,
   .crew-grid,
+  .crew-switch-panel,
   .handover-layout,
   .approach-layout,
   .vital-pair-grid,

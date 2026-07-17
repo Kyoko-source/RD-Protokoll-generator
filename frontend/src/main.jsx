@@ -1,9 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
 import {
   Activity,
   AlertTriangle,
   ArrowLeft,
+  ArrowRightLeft,
   Building2,
   Brain,
   Calculator,
@@ -52,6 +53,7 @@ const EMPLOYEE_ROLE_OPTIONS = [
   { value: 'employee', label: 'Mitarbeiter' },
   { value: 'bufdi', label: 'BuFDi' },
   { value: 'azubi', label: 'Azubi' },
+  { value: 'praktikant', label: 'Praktikant/in' },
   { value: 'admin', label: 'Admin' }
 ];
 const EMPLOYEE_QUALIFICATION_OPTIONS = [
@@ -140,9 +142,13 @@ function saveLocalShiftCrew(employeeId, crew) {
   if (!employeeId || !crew) return;
   localStorage.setItem(localShiftCrewKey(employeeId), JSON.stringify({
     verantwortlicher: crew.verantwortlicher || '',
+    verantwortlicher_id: crew.verantwortlicher_id || '',
     fahrer: crew.fahrer || '',
+    fahrer_id: crew.fahrer_id || '',
     azubi: crew.azubi || '',
+    azubi_id: crew.azubi_id || '',
     praktikant: crew.praktikant || '',
+    praktikant_id: crew.praktikant_id || '',
     updatedAt: new Date().toISOString()
   }));
 }
@@ -1613,7 +1619,7 @@ function ApproachView({ session, employee, onBack, onLogout }) {
   );
 }
 
-function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvailable, onInstallApp }) {
+function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, installPromptAvailable, onInstallApp }) {
   const [dashboard, setDashboard] = useState(null);
   const [cases, setCases] = useState([]);
   const [view, setView] = useState(() => getInitialDashboardView());
@@ -1622,6 +1628,7 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
   const [pendingDispatch, setPendingDispatch] = useState(null);
 
   useEffect(() => {
+    setDashboard(null);
     api('/api/dashboard', {}, session.token)
       .then(setDashboard)
       .catch((err) => setError(err.message));
@@ -1711,11 +1718,11 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
   }
 
   if (view === 'protocol') {
-    return <ProtocolView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} onSync={onSync} />;
+    return <ProtocolView session={session} employee={employee} onSessionReplace={onSessionReplace} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} onSync={onSync} />;
   }
 
   if (view === 'refusal') {
-    return <ProtocolView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} onSync={onSync} initialSection="verweigerung" standaloneRefusal />;
+    return <ProtocolView session={session} employee={employee} onSessionReplace={onSessionReplace} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} onSync={onSync} initialSection="verweigerung" standaloneRefusal />;
   }
 
   if (view === 'cancelled') {
@@ -3326,7 +3333,7 @@ const emptyPatient = {
   transport: {},
   einsatz: {},
   anfahrt: {},
-  besatzung: { verantwortlicher: '', fahrer: '', azubi: '', praktikant: '' },
+  besatzung: { verantwortlicher: '', verantwortlicher_id: '', fahrer: '', fahrer_id: '', azubi: '', azubi_id: '', praktikant: '', praktikant_id: '' },
   uebergabe: {}
 };
 
@@ -3337,14 +3344,18 @@ function patientWithCrewDefaults(patient, employee) {
     ...(emptyPatient.besatzung || {}),
     ...(shiftCrew || {}),
     ...(nextPatient.besatzung || {}),
-    verantwortlicher: nextPatient.besatzung?.verantwortlicher || shiftCrew?.verantwortlicher || employee?.name || ''
+    verantwortlicher: nextPatient.besatzung?.verantwortlicher || shiftCrew?.verantwortlicher || employee?.name || '',
+    verantwortlicher_id: nextPatient.besatzung?.verantwortlicher_id || shiftCrew?.verantwortlicher_id || employee?.id || ''
   };
   return nextPatient;
 }
 
-function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSync, initialSection = 'patient', standaloneRefusal = false }) {
+function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, connectivity, onSync, initialSection = 'patient', standaloneRefusal = false }) {
   const initialLocalDraft = loadLocalDraft(employee?.id);
+  const skipNextDraftReload = useRef(false);
   const [patient, setPatient] = useState(emptyPatient);
+  const [crewEmployees, setCrewEmployees] = useState([]);
+  const [crewSwitch, setCrewSwitch] = useState({ open: false, target: null, password: '' });
   const [protocolSection, setProtocolSection] = useState(initialSection);
   const [protocolNavCollapsed, setProtocolNavCollapsed] = useState(
     () => localStorage.getItem('nana_protocol_nav_collapsed') === 'true'
@@ -3516,7 +3527,28 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     { key: 'protokoll', label: 'Dokumentation', icon: FileText, complete: hasValue(generatedProtocol) }
   ];
 
+  const selectableCrewEmployees = useMemo(() => crewEmployees.filter((item) => item.active !== false), [crewEmployees]);
+  const transportLeaderOptions = useMemo(() => selectableCrewEmployees.filter((item) => !['azubi', 'bufdi', 'praktikant'].includes(item.role)), [selectableCrewEmployees]);
+  const driverOptions = transportLeaderOptions;
+  const azubiOptions = useMemo(() => selectableCrewEmployees.filter((item) => item.role === 'azubi'), [selectableCrewEmployees]);
+  const traineeOptions = useMemo(() => selectableCrewEmployees.filter((item) => ['praktikant', 'bufdi'].includes(item.role)), [selectableCrewEmployees]);
+
+  function employeeById(employeeId) {
+    return selectableCrewEmployees.find((item) => item.id === employeeId);
+  }
+
   useEffect(() => {
+    api('/api/auth/employees')
+      .then((data) => setCrewEmployees(data.employees || []))
+      .catch(() => setCrewEmployees([]));
+  }, []);
+
+  useEffect(() => {
+    if (skipNextDraftReload.current) {
+      skipNextDraftReload.current = false;
+      setDraftReady(true);
+      return;
+    }
     api('/api/draft', {}, session.token)
       .then((data) => {
         setPatient(patientWithCrewDefaults(data.patient, employee));
@@ -3606,6 +3638,14 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
     saveLocalShiftCrew(employee?.id, { ...(patient.besatzung || {}), [key]: value });
   }
 
+  function selectCrewEmployee(nameKey, idKey, employeeId) {
+    const selectedEmployee = employeeById(employeeId);
+    replaceCrew({
+      [idKey]: selectedEmployee?.id || '',
+      [nameKey]: selectedEmployee?.name || ''
+    });
+  }
+
   function replaceCrew(nextCrew) {
     setPatient((current) => ({
       ...current,
@@ -3618,15 +3658,80 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
   }
 
   function swapTransportLeaderWithDriver() {
-    if (!hasValue(crew.fahrer)) {
-      setStatusText('Bitte zuerst Fahrer/in eintragen, dann kann der Transportführer getauscht werden.');
+    if (!hasValue(crew.verantwortlicher) || !hasValue(crew.fahrer)) {
+      setStatusText('Bitte zuerst Transportführer/in und Fahrer/in eintragen.');
       return;
     }
-    replaceCrew({
-      verantwortlicher: crew.fahrer || '',
-      fahrer: crew.verantwortlicher || employee?.name || ''
-    });
-    setStatusText('Transportführer/in und Fahrer/in wurden für diesen Einsatz getauscht.');
+    if (!crew.fahrer_id) {
+      setStatusText('Bitte Fahrer/in aus der Mitarbeiterliste auswählen, damit das Passwort geprüft werden kann.');
+      return;
+    }
+    setCrewSwitch({ open: true, target: employeeById(crew.fahrer_id), password: '' });
+  }
+
+  async function confirmTransportLeaderSwitch(event) {
+    event.preventDefault();
+    const target = crewSwitch.target;
+    if (!target?.id) {
+      setError('Neuer Transportführer wurde nicht eindeutig ausgewählt.');
+      return;
+    }
+    setError('');
+    setStatusText('');
+    const nextCrew = {
+      verantwortlicher: crew.fahrer || target.name,
+      verantwortlicher_id: target.id,
+      fahrer: crew.verantwortlicher || employee?.name || '',
+      fahrer_id: crew.verantwortlicher_id || employee?.id || '',
+      azubi: crew.azubi || '',
+      azubi_id: crew.azubi_id || '',
+      praktikant: crew.praktikant || '',
+      praktikant_id: crew.praktikant_id || ''
+    };
+    const nextPatient = { ...patient, besatzung: nextCrew };
+    try {
+      const result = await api('/api/auth/reauth', {
+        method: 'POST',
+        body: JSON.stringify({ employee_id: target.id, password: crewSwitch.password, restore_shift: true, ...browserDeviceInfo() })
+      });
+      await api('/api/draft', {
+        method: 'PUT',
+        body: JSON.stringify({ patient: nextPatient })
+      }, result.token);
+      skipNextDraftReload.current = true;
+      setPatient(nextPatient);
+      saveLocalShiftCrew(result.employee?.id, nextCrew);
+      saveLocalDraft(result.employee?.id, nextPatient);
+      setLocalDraft(loadLocalDraft(result.employee?.id));
+      onSessionReplace?.(result);
+      setCrewSwitch({ open: false, target: null, password: '' });
+      setStatusText(`${target.name} ist jetzt als Transportführer/in angemeldet.`);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  function renderCrewSelector(label, nameKey, idKey, options, placeholder) {
+    return (
+      <label>
+        {label}
+        <div className="crew-select-row">
+          <input
+            value={crew[nameKey] || ''}
+            onChange={(event) => replaceCrew({ [nameKey]: event.target.value, [idKey]: '' })}
+            placeholder={placeholder}
+          />
+          <select value={crew[idKey] || ''} onChange={(event) => selectCrewEmployee(nameKey, idKey, event.target.value)}>
+            <option value="">Auswählen</option>
+            {options.map((item) => (
+              <option key={`${idKey}-${item.id}`} value={item.id}>
+                {item.name} · {roleLabel(item.role)}
+              </option>
+            ))}
+          </select>
+        </div>
+      </label>
+    );
   }
 
   function updatePediatricGroup(group, key, value) {
@@ -4942,27 +5047,34 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
             <span>Transportführer/in pro Einsatz wechselbar</span>
           </div>
           <div className="form-grid crew-grid">
-            <label>
-              Transportführer/in
-              <input value={crew.verantwortlicher || employee?.name || ''} onChange={(event) => updateCrew('verantwortlicher', event.target.value)} />
-            </label>
-            <label>
-              Fahrer/in
-              <input value={crew.fahrer || ''} onChange={(event) => updateCrew('fahrer', event.target.value)} placeholder="Name Fahrer/in" />
-            </label>
-            <label>
-              Azubi
-              <input value={crew.azubi || ''} onChange={(event) => updateCrew('azubi', event.target.value)} placeholder="optional" />
-            </label>
-            <label>
-              Praktikant/in
-              <input value={crew.praktikant || ''} onChange={(event) => updateCrew('praktikant', event.target.value)} placeholder="optional" />
-            </label>
+            {renderCrewSelector('Transportführer/in', 'verantwortlicher', 'verantwortlicher_id', transportLeaderOptions, 'Name Transportführer/in')}
+            {renderCrewSelector('Fahrer/in', 'fahrer', 'fahrer_id', driverOptions, 'Name Fahrer/in')}
+            {renderCrewSelector('Azubi', 'azubi', 'azubi_id', azubiOptions, 'optional')}
+            {renderCrewSelector('Praktikant/in / BuFDi', 'praktikant', 'praktikant_id', traineeOptions, 'optional')}
           </div>
           <div className="crew-actions">
-            <button type="button" onClick={swapTransportLeaderWithDriver}>TF mit Fahrer/in tauschen</button>
-            <button type="button" onClick={() => replaceCrew({ verantwortlicher: employee?.name || '' })}>Login als TF setzen</button>
+            <button type="button" className="crew-swap-button" onClick={swapTransportLeaderWithDriver} title="Transportführer/in und Fahrer/in tauschen">
+              <ArrowRightLeft size={18} />
+            </button>
+            <button type="button" onClick={() => replaceCrew({ verantwortlicher: employee?.name || '', verantwortlicher_id: employee?.id || '' })}>Login als TF setzen</button>
           </div>
+          {crewSwitch.open && (
+            <form className="crew-switch-panel" onSubmit={confirmTransportLeaderSwitch}>
+              <div>
+                <strong>{crewSwitch.target?.name || crew.fahrer} wird neuer Transportführer</strong>
+                <span>Bitte Passwort eingeben, danach ist diese Person oben rechts angemeldet.</span>
+              </div>
+              <input
+                type="password"
+                value={crewSwitch.password}
+                onChange={(event) => setCrewSwitch((current) => ({ ...current, password: event.target.value }))}
+                placeholder="Passwort neuer TF"
+                autoFocus
+              />
+              <button type="submit">Wechsel bestätigen</button>
+              <button type="button" onClick={() => setCrewSwitch({ open: false, target: null, password: '' })}>Abbrechen</button>
+            </form>
+          )}
         </section>
 
         <div className="patient-type-grid" role="group" aria-label="Patientengruppe">
@@ -6278,6 +6390,7 @@ function App() {
       <Dashboard
         session={session}
         onLogout={handleLogout}
+        onSessionReplace={handleRestoreSession}
         connectivity={connectivity}
         onSync={setLastSync}
         installPromptAvailable={Boolean(installPrompt) && !standalone}

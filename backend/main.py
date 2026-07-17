@@ -94,7 +94,7 @@ if production_mode() and not os.getenv("NANA_DATA_KEY", "").strip():
 
 sessions = {}
 password_change_tokens = {}
-EMPLOYEE_ROLES = {"employee", "admin", "bufdi", "azubi"}
+EMPLOYEE_ROLES = {"employee", "admin", "bufdi", "azubi", "praktikant"}
 EMPLOYEE_QUALIFICATIONS = {
     "",
     "Rettungshelfer",
