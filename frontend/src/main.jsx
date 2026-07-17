@@ -3464,6 +3464,12 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       : { level: 'info', text: 'Arbeitsdiagnose noch offen.' };
   const protocolNavItems = [
     {
+      key: 'besatzung',
+      label: 'Besatzung',
+      icon: UserPlus,
+      complete: hasValue(crew.verantwortlicher) && hasValue(crew.fahrer)
+    },
+    {
       key: 'patient',
       label: 'Patient',
       icon: UserRound,
@@ -3731,6 +3737,46 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
           </select>
         </div>
       </label>
+    );
+  }
+
+  function renderCrewSection() {
+    return (
+      <>
+        <div className="section-head">
+          <h2>Besatzung</h2>
+          <span>Transportführer/in pro Einsatz wechselbar</span>
+        </div>
+        <div className="form-grid crew-grid">
+          {renderCrewSelector('Transportführer/in', 'verantwortlicher', 'verantwortlicher_id', transportLeaderOptions, 'Name Transportführer/in')}
+          {renderCrewSelector('Fahrer/in', 'fahrer', 'fahrer_id', driverOptions, 'Name Fahrer/in')}
+          {renderCrewSelector('Azubi', 'azubi', 'azubi_id', azubiOptions, 'optional')}
+          {renderCrewSelector('Praktikant/in / BuFDi', 'praktikant', 'praktikant_id', traineeOptions, 'optional')}
+        </div>
+        <div className="crew-actions">
+          <button type="button" className="crew-swap-button" onClick={swapTransportLeaderWithDriver} title="Transportführer/in und Fahrer/in tauschen">
+            <ArrowRightLeft size={18} />
+          </button>
+          <button type="button" onClick={() => replaceCrew({ verantwortlicher: employee?.name || '', verantwortlicher_id: employee?.id || '' })}>Login als TF setzen</button>
+        </div>
+        {crewSwitch.open && (
+          <form className="crew-switch-panel" onSubmit={confirmTransportLeaderSwitch}>
+            <div>
+              <strong>{crewSwitch.target?.name || crew.fahrer} wird neuer Transportführer</strong>
+              <span>Bitte Passwort eingeben, danach ist diese Person oben rechts angemeldet.</span>
+            </div>
+            <input
+              type="password"
+              value={crewSwitch.password}
+              onChange={(event) => setCrewSwitch((current) => ({ ...current, password: event.target.value }))}
+              placeholder="Passwort neuer TF"
+              autoFocus
+            />
+            <button type="submit">Wechsel bestätigen</button>
+            <button type="button" onClick={() => setCrewSwitch({ open: false, target: null, password: '' })}>Abbrechen</button>
+          </form>
+        )}
+      </>
     );
   }
 
@@ -5035,47 +5081,15 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
         })}
       </nav>}
 
+      {protocolSection === 'besatzung' && <section className="work-panel crew-box">
+        {renderCrewSection()}
+      </section>}
+
       {protocolSection === 'patient' && <section className="work-panel patient-panel">
         <div className="section-head">
           <h2>Patient</h2>
           <span>Patientengruppe und Stammdaten</span>
         </div>
-
-        <section className="crew-box">
-          <div className="section-head compact-head">
-            <h3>Besatzung</h3>
-            <span>Transportführer/in pro Einsatz wechselbar</span>
-          </div>
-          <div className="form-grid crew-grid">
-            {renderCrewSelector('Transportführer/in', 'verantwortlicher', 'verantwortlicher_id', transportLeaderOptions, 'Name Transportführer/in')}
-            {renderCrewSelector('Fahrer/in', 'fahrer', 'fahrer_id', driverOptions, 'Name Fahrer/in')}
-            {renderCrewSelector('Azubi', 'azubi', 'azubi_id', azubiOptions, 'optional')}
-            {renderCrewSelector('Praktikant/in / BuFDi', 'praktikant', 'praktikant_id', traineeOptions, 'optional')}
-          </div>
-          <div className="crew-actions">
-            <button type="button" className="crew-swap-button" onClick={swapTransportLeaderWithDriver} title="Transportführer/in und Fahrer/in tauschen">
-              <ArrowRightLeft size={18} />
-            </button>
-            <button type="button" onClick={() => replaceCrew({ verantwortlicher: employee?.name || '', verantwortlicher_id: employee?.id || '' })}>Login als TF setzen</button>
-          </div>
-          {crewSwitch.open && (
-            <form className="crew-switch-panel" onSubmit={confirmTransportLeaderSwitch}>
-              <div>
-                <strong>{crewSwitch.target?.name || crew.fahrer} wird neuer Transportführer</strong>
-                <span>Bitte Passwort eingeben, danach ist diese Person oben rechts angemeldet.</span>
-              </div>
-              <input
-                type="password"
-                value={crewSwitch.password}
-                onChange={(event) => setCrewSwitch((current) => ({ ...current, password: event.target.value }))}
-                placeholder="Passwort neuer TF"
-                autoFocus
-              />
-              <button type="submit">Wechsel bestätigen</button>
-              <button type="button" onClick={() => setCrewSwitch({ open: false, target: null, password: '' })}>Abbrechen</button>
-            </form>
-          )}
-        </section>
 
         <div className="patient-type-grid" role="group" aria-label="Patientengruppe">
           <button
