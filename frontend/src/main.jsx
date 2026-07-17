@@ -18,6 +18,7 @@ import {
   Home,
   Lock,
   LogOut,
+  MapPinned,
   Megaphone,
   MessageSquare,
   PanelLeftClose,
@@ -1058,12 +1059,47 @@ const tileIcons = {
   protocol: FileText,
   refusal: ShieldCheck,
   cancelled: AlertTriangle,
+  approach: MapPinned,
   hospital: Building2,
   icd10: Stethoscope,
   devices: Wrench,
   interfaces: Cable,
   admin: ShieldCheck
 };
+
+function parseCoordinates(value) {
+  const match = String(value || '').trim().match(/^(-?\d+(?:[.,]\d+)?)\s*[,;\s]\s*(-?\d+(?:[.,]\d+)?)$/);
+  if (!match) return null;
+  const lat = Number(match[1].replace(',', '.'));
+  const lng = Number(match[2].replace(',', '.'));
+  if (!Number.isFinite(lat) || !Number.isFinite(lng) || Math.abs(lat) > 90 || Math.abs(lng) > 180) return null;
+  return { lat, lng };
+}
+
+function approachLinks(locationText) {
+  const trimmed = String(locationText || '').trim();
+  const coords = parseCoordinates(trimmed);
+  const query = coords ? `${coords.lat},${coords.lng}` : trimmed;
+  const encoded = encodeURIComponent(query);
+  const overpassQuery = coords
+    ? `[out:json][timeout:20];way(around:35,${coords.lat},${coords.lng})[highway];out tags geom;`
+    : '';
+  return {
+    query,
+    coords,
+    apple: `https://maps.apple.com/?q=${encoded}`,
+    google: `https://www.google.com/maps/search/?api=1&query=${encoded}`,
+    streetView: coords
+      ? `https://www.google.com/maps/@?api=1&map_action=pano&viewpoint=${coords.lat},${coords.lng}`
+      : `https://www.google.com/maps/search/?api=1&query=${encoded}`,
+    osm: coords
+      ? `https://www.openstreetmap.org/?mlat=${coords.lat}&mlon=${coords.lng}#map=18/${coords.lat}/${coords.lng}`
+      : `https://www.openstreetmap.org/search?query=${encoded}`,
+    maxspeed: coords
+      ? `https://overpass-turbo.eu/?Q=${encodeURIComponent(overpassQuery)}`
+      : `https://www.openstreetmap.org/search?query=${encoded}`
+  };
+}
 
 const cancellationReasons = [
   'Nur Tragehilfe / technische Hilfeleistung',
@@ -1335,6 +1371,95 @@ function LoginTransition({ session, onComplete }) {
   );
 }
 
+function ApproachView({ employee, onBack, onLogout }) {
+  const [location, setLocation] = useState('');
+  const [notes, setNotes] = useState('');
+  const links = approachLinks(location);
+  const hasLocation = Boolean(location.trim());
+  const linkClass = hasLocation ? 'approach-link' : 'approach-link disabled';
+
+  return (
+    <main className="app-shell">
+      <header className="topbar">
+        <div>
+          <div className="app-name">NANA</div>
+          <div className="app-subtitle">Anfahrt & Lage</div>
+        </div>
+        <div className="user-area">
+          <button className="header-button" type="button" onClick={onBack}>
+            <Home size={16} /> Hauptmenü
+          </button>
+          <button className="icon-button" onClick={onLogout} aria-label="Abmelden">
+            <LogOut size={18} />
+          </button>
+        </div>
+      </header>
+
+      <section className="work-panel approach-panel">
+        <div className="section-head">
+          <h2>Anfahrt & Lage</h2>
+          <span>{employee?.name || 'Einsatzteam'}</span>
+        </div>
+        <div className="approach-layout">
+          <div className="approach-form">
+            <label>
+              Einsatzort oder Koordinaten
+              <input
+                value={location}
+                onChange={(event) => setLocation(event.target.value)}
+                placeholder="Adresse oder 51.8431, 6.8579"
+              />
+            </label>
+            <label>
+              Lagehinweise
+              <textarea
+                value={notes}
+                onChange={(event) => setNotes(event.target.value)}
+                rows={5}
+                placeholder="z.B. VU Kreuzung, Anfahrt über Nebenstraße, RTW-Aufstellung prüfen"
+              />
+            </label>
+            <div className="approach-quick-row">
+              <button type="button" onClick={() => setLocation('Borken, Nordrhein-Westfalen')}>
+                Borken
+              </button>
+              <button type="button" onClick={() => setNotes('RTW-Aufstellung, Eigenschutz, Verkehrsfluss und Rettungsweg vor Ort prüfen.')}>
+                Lagehinweis
+              </button>
+            </div>
+          </div>
+          <div className="approach-card">
+            <MapPinned size={34} />
+            <strong>{hasLocation ? links.query : 'Kein Einsatzort gesetzt'}</strong>
+            <span>{links.coords ? `Koordinaten erkannt: ${links.coords.lat}, ${links.coords.lng}` : 'Bei Koordinaten kann Street View direkter geöffnet werden.'}</span>
+            {notes && <p>{notes}</p>}
+          </div>
+        </div>
+        <div className="approach-actions">
+          <a className={linkClass} href={hasLocation ? links.apple : undefined} target="_blank" rel="noreferrer">
+            Apple Karten
+          </a>
+          <a className={linkClass} href={hasLocation ? links.google : undefined} target="_blank" rel="noreferrer">
+            Google Maps
+          </a>
+          <a className={linkClass} href={hasLocation ? links.streetView : undefined} target="_blank" rel="noreferrer">
+            Street View
+          </a>
+          <a className={linkClass} href={hasLocation ? links.osm : undefined} target="_blank" rel="noreferrer">
+            OpenStreetMap
+          </a>
+          <a className={linkClass} href={hasLocation ? links.maxspeed : undefined} target="_blank" rel="noreferrer">
+            Tempolimit prüfen
+          </a>
+        </div>
+        <div className="notice-box">
+          Orientierungshilfe. Aktuelle Beschilderung, Lage, Weisungen und Eigenschutz vor Ort haben Vorrang. Keine Patientendaten an externe Kartendienste übermitteln.
+        </div>
+      </section>
+    </main>
+  );
+}
+
 function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvailable, onInstallApp }) {
   const [dashboard, setDashboard] = useState(null);
   const [cases, setCases] = useState([]);
@@ -1398,6 +1523,10 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
 
   if (view === 'cancelled') {
     return <CancellationView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} connectivity={connectivity} />;
+  }
+
+  if (view === 'approach') {
+    return <ApproachView employee={employee} onBack={() => setView('home')} onLogout={logout} />;
   }
 
   if (view === 'hospital') {
@@ -1476,6 +1605,7 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
                 if (tile.id === 'protocol') setView('protocol');
                 if (tile.id === 'refusal') setView('refusal');
                 if (tile.id === 'cancelled') setView('cancelled');
+                if (tile.id === 'approach') setView('approach');
                 if (tile.id === 'hospital') setView('hospital');
                 if (tile.id === 'icd10') setView('icd10');
                 if (tile.id === 'devices') setView('devices');
@@ -5795,7 +5925,7 @@ function isStandaloneApp() {
 
 function getInitialDashboardView() {
   const view = new URLSearchParams(window.location.search).get('view');
-  return ['protocol', 'refusal', 'cancelled', 'hospital', 'icd10', 'devices'].includes(view) ? view : 'home';
+  return ['protocol', 'refusal', 'cancelled', 'approach', 'hospital', 'icd10', 'devices'].includes(view) ? view : 'home';
 }
 
 function isLocalDevHost() {

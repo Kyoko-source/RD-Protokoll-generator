@@ -1731,6 +1731,7 @@ form button,
 .tile-protocol { background: linear-gradient(135deg, #2f74ff 0%, #46badf 100%); }
 .tile-refusal { background: linear-gradient(135deg, #0f766e 0%, #f59e0b 100%); }
 .tile-cancelled { background: linear-gradient(135deg, #991b1b 0%, #f97316 100%); }
+.tile-approach { background: linear-gradient(135deg, #14532d 0%, #38bdf8 100%); }
 .tile-hospital { background: linear-gradient(135deg, #00907d 0%, #45b98b 100%); }
 .tile-icd10 { background: linear-gradient(135deg, #8449d6 0%, #db5399 100%); }
 .tile-devices { background: linear-gradient(135deg, #e27820 0%, #dda440 100%); }
@@ -1740,6 +1741,83 @@ form button,
 .work-panel {
   border-radius: 18px;
   padding: 20px;
+}
+
+.approach-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.1fr) minmax(280px, 0.9fr);
+  gap: 18px;
+  margin-bottom: 16px;
+}
+
+.approach-form {
+  display: grid;
+  gap: 14px;
+}
+
+.approach-quick-row,
+.approach-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.approach-quick-row button,
+.approach-link {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.07);
+  color: #f7fbff;
+  font-weight: 860;
+  text-decoration: none;
+}
+
+.approach-link {
+  background: linear-gradient(135deg, rgba(20, 83, 45, 0.82), rgba(14, 116, 144, 0.72));
+}
+
+.approach-link.disabled {
+  pointer-events: none;
+  opacity: 0.45;
+}
+
+.approach-card {
+  min-height: 220px;
+  display: grid;
+  align-content: center;
+  gap: 10px;
+  padding: 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(80, 215, 192, 0.16);
+  background: rgba(8, 18, 33, 0.58);
+}
+
+.approach-card strong {
+  color: #f7fbff;
+  font-size: 1.15rem;
+}
+
+.approach-card span,
+.approach-card p {
+  margin: 0;
+  color: rgba(226, 232, 240, 0.72);
+  line-height: 1.45;
+}
+
+.notice-box {
+  margin-top: 16px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(250, 204, 21, 0.22);
+  background: rgba(250, 204, 21, 0.075);
+  color: rgba(254, 249, 195, 0.92);
+  font-weight: 760;
+  line-height: 1.45;
 }
 
 .section-head {
@@ -3448,6 +3526,7 @@ legend {
   .rules-grid,
   .form-grid,
   .handover-layout,
+  .approach-layout,
   .vital-pair-grid,
   .vital-bp-grid,
   .assessment-grid,

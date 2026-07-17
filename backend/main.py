@@ -2027,6 +2027,7 @@ def dashboard(employee=Depends(current_employee)):
         {"id": "protocol", "label": "Dokumentation", "subtitle": "Einsatz dokumentieren"},
         {"id": "refusal", "label": "Verweigerung", "subtitle": "Behandlungs-/Transportablehnung"},
         {"id": "cancelled", "label": "Einsatz abgebrochen", "subtitle": "Abbruch / Nichtdurchführung"},
+        {"id": "approach", "label": "Anfahrt & Lage", "subtitle": "Karten, Street View, Tempolimit"},
         {"id": "hospital", "label": "Krankenhaus Finder", "subtitle": "Geeignete Zielklinik"},
         {"id": "icd10", "label": "ICD10 Code", "subtitle": "Code dekodieren"},
         {"id": "devices", "label": "Geräte", "subtitle": "Kurzreferenzen"},
