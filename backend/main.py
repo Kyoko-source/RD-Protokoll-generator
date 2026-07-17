@@ -1273,7 +1273,7 @@ def generate_protocol_text(patient):
     text += build_narrative_report(patient)
 
     text += add_lines("BESATZUNG / SCHICHT", [
-        ("Dokumentation / Hauptnutzer", crew.get("verantwortlicher")),
+        ("Transportführer/in", crew.get("verantwortlicher")),
         ("Fahrer/in", crew.get("fahrer")),
         ("Azubi", crew.get("azubi")),
         ("Praktikant/in", crew.get("praktikant")),

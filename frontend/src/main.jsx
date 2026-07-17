@@ -123,6 +123,30 @@ function clearLocalDraft(employeeId) {
   }
 }
 
+function localShiftCrewKey(employeeId) {
+  return `nana_shift_crew_${employeeId || 'unknown'}`;
+}
+
+function loadLocalShiftCrew(employeeId) {
+  try {
+    const raw = localStorage.getItem(localShiftCrewKey(employeeId));
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveLocalShiftCrew(employeeId, crew) {
+  if (!employeeId || !crew) return;
+  localStorage.setItem(localShiftCrewKey(employeeId), JSON.stringify({
+    verantwortlicher: crew.verantwortlicher || '',
+    fahrer: crew.fahrer || '',
+    azubi: crew.azubi || '',
+    praktikant: crew.praktikant || '',
+    updatedAt: new Date().toISOString()
+  }));
+}
+
 function browserDeviceId() {
   const key = 'nana_browser_device_id';
   let value = localStorage.getItem(key);
@@ -519,7 +543,7 @@ function generateLocalProtocolText(patient) {
   text += `Lokal erzeugt am ${new Date().toLocaleString('de-DE')}\n`;
   text += 'Enthält ausschließlich dokumentierte Angaben; vor Verwendung vollständig prüfen.\n\n';
   text += addProtocolBlock('BESATZUNG / SCHICHT', [
-    ['Dokumentation / Hauptnutzer', crew.verantwortlicher],
+    ['Transportführer/in', crew.verantwortlicher],
     ['Fahrer/in', crew.fahrer],
     ['Azubi', crew.azubi],
     ['Praktikant/in', crew.praktikant],
@@ -3307,11 +3331,13 @@ const emptyPatient = {
 };
 
 function patientWithCrewDefaults(patient, employee) {
+  const shiftCrew = loadLocalShiftCrew(employee?.id);
   const nextPatient = { ...emptyPatient, ...(patient || {}) };
   nextPatient.besatzung = {
     ...(emptyPatient.besatzung || {}),
+    ...(shiftCrew || {}),
     ...(nextPatient.besatzung || {}),
-    verantwortlicher: nextPatient.besatzung?.verantwortlicher || employee?.name || ''
+    verantwortlicher: nextPatient.besatzung?.verantwortlicher || shiftCrew?.verantwortlicher || employee?.name || ''
   };
   return nextPatient;
 }
@@ -3577,6 +3603,30 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         [key]: value
       }
     }));
+    saveLocalShiftCrew(employee?.id, { ...(patient.besatzung || {}), [key]: value });
+  }
+
+  function replaceCrew(nextCrew) {
+    setPatient((current) => ({
+      ...current,
+      besatzung: {
+        ...(current.besatzung || {}),
+        ...nextCrew
+      }
+    }));
+    saveLocalShiftCrew(employee?.id, { ...(patient.besatzung || {}), ...nextCrew });
+  }
+
+  function swapTransportLeaderWithDriver() {
+    if (!hasValue(crew.fahrer)) {
+      setStatusText('Bitte zuerst Fahrer/in eintragen, dann kann der Transportführer getauscht werden.');
+      return;
+    }
+    replaceCrew({
+      verantwortlicher: crew.fahrer || '',
+      fahrer: crew.verantwortlicher || employee?.name || ''
+    });
+    setStatusText('Transportführer/in und Fahrer/in wurden für diesen Einsatz getauscht.');
   }
 
   function updatePediatricGroup(group, key, value) {
@@ -4766,7 +4816,8 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       }, session.token);
       setGeneratedProtocol(result.protocol_text || '');
       setQualityResult(result.quality || qualityResult);
-      setPatient(emptyPatient);
+      saveLocalShiftCrew(employee?.id, patient.besatzung || {});
+      setPatient(patientWithCrewDefaults({}, employee));
       clearLocalDraft(employee?.id);
       setLocalDraft(null);
       setProtocolSection('protokoll');
@@ -4888,11 +4939,11 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
         <section className="crew-box">
           <div className="section-head compact-head">
             <h3>Besatzung</h3>
-            <span>für Protokoll und Archiv</span>
+            <span>Transportführer/in pro Einsatz wechselbar</span>
           </div>
           <div className="form-grid crew-grid">
             <label>
-              Dokumentation / Hauptnutzer
+              Transportführer/in
               <input value={crew.verantwortlicher || employee?.name || ''} onChange={(event) => updateCrew('verantwortlicher', event.target.value)} />
             </label>
             <label>
@@ -4907,6 +4958,10 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
               Praktikant/in
               <input value={crew.praktikant || ''} onChange={(event) => updateCrew('praktikant', event.target.value)} placeholder="optional" />
             </label>
+          </div>
+          <div className="crew-actions">
+            <button type="button" onClick={swapTransportLeaderWithDriver}>TF mit Fahrer/in tauschen</button>
+            <button type="button" onClick={() => replaceCrew({ verantwortlicher: employee?.name || '' })}>Login als TF setzen</button>
           </div>
         </section>
 
