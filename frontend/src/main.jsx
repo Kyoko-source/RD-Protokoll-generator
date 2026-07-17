@@ -1523,6 +1523,7 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
   const [view, setView] = useState(() => getInitialDashboardView());
   const [error, setError] = useState('');
   const [statusText, setStatusText] = useState('');
+  const [pendingDispatch, setPendingDispatch] = useState(null);
 
   useEffect(() => {
     api('/api/dashboard', {}, session.token)
@@ -1531,6 +1532,24 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
     api('/api/cases', {}, session.token)
       .then((data) => setCases(data.cases || []))
       .catch(() => setCases([]));
+  }, [session.token]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function refreshPendingDispatch() {
+      try {
+        const data = await api('/api/dispatch/pending', {}, session.token);
+        if (!cancelled) setPendingDispatch(data.pending || null);
+      } catch {
+        if (!cancelled) setPendingDispatch(null);
+      }
+    }
+    refreshPendingDispatch();
+    const interval = window.setInterval(refreshPendingDispatch, 10000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
   }, [session.token]);
 
   const employee = dashboard?.employee || session.employee;
@@ -1565,6 +1584,31 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
       }, session.token).catch(() => {});
       printBlob(file.blob);
       setStatusText('Druckfenster wurde geöffnet.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function acceptPendingDispatch() {
+    setError('');
+    setStatusText('');
+    try {
+      const result = await api('/api/dispatch/pending/accept', { method: 'POST' }, session.token);
+      setPendingDispatch(null);
+      setStatusText(`Einsatz übernommen: ${result.updated_at}`);
+      setView('protocol');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function dismissPendingDispatch() {
+    setError('');
+    setStatusText('');
+    try {
+      await api('/api/dispatch/pending', { method: 'DELETE' }, session.token);
+      setPendingDispatch(null);
+      setStatusText('Leitstellen-Einsatz ausgeblendet.');
     } catch (err) {
       setError(err.message);
     }
@@ -1651,6 +1695,46 @@ function Dashboard({ session, onLogout, connectivity, onSync, installPromptAvail
         </div>
       </section>
 
+      {pendingDispatch && (
+        <section className="dispatch-alert">
+          <div className="dispatch-alert-icon">
+            <AlertTriangle size={30} />
+          </div>
+          <div className="dispatch-alert-content">
+            <span className="dispatch-alert-kicker">Neuer Einsatz von der Leitstelle</span>
+            <h2>{pendingDispatch.summary?.title || 'Neuer Leitstellen-Einsatz'}</h2>
+            <div className="dispatch-alert-grid">
+              {pendingDispatch.summary?.case_number && (
+                <span><b>Einsatznummer</b>{pendingDispatch.summary.case_number}</span>
+              )}
+              {pendingDispatch.summary?.location && (
+                <span><b>Ort</b>{pendingDispatch.summary.location}</span>
+              )}
+              {pendingDispatch.summary?.coordinates && (
+                <span><b>Koordinaten</b>{pendingDispatch.summary.coordinates}</span>
+              )}
+              {pendingDispatch.summary?.alarm_time && (
+                <span><b>Alarmzeit</b>{pendingDispatch.summary.alarm_time}</span>
+              )}
+              {pendingDispatch.summary?.vehicle && (
+                <span><b>Fahrzeug</b>{pendingDispatch.summary.vehicle}</span>
+              )}
+              {pendingDispatch.summary?.dispatch_center && (
+                <span><b>Leitstelle</b>{pendingDispatch.summary.dispatch_center}</span>
+              )}
+            </div>
+          </div>
+          <div className="dispatch-alert-actions">
+            <button type="button" className="primary" onClick={acceptPendingDispatch}>
+              <CheckCircle2 size={18} /> Einsatz übernehmen
+            </button>
+            <button type="button" onClick={dismissPendingDispatch}>
+              Ausblenden
+            </button>
+          </div>
+        </section>
+      )}
+
       <section className="tile-grid">
         {tiles.map((tile) => {
           const Icon = tileIcons[tile.id] || FileText;
@@ -1733,7 +1817,11 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
         body: JSON.stringify({ source, payload })
       }, session.token);
       setImportResult(result);
-      setStatusText(`Import übernommen: ${Object.keys(result.imported || {}).length} Felder.`);
+      if (result.status === 'pending') {
+        setStatusText(`Leitstellen-Einsatz wartet im Hauptmenü: ${Object.keys(result.imported || {}).length} Felder.`);
+      } else {
+        setStatusText(`Import übernommen: ${Object.keys(result.imported || {}).length} Felder.`);
+      }
     } catch (err) {
       setError(err.message);
     }
@@ -1810,7 +1898,9 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
                 rows={12}
               />
             </label>
-            <button type="button" onClick={importPayload}>Import in Dokumentation übernehmen</button>
+            <button type="button" onClick={importPayload}>
+              {source === 'dispatch' ? 'Als eingehenden Einsatz senden' : 'Import in Dokumentation übernehmen'}
+            </button>
           </div>
           {importResult && (
             <div className="import-result">
@@ -3139,6 +3229,7 @@ const emptyPatient = {
   reanimation: { shocks: [] },
   transport: {},
   einsatz: {},
+  anfahrt: {},
   uebergabe: {}
 };
 

@@ -1144,6 +1144,98 @@ form button,
   margin-bottom: 22px;
 }
 
+.dispatch-alert {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 18px;
+  align-items: center;
+  margin-bottom: 24px;
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(45, 212, 191, 0.35);
+  background: linear-gradient(135deg, rgba(13, 148, 136, 0.3), rgba(15, 23, 42, 0.86));
+  box-shadow: 0 22px 54px rgba(0, 0, 0, 0.28);
+}
+
+.dispatch-alert-icon {
+  width: 58px;
+  height: 58px;
+  display: grid;
+  place-items: center;
+  border-radius: 16px;
+  color: #042f2e;
+  background: linear-gradient(135deg, #99f6e4, #67e8f9);
+}
+
+.dispatch-alert-content {
+  min-width: 0;
+}
+
+.dispatch-alert-kicker {
+  display: block;
+  margin-bottom: 5px;
+  color: #99f6e4;
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 0.78rem;
+}
+
+.dispatch-alert h2 {
+  margin: 0 0 12px;
+  color: #fff;
+  font-size: 1.35rem;
+}
+
+.dispatch-alert-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dispatch-alert-grid span {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+  padding: 9px 10px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(239, 248, 255, 0.88);
+  overflow-wrap: anywhere;
+}
+
+.dispatch-alert-grid b {
+  color: rgba(153, 246, 228, 0.94);
+  font-size: 0.72rem;
+  text-transform: uppercase;
+}
+
+.dispatch-alert-actions {
+  display: grid;
+  gap: 10px;
+  min-width: 190px;
+}
+
+.dispatch-alert-actions button {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: #fff;
+  background: rgba(255, 255, 255, 0.09);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.dispatch-alert-actions .primary {
+  color: #032f2c;
+  background: linear-gradient(135deg, #5eead4 0%, #67e8f9 100%);
+  border-color: transparent;
+}
+
 .protocol-toolbar {
   display: flex;
   justify-content: space-between;
@@ -3538,6 +3630,8 @@ legend {
   .system-status,
   .offline-draft-box,
   .status-band,
+  .dispatch-alert,
+  .dispatch-alert-grid,
   .tile-grid,
   .quality-box,
   .quality-overview,
@@ -3602,6 +3696,10 @@ legend {
   .toolbar-group-end {
     align-items: stretch;
     width: 100%;
+  }
+
+  .dispatch-alert-actions {
+    min-width: 0;
   }
 
   .toolbar-group {

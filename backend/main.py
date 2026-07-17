@@ -270,15 +270,18 @@ PILOT_BLOCKED_IDENTITY_KEYS = {
 
 def sanitize_pilot_patient(patient):
     """Server-side guard: identity data must not be persisted during the pilot."""
-    def scrub(value):
+    allowed_location_sections = {"einsatz", "anfahrt"}
+
+    def scrub(value, path=()):
         if isinstance(value, dict):
+            section = path[0] if path else ""
             return {
-                key: scrub(item)
+                key: scrub(item, (*path, str(key)))
                 for key, item in value.items()
-                if str(key).strip().lower() not in PILOT_BLOCKED_IDENTITY_KEYS
+                if section in allowed_location_sections or str(key).strip().lower() not in PILOT_BLOCKED_IDENTITY_KEYS
             }
         if isinstance(value, list):
-            return [scrub(item) for item in value]
+            return [scrub(item, path) for item in value]
         return value
 
     return scrub(patient if isinstance(patient, dict) else {})
@@ -376,6 +379,66 @@ def approach_from_dispatch(imported):
         "source": "dispatch",
     }
     return {key: value for key, value in approach.items() if valid(value)}
+
+
+def patient_with_dispatch(patient, imported):
+    patient = patient if isinstance(patient, dict) else default_patient_case()
+    imported = imported if isinstance(imported, dict) else {}
+    patient["einsatz"] = {**(patient.get("einsatz") or {}), **imported}
+    approach = approach_from_dispatch(imported)
+    if approach:
+        patient["anfahrt"] = {**(patient.get("anfahrt") or {}), **approach}
+    return patient, approach
+
+
+def pending_dispatch_summary(imported):
+    imported = imported if isinstance(imported, dict) else {}
+    approach = approach_from_dispatch(imported)
+    title = compact_join([imported.get("stichwort"), imported.get("meldebild")], " / ")
+    location = approach.get("address") or clean_text(imported.get("adresse"), 240) or compact_join([imported.get("strasse"), imported.get("hausnummer"), imported.get("ort")])
+    return {
+        "title": title or "Neuer Leitstellen-Einsatz",
+        "case_number": clean_text(imported.get("einsatznummer"), 80),
+        "keyword": clean_text(imported.get("stichwort"), 120),
+        "location": location,
+        "coordinates": approach.get("coordinates", ""),
+        "alarm_time": clean_text(imported.get("alarmzeit"), 120),
+        "vehicle": clean_text(imported.get("fahrzeug"), 120),
+        "dispatch_center": clean_text(imported.get("leitstelle"), 120),
+    }
+
+
+def load_employee_pending_dispatch(employee):
+    store = load_case_draft_store()
+    draft = store.get("drafts", {}).get(employee["id"], {})
+    pending = draft.get("pending_dispatch") if isinstance(draft, dict) else None
+    return pending if isinstance(pending, dict) else None
+
+
+def save_employee_pending_dispatch(employee, imported, raw_payload=""):
+    store = load_case_draft_store()
+    draft = store.setdefault("drafts", {}).setdefault(employee["id"], {})
+    created_at = local_now().isoformat(timespec="seconds")
+    pending = {
+        "id": f"dispatch-{employee['id']}-{created_at}",
+        "created_at": created_at,
+        "imported": imported,
+        "raw_payload": clean_text(raw_payload, 8000),
+        "summary": pending_dispatch_summary(imported),
+    }
+    draft["pending_dispatch"] = pending
+    draft.setdefault("updated_at", created_at)
+    save_case_draft_store(store)
+    return pending
+
+
+def clear_employee_pending_dispatch(employee):
+    store = load_case_draft_store()
+    draft = store.get("drafts", {}).get(employee["id"], {})
+    if isinstance(draft, dict):
+        draft.pop("pending_dispatch", None)
+        draft["updated_at"] = local_now().isoformat(timespec="seconds")
+        save_case_draft_store(store)
 
 
 def add_paragraph(title, sentences):
@@ -1812,6 +1875,8 @@ def load_employee_patient_draft(employee):
 
 def save_employee_patient_draft(employee, patient):
     store = load_case_draft_store()
+    existing_draft = store.get("drafts", {}).get(employee["id"], {})
+    pending_dispatch = existing_draft.get("pending_dispatch") if isinstance(existing_draft, dict) else None
     store.setdefault("drafts", {})[employee["id"]] = {
         "updated_at": local_now().isoformat(timespec="seconds"),
         "patient": patient,
@@ -1822,6 +1887,8 @@ def save_employee_patient_draft(employee, patient):
         "generated_protocol_text": "",
         "xabcde_selected": "A",
     }
+    if isinstance(pending_dispatch, dict):
+        store["drafts"][employee["id"]]["pending_dispatch"] = pending_dispatch
     save_case_draft_store(store)
     return store["drafts"][employee["id"]]["updated_at"]
 
@@ -2069,6 +2136,50 @@ def dashboard(employee=Depends(current_employee)):
         tiles.append({"id": "interfaces", "label": "Schnittstellen", "subtitle": "Import und Export"})
         tiles.append({"id": "admin", "label": "Admin", "subtitle": "Sicherheit und Verwaltung"})
     return {"employee": public_employee(employee), "tiles": tiles}
+
+
+@app.get("/api/dispatch/pending")
+def pending_dispatch(employee=Depends(current_employee)):
+    return {"pending": load_employee_pending_dispatch(employee)}
+
+
+@app.post("/api/dispatch/pending/accept")
+def accept_pending_dispatch(employee=Depends(current_employee)):
+    pending = load_employee_pending_dispatch(employee)
+    if not pending:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Kein wartender Leitstellen-Einsatz vorhanden.")
+    patient = load_employee_patient_draft(employee)
+    patient, approach = patient_with_dispatch(patient, pending.get("imported", {}))
+    updated_at = save_employee_patient_draft(employee, sanitize_pilot_patient(patient))
+    clear_employee_pending_dispatch(employee)
+    audit(
+        "api_dispatch_pending_accepted",
+        employee=employee,
+        entity_type="case_draft",
+        details={
+            "fields": sorted((pending.get("imported") or {}).keys()),
+            "approach_fields": sorted(approach.keys()),
+        },
+    )
+    return {
+        "status": "accepted",
+        "patient": patient,
+        "approach": approach,
+        "updated_at": updated_at,
+    }
+
+
+@app.delete("/api/dispatch/pending")
+def dismiss_pending_dispatch(employee=Depends(current_employee)):
+    pending = load_employee_pending_dispatch(employee)
+    clear_employee_pending_dispatch(employee)
+    audit(
+        "api_dispatch_pending_dismissed",
+        employee=employee,
+        entity_type="case_draft",
+        details={"had_pending": bool(pending)},
+    )
+    return {"status": "dismissed"}
 
 
 @app.get("/api/announcements")
@@ -2463,10 +2574,20 @@ def admin_interface_import(payload: InterfaceImportRequest, employee=Depends(req
     patient = load_employee_patient_draft(employee)
     if source == "dispatch":
         imported = parse_dispatch_import(payload.payload)
-        patient["einsatz"] = {**(patient.get("einsatz") or {}), **imported}
-        approach = approach_from_dispatch(imported)
-        if approach:
-            patient["anfahrt"] = {**(patient.get("anfahrt") or {}), **approach}
+        pending = save_employee_pending_dispatch(employee, imported, payload.payload)
+        audit(
+            "api_dispatch_pending_received",
+            employee=employee,
+            entity_type="case_draft",
+            details={"source": source, "fields": sorted(imported.keys()), "pending_id": pending.get("id", "")},
+        )
+        return {
+            "status": "pending",
+            "source": source,
+            "imported": imported,
+            "pending": pending,
+            "approach": approach_from_dispatch(imported),
+        }
     elif source == "corpuls":
         imported = parse_corpuls_import(payload.payload)
         patient["vitalwerte"] = {**(patient.get("vitalwerte") or {}), **imported}
