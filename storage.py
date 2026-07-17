@@ -670,6 +670,27 @@ def list_login_events(limit=100):
     ]
 
 
+def delete_security_events_before(cutoff_timestamp):
+    init_database()
+    cutoff = str(cutoff_timestamp or "").strip()
+    if not cutoff:
+        return {"audit_log": 0, "login_events": 0}
+    with _connect() as connection:
+        audit_deleted = connection.execute(
+            "DELETE FROM audit_log WHERE timestamp < ?",
+            (cutoff,),
+        ).rowcount
+        login_deleted = connection.execute(
+            "DELETE FROM login_events WHERE timestamp < ?",
+            (cutoff,),
+        ).rowcount
+        connection.commit()
+    return {
+        "audit_log": max(0, audit_deleted),
+        "login_events": max(0, login_deleted),
+    }
+
+
 def migrate_json_files(employee_file="employees.json", draft_file="case_drafts.json"):
     init_database()
 

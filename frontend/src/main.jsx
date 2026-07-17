@@ -99,30 +99,32 @@ function localDraftKey(employeeId) {
   return `nana_local_draft_${employeeId || 'unknown'}`;
 }
 
-function loadLocalDraft(employeeId) {
+function clearLegacyLocalPatientDrafts() {
   try {
-    const raw = localStorage.getItem(localDraftKey(employeeId));
-    return raw ? JSON.parse(raw) : null;
+    Object.keys(localStorage)
+      .filter((key) => key.startsWith('nana_local_draft_'))
+      .forEach((key) => localStorage.removeItem(key));
   } catch {
-    return null;
+    // Browser storage is intentionally not used for patient data.
   }
+}
+
+function loadLocalDraft(employeeId) {
+  clearLegacyLocalPatientDrafts();
+  return null;
 }
 
 function saveLocalDraft(employeeId, patient) {
   if (!employeeId || !patient) return null;
-  const draft = {
-    patient,
-    updatedAt: new Date().toISOString(),
-    source: 'browser'
-  };
-  localStorage.setItem(localDraftKey(employeeId), JSON.stringify(draft));
-  return draft;
+  clearLegacyLocalPatientDrafts();
+  return null;
 }
 
 function clearLocalDraft(employeeId) {
   if (employeeId) {
     localStorage.removeItem(localDraftKey(employeeId));
   }
+  clearLegacyLocalPatientDrafts();
 }
 
 function localShiftCrewKey(employeeId) {
@@ -2646,6 +2648,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [newRole, setNewRole] = useState('employee');
   const [newQualification, setNewQualification] = useState('');
   const [retentionDays, setRetentionDays] = useState(3650);
+  const [securityLogRetentionDays, setSecurityLogRetentionDays] = useState(180);
   const [temporaryPassword, setTemporaryPassword] = useState('');
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
@@ -2678,6 +2681,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
       setPrivacy(privacyData);
       setQualityRules(qualityData.rules || []);
       setRetentionDays(privacyData.retention_days || 3650);
+      setSecurityLogRetentionDays(privacyData.security_log_retention_days || 180);
       setCases(caseData.cases || []);
       setAnnouncementData(announcementAdminData);
       setReleaseInfo(releaseData);
@@ -2756,9 +2760,12 @@ function AdminView({ session, employee, onBack, onLogout }) {
     try {
       const result = await api('/api/admin/privacy', {
         method: 'PUT',
-        body: JSON.stringify({ retention_days: Number(retentionDays) })
+        body: JSON.stringify({
+          retention_days: Number(retentionDays),
+          security_log_retention_days: Number(securityLogRetentionDays)
+        })
       }, session.token);
-      setStatusText(`Aufbewahrung gesetzt: ${result.retention_days} Tage.`);
+      setStatusText(`Aufbewahrung gesetzt: ${result.retention_days} Tage, Logs ${result.security_log_retention_days} Tage.`);
       await loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -2771,6 +2778,19 @@ function AdminView({ session, employee, onBack, onLogout }) {
     try {
       const result = await api('/api/admin/privacy/purge-expired', { method: 'POST' }, session.token);
       setStatusText(`${result.count} abgelaufene Einsätze gelöscht.`);
+      await loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function purgeSecurityEvents() {
+    setError('');
+    setStatusText('');
+    try {
+      const result = await api('/api/admin/privacy/purge-security-events', { method: 'POST' }, session.token);
+      const deleted = result.deleted || {};
+      setStatusText(`${(deleted.audit_log || 0) + (deleted.login_events || 0)} alte Sicherheitsereignisse gelöscht.`);
       await loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -2978,7 +2998,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
             </div>
             <div>
               <strong>Audit-Log</strong>
-              <span>{privacy?.audit_events || 0} letzte Ereignisse abrufbar</span>
+              <span>{privacy?.audit_events || 0} letzte Ereignisse abrufbar · {privacy?.security_log_retention_days || 180} Tage Aufbewahrung</span>
             </div>
             <div>
               <strong>Abgelaufene Fälle</strong>
@@ -2986,12 +3006,22 @@ function AdminView({ session, employee, onBack, onLogout }) {
             </div>
           </div>
           <div className="inline-form">
-            <input value={retentionDays} onChange={(event) => setRetentionDays(event.target.value)} inputMode="numeric" />
+            <label>
+              Einsatzdaten
+              <input value={retentionDays} onChange={(event) => setRetentionDays(event.target.value)} inputMode="numeric" />
+            </label>
+            <label>
+              Sicherheitslogs
+              <input value={securityLogRetentionDays} onChange={(event) => setSecurityLogRetentionDays(event.target.value)} inputMode="numeric" />
+            </label>
             <button type="button" onClick={saveRetention}>Aufbewahrung speichern</button>
           </div>
           <div className="privacy-actions">
             <button type="button" className="danger-button" onClick={purgeExpiredCases}>
               <Trash2 size={16} /> Abgelaufene Fälle löschen
+            </button>
+            <button type="button" className="danger-button" onClick={purgeSecurityEvents}>
+              <Trash2 size={16} /> Alte Logs löschen
             </button>
           </div>
           <div className="privacy-checklist">
@@ -3631,15 +3661,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
         onSync?.(syncTime);
       })
       .catch((err) => {
-        const fallback = loadLocalDraft(employee?.id);
-        if (fallback?.patient) {
-          setPatient(patientWithCrewDefaults(fallback.patient, employee));
-          setLocalDraft(fallback);
-          setLocalDraftDecisionPending(false);
-          setStatusText('Backend nicht erreichbar. Lokaler Entwurf wurde geladen.');
-        } else {
-          setError(err.message);
-        }
+        setError(`${err.message} Patientendaten werden aus Datenschutzgründen nicht lokal im Browser zwischengespeichert.`);
         setDraftReady(true);
       });
   }, [session.token, employee?.id]);
@@ -4921,12 +4943,12 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       }, session.token);
       markActionFeedback('save-draft', `Entwurf gespeichert: ${result.updated_at}`);
       onSync?.(result.updated_at);
-      const saved = saveLocalDraft(employee?.id, patient);
-      setLocalDraft(saved);
+      clearLocalDraft(employee?.id);
+      setLocalDraft(null);
     } catch (err) {
-      const saved = saveLocalDraft(employee?.id, patient);
-      setLocalDraft(saved);
-      setError(`${err.message} Lokale Sicherung wurde aktualisiert.`);
+      clearLocalDraft(employee?.id);
+      setLocalDraft(null);
+      setError(`${err.message} Keine lokale Sicherung: Patientendaten werden nur verschlüsselt serverseitig gespeichert.`);
     }
   }
 
@@ -6307,7 +6329,11 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
 
 function App() {
   const [session, setSession] = useState(() => {
-    const raw = localStorage.getItem('nana_session');
+    const legacy = localStorage.getItem('nana_session');
+    if (legacy) {
+      localStorage.removeItem('nana_session');
+    }
+    const raw = sessionStorage.getItem('nana_session');
     return raw ? JSON.parse(raw) : null;
   });
   const [lockedSession, setLockedSession] = useState(() => {
@@ -6323,7 +6349,7 @@ function App() {
 
   function handleLogin(result) {
     const nextSession = { token: result.token, employee: result.employee, lastActivity: Date.now() };
-    localStorage.setItem('nana_session', JSON.stringify(nextSession));
+    sessionStorage.setItem('nana_session', JSON.stringify(nextSession));
     localStorage.removeItem('nana_locked_session');
     setLockedSession(null);
     setPendingSession(nextSession);
@@ -6331,7 +6357,7 @@ function App() {
 
   function handleRestoreSession(result) {
     const nextSession = { token: result.token, employee: result.employee, lastActivity: Date.now() };
-    localStorage.setItem('nana_session', JSON.stringify(nextSession));
+    sessionStorage.setItem('nana_session', JSON.stringify(nextSession));
     localStorage.removeItem('nana_locked_session');
     setLockedSession(null);
     setSession(nextSession);
@@ -6348,6 +6374,7 @@ function App() {
       lastActivity: currentSession.lastActivity || Date.now()
     };
     localStorage.setItem('nana_locked_session', JSON.stringify(nextLocked));
+    sessionStorage.removeItem('nana_session');
     localStorage.removeItem('nana_session');
     setLockedSession(nextLocked);
     setPendingSession(null);
@@ -6355,6 +6382,7 @@ function App() {
   }
 
   function handleLogout() {
+    sessionStorage.removeItem('nana_session');
     localStorage.removeItem('nana_session');
     localStorage.removeItem('nana_locked_session');
     setLockedSession(null);
@@ -6372,14 +6400,14 @@ function App() {
     if (!session) return undefined;
 
     function markActivity() {
-      const raw = localStorage.getItem('nana_session');
+      const raw = sessionStorage.getItem('nana_session');
       const current = raw ? JSON.parse(raw) : session;
       const nextSession = { ...current, lastActivity: Date.now() };
-      localStorage.setItem('nana_session', JSON.stringify(nextSession));
+      sessionStorage.setItem('nana_session', JSON.stringify(nextSession));
     }
 
     function checkTimeout() {
-      const raw = localStorage.getItem('nana_session');
+      const raw = sessionStorage.getItem('nana_session');
       const current = raw ? JSON.parse(raw) : null;
       if (!current?.lastActivity || Date.now() - current.lastActivity > SESSION_TIMEOUT_MS) {
         lockCurrentSession(current || session);

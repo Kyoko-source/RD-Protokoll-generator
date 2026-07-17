@@ -24,6 +24,7 @@ from storage import (
     anonymize_finished_case,
     delete_finished_case,
     delete_expired_finished_cases,
+    delete_security_events_before,
     encrypt_existing_patient_data,
     encryption_status,
     get_finished_case,
@@ -229,6 +230,7 @@ class FeedbackUpdateRequest(BaseModel):
 
 class RetentionRequest(BaseModel):
     retention_days: int = 3650
+    security_log_retention_days: int = 180
 
 
 def default_patient_case():
@@ -1925,11 +1927,24 @@ def short_text(value, limit=240):
 def client_ip(request: Request):
     forwarded_for = request.headers.get("x-forwarded-for", "")
     if forwarded_for:
-        return short_text(forwarded_for.split(",")[0], 80)
+        return short_text(anonymize_ip(forwarded_for.split(",")[0]), 80)
     real_ip = request.headers.get("x-real-ip", "")
     if real_ip:
-        return short_text(real_ip, 80)
-    return short_text(request.client.host if request.client else "", 80)
+        return short_text(anonymize_ip(real_ip), 80)
+    return short_text(anonymize_ip(request.client.host if request.client else ""), 80)
+
+
+def anonymize_ip(value):
+    ip = str(value or "").strip()
+    if not ip:
+        return ""
+    if ":" in ip:
+        parts = ip.split(":")
+        return ":".join(parts[:4] + ["0000"] * max(0, 8 - len(parts[:4])))
+    parts = ip.split(".")
+    if len(parts) == 4 and all(part.isdigit() for part in parts):
+        return ".".join(parts[:3] + ["0"])
+    return short_text(ip, 24)
 
 
 def record_login_event(employee, payload, request: Request, source="login"):
@@ -2707,11 +2722,13 @@ def admin_privacy(employee=Depends(require_admin)):
     today = local_now().date().isoformat()
     expired_cases = list_expired_finished_cases(today)
     retention_days = int(get_app_setting("retention_days", 3650) or 3650)
+    security_log_retention_days = int(get_app_setting("security_log_retention_days", 180) or 180)
     audit_count = len(list_audit_events(limit=500))
     encryption = encryption_status()
     return {
         "encryption": encryption,
         "retention_days": retention_days,
+        "security_log_retention_days": security_log_retention_days,
         "session_minutes": SESSION_MINUTES,
         "audit_events": audit_count,
         "expired_cases": len(expired_cases),
@@ -2721,6 +2738,7 @@ def admin_privacy(employee=Depends(require_admin)):
             {"label": "Rollenbasierter Admin-Zugriff", "status": "ok", "detail": "Admin-Endpunkte sind rollenbeschränkt."},
             {"label": "Sitzungssperre", "status": "ok", "detail": f"Backend {SESSION_MINUTES} Minuten, Oberfläche 20 Minuten."},
             {"label": "Aufbewahrungsfrist", "status": "ok" if retention_days <= 3650 else "warning", "detail": f"{retention_days} Tage konfiguriert."},
+            {"label": "Log-Aufbewahrung", "status": "ok" if security_log_retention_days <= 180 else "warning", "detail": f"{security_log_retention_days} Tage für Audit/Login-Metadaten."},
             {"label": "Fällige Löschungen", "status": "ok" if not expired_cases else "warning", "detail": f"{len(expired_cases)} Einsatz/Einsätze abgelaufen."},
             {"label": "Audit-Trail", "status": "ok" if audit_count else "info", "detail": f"{audit_count} Ereignisse einsehbar."},
         ],
@@ -2730,9 +2748,11 @@ def admin_privacy(employee=Depends(require_admin)):
 @app.put("/api/admin/privacy")
 def update_privacy(payload: RetentionRequest, employee=Depends(require_admin)):
     days = max(1, min(int(payload.retention_days or 3650), 36500))
+    log_days = max(1, min(int(payload.security_log_retention_days or 180), 3650))
     set_app_setting("retention_days", days)
-    audit("api_privacy_settings_updated", employee=employee, details={"retention_days": days})
-    return {"status": "saved", "retention_days": days}
+    set_app_setting("security_log_retention_days", log_days)
+    audit("api_privacy_settings_updated", employee=employee, details={"retention_days": days, "security_log_retention_days": log_days})
+    return {"status": "saved", "retention_days": days, "security_log_retention_days": log_days}
 
 
 @app.post("/api/admin/privacy/purge-expired")
@@ -2747,6 +2767,19 @@ def purge_expired_cases(employee=Depends(require_admin)):
         details={"count": len(expired), "date": today},
     )
     return {"status": "purged", "count": len(expired), "case_ids": [item["id"] for item in expired]}
+
+
+@app.post("/api/admin/privacy/purge-security-events")
+def purge_security_events(employee=Depends(require_admin)):
+    days = max(1, min(int(get_app_setting("security_log_retention_days", 180) or 180), 3650))
+    cutoff = (local_now() - timedelta(days=days)).isoformat(timespec="seconds")
+    deleted = delete_security_events_before(cutoff)
+    audit(
+        "api_security_events_purged",
+        employee=employee,
+        details={"cutoff": cutoff, "deleted": deleted},
+    )
+    return {"status": "purged", "cutoff": cutoff, "deleted": deleted}
 
 
 @app.get("/api/admin/employees")

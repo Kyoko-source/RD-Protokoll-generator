@@ -6,4 +6,5 @@ After=docker.service
 [Service]
 Type=oneshot
 WorkingDirectory=/opt/NANA
+EnvironmentFile=/opt/NANA/deploy/env.production
 ExecStart=/opt/NANA/deploy/scripts/backup_nana.sh
