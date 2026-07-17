@@ -966,6 +966,17 @@ form button,
   gap: 7px;
 }
 
+.user-dropdown-tabs em {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: rgba(255, 206, 84, 0.18);
+  color: #ffe8a3;
+  font-size: 0.68rem;
+  font-style: normal;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
 .user-dropdown-tabs button.active {
   color: #f8ffff;
   background: linear-gradient(135deg, rgba(31, 185, 201, 0.24), rgba(57, 213, 174, 0.16));
@@ -1010,6 +1021,44 @@ form button,
   color: rgba(239, 248, 255, 0.86);
   line-height: 1.48;
   white-space: pre-wrap;
+}
+
+.dropdown-entry.entry-new {
+  border-color: rgba(255, 206, 84, 0.24);
+  background: rgba(255, 206, 84, 0.07);
+}
+
+.feedback-status {
+  display: inline-flex !important;
+  width: fit-content;
+  margin: 2px 0 7px !important;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, 0.14);
+  color: rgba(241, 245, 249, 0.86) !important;
+  font-size: 0.76rem !important;
+  font-weight: 850;
+}
+
+.status-offen {
+  background: rgba(249, 115, 22, 0.16);
+  color: #fed7aa !important;
+}
+
+.status-in-arbeit {
+  background: rgba(59, 130, 246, 0.16);
+  color: #bfdbfe !important;
+}
+
+.status-beantwortet,
+.status-erledigt {
+  background: rgba(34, 197, 94, 0.15);
+  color: #bbf7d0 !important;
+}
+
+.status-abgelehnt {
+  background: rgba(239, 68, 68, 0.15);
+  color: #fecaca !important;
 }
 
 .feedback-form {
@@ -1738,6 +1787,33 @@ form button,
 
 .feedback-admin-list {
   gap: 12px;
+}
+
+.feedback-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 0 0 14px;
+}
+
+.feedback-summary button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 36px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.045);
+  color: rgba(239, 248, 255, 0.78);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.feedback-summary button.active {
+  border-color: rgba(80, 215, 192, 0.34);
+  background: rgba(45, 212, 191, 0.14);
+  color: #f7fbff;
 }
 
 .feedback-admin-row {
@@ -3206,6 +3282,14 @@ legend {
 
 .cancellation-panel .protocol-toolbar {
   margin-top: 16px;
+}
+
+.quick-select {
+  opacity: 0.94;
+}
+
+.quick-select select {
+  border-style: dashed;
 }
 
 .cancellation-preview {

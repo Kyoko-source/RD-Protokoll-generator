@@ -61,6 +61,14 @@ const EMPLOYEE_QUALIFICATION_OPTIONS = [
   { value: 'Notfallsanitäter', label: 'Notfallsanitäter' },
   { value: 'Notarzt', label: 'Notarzt' }
 ];
+const FEEDBACK_STATUS_OPTIONS = ['offen', 'in Arbeit', 'beantwortet', 'erledigt', 'abgelehnt'];
+const FEEDBACK_STATUS_LABELS = {
+  offen: 'Offen',
+  'in Arbeit': 'In Arbeit',
+  beantwortet: 'Beantwortet',
+  erledigt: 'Erledigt',
+  abgelehnt: 'Abgelehnt'
+};
 
 function roleLabel(role) {
   return EMPLOYEE_ROLE_OPTIONS.find((item) => item.value === role)?.label || 'Mitarbeiter';
@@ -68,6 +76,20 @@ function roleLabel(role) {
 
 function qualificationLabel(qualification) {
   return EMPLOYEE_QUALIFICATION_OPTIONS.find((item) => item.value === qualification)?.label || 'Keine Angabe';
+}
+
+function feedbackStatusLabel(status) {
+  return FEEDBACK_STATUS_LABELS[status] || status || 'Offen';
+}
+
+function feedbackStatusClass(status) {
+  return `feedback-status status-${String(status || 'offen').toLowerCase().replace(/\s+/g, '-')}`;
+}
+
+function announcementSignature(items) {
+  const first = Array.isArray(items) ? items[0] : null;
+  if (!first) return '';
+  return first.id || `${first.title || ''}-${first.published_at || ''}`;
 }
 
 function localDraftKey(employeeId) {
@@ -884,6 +906,13 @@ function UserMenu({ session, employee, onLogout }) {
   const [activePanel, setActivePanel] = useState('');
   const [announcements, setAnnouncements] = useState({ patch_notes: [], planned_updates: [], feedback: [] });
   const [feedbackDraft, setFeedbackDraft] = useState({ kind: 'Bug', title: '', message: '' });
+  const [seenPatchSignature, setSeenPatchSignature] = useState(() => {
+    try {
+      return localStorage.getItem(`nana_seen_patch_notes_${employee?.id || 'unknown'}`) || '';
+    } catch {
+      return '';
+    }
+  });
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
 
@@ -891,9 +920,25 @@ function UserMenu({ session, employee, onLogout }) {
     setError('');
     try {
       const data = await api('/api/announcements', {}, session.token);
+      const previousSignature = (() => {
+        try {
+          return localStorage.getItem(`nana_seen_patch_notes_${employee?.id || 'unknown'}`) || '';
+        } catch {
+          return '';
+        }
+      })();
+      const nextSignature = announcementSignature(data.patch_notes);
       setAnnouncements(data);
+      setSeenPatchSignature(previousSignature);
       setActivePanel(nextPanel);
       setOpen(true);
+      if (nextPanel === 'patch' && nextSignature) {
+        try {
+          localStorage.setItem(`nana_seen_patch_notes_${employee?.id || 'unknown'}`, nextSignature);
+        } catch {
+          // Local storage is optional; patch notes still render without it.
+        }
+      }
     } catch (err) {
       setError(err.message);
       setOpen(true);
@@ -918,6 +963,8 @@ function UserMenu({ session, employee, onLogout }) {
   }
 
   const visibleList = activePanel === 'planned' ? announcements.planned_updates : announcements.patch_notes;
+  const latestPatchSignature = announcementSignature(announcements.patch_notes);
+  const hasUnseenPatch = Boolean(latestPatchSignature && latestPatchSignature !== seenPatchSignature);
 
   return (
     <div className="user-menu">
@@ -942,7 +989,9 @@ function UserMenu({ session, employee, onLogout }) {
             </div>
           </div>
           <div className="user-dropdown-tabs">
-            <button type="button" className={activePanel === 'patch' ? 'active' : ''} onClick={() => loadAnnouncements('patch')}><Megaphone size={17} /><span>Patch Notes</span></button>
+            <button type="button" className={activePanel === 'patch' ? 'active' : ''} onClick={() => loadAnnouncements('patch')}>
+              <Megaphone size={17} /><span>Patch Notes</span>{hasUnseenPatch && <em>Neu</em>}
+            </button>
             <button type="button" className={activePanel === 'planned' ? 'active' : ''} onClick={() => loadAnnouncements('planned')}><Wrench size={17} /><span>Geplant</span></button>
             <button type="button" className={activePanel === 'feedback' ? 'active' : ''} onClick={() => loadAnnouncements('feedback')}><MessageSquare size={17} /><span>Feedback</span></button>
           </div>
@@ -953,10 +1002,10 @@ function UserMenu({ session, employee, onLogout }) {
             <div className="user-dropdown-list">
               {visibleList.length === 0 ? (
                 <p className="muted">Noch keine Einträge vorhanden.</p>
-              ) : visibleList.map((item) => (
-                <article className="dropdown-entry" key={item.id || `${item.title}-${item.published_at}`}>
+              ) : visibleList.map((item, index) => (
+                <article className={`dropdown-entry${activePanel === 'patch' && index === 0 && hasUnseenPatch ? ' entry-new' : ''}`} key={item.id || `${item.title}-${item.published_at}`}>
                   <strong>{item.title}</strong>
-                  <span>{item.published_at}</span>
+                  <span>{item.published_at}{activePanel === 'patch' && index === 0 && hasUnseenPatch ? ' · Neu seit deinem letzten Blick' : ''}</span>
                   <p>{item.body}</p>
                 </article>
               ))}
@@ -980,7 +1029,8 @@ function UserMenu({ session, employee, onLogout }) {
                 ) : announcements.feedback.map((item) => (
                   <article className="dropdown-entry" key={item.id}>
                     <strong>{item.kind}: {item.title}</strong>
-                    <span>{item.created_at} · {item.status}</span>
+                    <span>{item.created_at}</span>
+                    <span className={feedbackStatusClass(item.status)}>{feedbackStatusLabel(item.status)}</span>
                     <p>{item.message}</p>
                     {item.answer && <p><b>Antwort:</b> {item.answer}</p>}
                   </article>
@@ -1023,6 +1073,27 @@ const cancellationReasons = [
   'Versorgung durch anderes Rettungsmittel übernommen',
   'Polizei / Feuerwehr übernimmt',
   'Sonstiges'
+];
+const cancellationDispatcherSnippets = [
+  'Leitstelle über Funk informiert',
+  'Leitstelle telefonisch informiert',
+  'Rücksprache mit Einsatzleitung erfolgt',
+  'Rückmeldung an Wache / Dienstführung',
+  'Dokumentation nachträglich ergänzt'
+];
+const cancellationAlternativeSnippets = [
+  'Ersatzrettungsmittel alarmiert',
+  'Versorgung durch anderes Rettungsmittel übernommen',
+  'Technik / Werkstatt informiert',
+  'Führungskraft informiert',
+  'Kein weiterer Handlungsbedarf'
+];
+const cancellationDetailSnippets = [
+  'Einsatz vor Eintreffen abgebrochen.',
+  'Anfahrt nicht möglich bzw. nicht vertretbar.',
+  'Rettungsmittel war aus technischen Gründen nicht einsatzbereit.',
+  'Patient/in wurde nicht angetroffen.',
+  'Lage wurde durch andere Einheit übernommen.'
 ];
 
 function Login({ onLogin }) {
@@ -2115,6 +2186,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [patchDraft, setPatchDraft] = useState({ title: '', body: '', published_at: '' });
   const [plannedDraft, setPlannedDraft] = useState({ title: '', body: '', published_at: '' });
   const [feedbackAnswers, setFeedbackAnswers] = useState({});
+  const [feedbackFilter, setFeedbackFilter] = useState('alle');
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState('employee');
   const [newQualification, setNewQualification] = useState('');
@@ -2123,6 +2195,14 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
   const exportEvents = auditEvents.filter((event) => event.action.includes('pdf') || event.action.includes('print'));
+  const feedbackItems = announcementData.feedback || [];
+  const feedbackCounts = FEEDBACK_STATUS_OPTIONS.reduce((counts, statusValue) => {
+    counts[statusValue] = feedbackItems.filter((item) => (item.status || 'offen') === statusValue).length;
+    return counts;
+  }, {});
+  const visibleFeedbackItems = feedbackFilter === 'alle'
+    ? feedbackItems
+    : feedbackItems.filter((item) => (item.status || 'offen') === feedbackFilter);
 
   async function loadAdminData() {
     setError('');
@@ -2504,24 +2584,40 @@ function AdminView({ session, employee, onBack, onLogout }) {
       <section className="work-panel">
         <div className="section-head">
           <h2>Bugs/Wünsche</h2>
-          <span>{(announcementData.feedback || []).length} Meldungen</span>
+          <span>{feedbackItems.length} Meldungen · {feedbackCounts.offen || 0} offen</span>
+        </div>
+        <div className="feedback-summary">
+          <button type="button" className={feedbackFilter === 'alle' ? 'active' : ''} onClick={() => setFeedbackFilter('alle')}>
+            Alle <strong>{feedbackItems.length}</strong>
+          </button>
+          {FEEDBACK_STATUS_OPTIONS.map((statusValue) => (
+            <button
+              type="button"
+              key={statusValue}
+              className={feedbackFilter === statusValue ? 'active' : ''}
+              onClick={() => setFeedbackFilter(statusValue)}
+            >
+              {feedbackStatusLabel(statusValue)} <strong>{feedbackCounts[statusValue] || 0}</strong>
+            </button>
+          ))}
         </div>
         <div className="admin-list feedback-admin-list">
-          {(announcementData.feedback || []).length === 0 ? (
+          {feedbackItems.length === 0 ? (
             <p className="muted">Noch keine Meldungen vorhanden.</p>
-          ) : (announcementData.feedback || []).map((item) => (
+          ) : visibleFeedbackItems.length === 0 ? (
+            <p className="muted">Keine Meldungen in diesem Status.</p>
+          ) : visibleFeedbackItems.map((item) => (
             <div className="admin-row feedback-admin-row" key={item.id}>
               <div>
                 <strong>{item.kind}: {item.title}</strong>
-                <span>{item.created_at} · {item.employee_name || 'unbekannt'} · {item.status}</span>
+                <span>{item.created_at} · {item.employee_name || 'unbekannt'}</span>
+                <span className={feedbackStatusClass(item.status)}>{feedbackStatusLabel(item.status)}</span>
                 <p>{item.message}</p>
               </div>
               <select value={item.status || 'offen'} onChange={(event) => answerFeedback(item, event.target.value)}>
-                <option value="offen">offen</option>
-                <option value="in Arbeit">in Arbeit</option>
-                <option value="beantwortet">beantwortet</option>
-                <option value="erledigt">erledigt</option>
-                <option value="abgelehnt">abgelehnt</option>
+                {FEEDBACK_STATUS_OPTIONS.map((statusValue) => (
+                  <option key={statusValue} value={statusValue}>{feedbackStatusLabel(statusValue)}</option>
+                ))}
               </select>
               <textarea
                 value={feedbackAnswers[item.id] || ''}
@@ -2661,6 +2757,14 @@ function CancellationView({ session, employee, onBack, onLogout, connectivity })
     setCancellation((current) => ({ ...current, [key]: value }));
   }
 
+  function appendCancellation(key, value) {
+    if (!value) return;
+    setCancellation((current) => ({
+      ...current,
+      [key]: current[key] ? `${current[key]}; ${value}` : value
+    }));
+  }
+
   function markCancellationFeedback(key, message) {
     setActionFeedback({ key, message });
     setStatusText(message);
@@ -2750,9 +2854,30 @@ function CancellationView({ session, employee, onBack, onLogout, connectivity })
             Weitere Veranlassung
             <input value={cancellation.alternative_action} onChange={(event) => updateCancellation('alternative_action', event.target.value)} placeholder="z.B. Ersatz-RTW, Technik, Führungskraft" />
           </label>
+          <label className="quick-select">
+            Rücksprache ergänzen
+            <select value="" onChange={(event) => appendCancellation('dispatcher', event.target.value)}>
+              <option value="">Schnellbaustein auswählen</option>
+              {cancellationDispatcherSnippets.map((snippet) => <option key={snippet} value={snippet}>{snippet}</option>)}
+            </select>
+          </label>
+          <label className="quick-select">
+            Veranlassung ergänzen
+            <select value="" onChange={(event) => appendCancellation('alternative_action', event.target.value)}>
+              <option value="">Schnellbaustein auswählen</option>
+              {cancellationAlternativeSnippets.map((snippet) => <option key={snippet} value={snippet}>{snippet}</option>)}
+            </select>
+          </label>
           <label className="full-span">
             Freitext / Verlauf
             <textarea value={cancellation.details} onChange={(event) => updateCancellation('details', event.target.value)} rows={5} placeholder="Was ist passiert? Warum war der Einsatz nicht möglich bzw. warum wurde abgebrochen?" />
+          </label>
+          <label className="full-span quick-select">
+            Verlauf ergänzen
+            <select value="" onChange={(event) => appendCancellation('details', event.target.value)}>
+              <option value="">Schnellbaustein auswählen</option>
+              {cancellationDetailSnippets.map((snippet) => <option key={snippet} value={snippet}>{snippet}</option>)}
+            </select>
           </label>
           <label>
             Dokumentiert durch
@@ -4152,7 +4277,9 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
 
   async function generateProtocol() {
     setError('');
-    setStatusText('');
+    setStatusText('Protokoll wird erstellt...');
+    setGeneratedProtocol('Protokoll wird erstellt...');
+    setProtocolSection('protokoll');
     const localProtocol = generateLocalProtocolText(patient);
     try {
       const result = await api('/api/protocol/preview', {
@@ -4161,16 +4288,22 @@ function ProtocolView({ session, employee, onBack, onLogout, connectivity, onSyn
       }, session.token);
       const protocolText = result.protocol_text || '';
       const nextProtocol = protocolContainsVitalStatuses(protocolText, patient) ? protocolText : localProtocol;
+      if (!String(nextProtocol || '').trim()) {
+        setGeneratedProtocol('');
+        setStatusText('');
+        setError('Es wurden noch keine protokollierbaren Daten eingegeben.');
+        return;
+      }
       setGeneratedProtocol(nextProtocol);
-      setProtocolSection('protokoll');
       markActionFeedback('generate-protocol', nextProtocol === protocolText ? 'Protokoll wurde erzeugt.' : 'Protokoll wurde aus den aktuellen Formularwerten erzeugt.');
     } catch (err) {
       if (localProtocol) {
         setGeneratedProtocol(localProtocol);
-        setProtocolSection('protokoll');
         setStatusText('Protokoll wurde lokal erzeugt. Backend bitte neu starten, damit PDF/Archiv wieder die aktuelle API nutzen.');
         setError(err.message);
       } else {
+        setGeneratedProtocol('');
+        setStatusText('');
         setError(err.message);
       }
     }

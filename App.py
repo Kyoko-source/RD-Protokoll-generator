@@ -6526,10 +6526,22 @@ elif seite == "📄 Protokoll":
         use_container_width=True,
         type="primary"
     ):
+        st.session_state["generated_protocol_text"] = "Protokoll wird erstellt..."
+        protocol = ""
+        protocol_error = None
 
-        protocol = generate_protocol()
+        try:
+            with st.spinner("Protokoll wird erstellt..."):
+                protocol = generate_protocol()
+        except Exception as exc:
+            st.session_state["generated_protocol_text"] = ""
+            protocol_error = exc
 
-        if protocol.strip() == "":
+        if protocol_error is not None:
+            st.error(f"Protokoll konnte nicht erstellt werden: {protocol_error}")
+
+        elif protocol.strip() == "":
+            st.session_state["generated_protocol_text"] = ""
 
             st.warning("Es wurden noch keine Daten eingegeben.")
 
