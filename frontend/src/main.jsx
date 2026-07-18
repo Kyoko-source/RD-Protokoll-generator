@@ -3285,22 +3285,27 @@ function AdminView({ session, employee, onBack, onLogout }) {
         </div>
       </section>
 
-      <section className="work-panel admin-section-card">
-        <div className="section-head">
-          <h2>Audit-Log</h2>
-          <span>letzte Ereignisse</span>
-        </div>
-        <div className="audit-list">
-          {auditEvents.slice(0, 10).map((event, index) => (
+      <details className="work-panel admin-section-card collapsible-panel log-admin-card">
+        <summary>
+          <span>
+            <strong>Audit-Log</strong>
+            <small>{auditEvents.length} Ereignisse</small>
+          </span>
+          <ChevronDown size={18} />
+        </summary>
+        <div className="audit-list collapsible-body">
+          {auditEvents.length === 0 ? (
+            <p className="muted">Noch keine Audit-Ereignisse vorhanden.</p>
+          ) : auditEvents.slice(0, 10).map((event, index) => (
             <div className="audit-row" key={`${event.timestamp}-${index}`}>
               <strong>{event.action}</strong>
               <span>{event.timestamp} · {event.employee_name || 'System'} · {event.entity_type || '-'}</span>
             </div>
           ))}
         </div>
-      </section>
+      </details>
 
-      <details className="work-panel admin-section-card collapsible-panel">
+      <details className="work-panel admin-section-card collapsible-panel log-admin-card">
         <summary>
           <span>
             <strong>Login-Historie</strong>

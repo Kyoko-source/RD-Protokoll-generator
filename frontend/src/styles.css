@@ -2224,6 +2224,10 @@ form button,
   grid-column: 1 / -1;
 }
 
+.log-admin-card {
+  align-self: start;
+}
+
 .admin-card {
   background:
     linear-gradient(135deg, rgba(23, 49, 84, 0.58) 0%, rgba(40, 45, 74, 0.48) 52%, rgba(23, 70, 65, 0.32) 100%),
@@ -3077,6 +3081,10 @@ form button,
   max-height: 420px;
   overflow: auto;
   padding: 0 18px 18px;
+}
+
+.log-admin-card .collapsible-body {
+  max-height: 320px;
 }
 
 .login-event-row {
