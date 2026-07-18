@@ -3246,114 +3246,118 @@ function AdminView({ session, employee, onBack, onLogout }) {
         </div>
       </section>
 
-      <section className="work-panel admin-section-card">
-        <div className="section-head">
-          <h2>Fall-Datenschutz</h2>
-          <span>{cases.length} Einsätze</span>
-        </div>
-        <div className="case-list">
-          {cases.length === 0 ? (
-            <p className="muted">Keine Fälle vorhanden.</p>
-          ) : cases.slice(0, 12).map((item) => (
-            <article className="case-row case-row-actions" key={item.id}>
-              <div>
-                <strong>{item.summary}</strong>
-                <span>{item.completed_at} · {item.employee_name || 'anonym'}</span>
-              </div>
-              <span className={`status-pill status-${item.status}`}>{item.status}</span>
-              <button type="button" onClick={() => anonymizeCase(item.id)}>Anonymisieren</button>
-              <button type="button" className="danger-button" onClick={() => deleteCase(item.id)}>
-                <Trash2 size={16} /> Löschen
-              </button>
-            </article>
-          ))}
-        </div>
-      </section>
+      <div className="admin-stack">
+        <section className="work-panel admin-section-card">
+          <div className="section-head">
+            <h2>Fall-Datenschutz</h2>
+            <span>{cases.length} Einsätze</span>
+          </div>
+          <div className="case-list">
+            {cases.length === 0 ? (
+              <p className="muted">Keine Fälle vorhanden.</p>
+            ) : cases.slice(0, 12).map((item) => (
+              <article className="case-row case-row-actions" key={item.id}>
+                <div>
+                  <strong>{item.summary}</strong>
+                  <span>{item.completed_at} · {item.employee_name || 'anonym'}</span>
+                </div>
+                <span className={`status-pill status-${item.status}`}>{item.status}</span>
+                <button type="button" onClick={() => anonymizeCase(item.id)}>Anonymisieren</button>
+                <button type="button" className="danger-button" onClick={() => deleteCase(item.id)}>
+                  <Trash2 size={16} /> Löschen
+                </button>
+              </article>
+            ))}
+          </div>
+        </section>
 
-      <section className="work-panel admin-section-card qs-admin-card">
-        <div className="section-head">
-          <h2>QS-Regeln</h2>
-          <span>{qualityRules.length} aktiv</span>
-        </div>
-        <div className="rules-grid">
-          {qualityRules.map((rule) => (
-            <div className={`rule-card rule-${rule.severity}`} key={rule.id}>
-              <strong>{rule.label}</strong>
-              <span>{rule.section} · {rule.severity}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <details className="work-panel admin-section-card collapsible-panel log-admin-card">
-        <summary>
-          <span>
-            <strong>Audit-Log</strong>
-            <small>{auditEvents.length} Ereignisse</small>
-          </span>
-          <ChevronDown size={18} />
-        </summary>
-        <div className="audit-list collapsible-body">
-          {auditEvents.length === 0 ? (
-            <p className="muted">Noch keine Audit-Ereignisse vorhanden.</p>
-          ) : auditEvents.slice(0, 10).map((event, index) => (
-            <div className="audit-row" key={`${event.timestamp}-${index}`}>
-              <strong>{event.action}</strong>
-              <span>{event.timestamp} · {event.employee_name || 'System'} · {event.entity_type || '-'}</span>
-            </div>
-          ))}
-        </div>
-      </details>
-
-      <details className="work-panel admin-section-card collapsible-panel log-admin-card">
-        <summary>
-          <span>
-            <strong>Login-Historie</strong>
-            <small>{loginEvents.length} Anmeldungen</small>
-          </span>
-          <ChevronDown size={18} />
-        </summary>
-        <div className="login-event-list collapsible-body">
-          {loginEvents.length === 0 ? (
-            <p className="muted">Noch keine Login-Daten vorhanden.</p>
-          ) : loginEvents.slice(0, 20).map((event, index) => (
-            <div className="login-event-row" key={`${event.timestamp}-${event.device_id}-${index}`}>
-              <div>
-                <strong>{event.employee_name || 'Unbekannter Account'}</strong>
-                <span>{event.timestamp} · {event.source || 'login'}</span>
+        <details className="work-panel admin-section-card collapsible-panel log-admin-card">
+          <summary>
+            <span>
+              <strong>Audit-Log</strong>
+              <small>{auditEvents.length} Ereignisse</small>
+            </span>
+            <ChevronDown size={18} />
+          </summary>
+          <div className="audit-list collapsible-body">
+            {auditEvents.length === 0 ? (
+              <p className="muted">Noch keine Audit-Ereignisse vorhanden.</p>
+            ) : auditEvents.slice(0, 10).map((event, index) => (
+              <div className="audit-row" key={`${event.timestamp}-${index}`}>
+                <strong>{event.action}</strong>
+                <span>{event.timestamp} · {event.employee_name || 'System'} · {event.entity_type || '-'}</span>
               </div>
-              <div>
-                <strong>{event.device_name || 'Unbekanntes Gerät'}</strong>
-                <span>{event.device_id || '-'}</span>
-              </div>
-              <div>
-                <strong>{event.ip_address || 'Keine IP'}</strong>
-                <span title={event.user_agent || ''}>{event.user_agent || 'Kein Browser-Agent'}</span>
-              </div>
-            </div>
-          ))}
-        </div>
-      </details>
+            ))}
+          </div>
+        </details>
 
-      <details className="work-panel admin-section-card collapsible-panel log-admin-card">
-        <summary>
-          <span>
-            <strong>Exporthistorie</strong>
-            <small>{exportEvents.length} Ereignisse</small>
-          </span>
-          <ChevronDown size={18} />
-        </summary>
-        <div className="audit-list collapsible-body">
-          {exportEvents.length === 0 ? (
-            <p className="muted">Noch keine PDF- oder Druckereignisse im Audit-Log.</p>
-          ) : exportEvents.slice(0, 12).map((event, index) => (
-            <div className="audit-row" key={`export-${event.timestamp}-${index}`}>
-              <strong>{event.action}</strong>
-              <span>{event.timestamp} · {event.employee_name || 'System'} · {event.entity_id || event.entity_type || '-'}</span>
-            </div>
-          ))}
-        </div>
-      </details>
+        <details className="work-panel admin-section-card collapsible-panel log-admin-card">
+          <summary>
+            <span>
+              <strong>Login-Historie</strong>
+              <small>{loginEvents.length} Anmeldungen</small>
+            </span>
+            <ChevronDown size={18} />
+          </summary>
+          <div className="login-event-list collapsible-body">
+            {loginEvents.length === 0 ? (
+              <p className="muted">Noch keine Login-Daten vorhanden.</p>
+            ) : loginEvents.slice(0, 20).map((event, index) => (
+              <div className="login-event-row" key={`${event.timestamp}-${event.device_id}-${index}`}>
+                <div>
+                  <strong>{event.employee_name || 'Unbekannter Account'}</strong>
+                  <span>{event.timestamp} · {event.source || 'login'}</span>
+                </div>
+                <div>
+                  <strong>{event.device_name || 'Unbekanntes Gerät'}</strong>
+                  <span>{event.device_id || '-'}</span>
+                </div>
+                <div>
+                  <strong>{event.ip_address || 'Keine IP'}</strong>
+                  <span title={event.user_agent || ''}>{event.user_agent || 'Kein Browser-Agent'}</span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </details>
+
+        <details className="work-panel admin-section-card collapsible-panel log-admin-card">
+          <summary>
+            <span>
+              <strong>Exporthistorie</strong>
+              <small>{exportEvents.length} Ereignisse</small>
+            </span>
+            <ChevronDown size={18} />
+          </summary>
+          <div className="audit-list collapsible-body">
+            {exportEvents.length === 0 ? (
+              <p className="muted">Noch keine PDF- oder Druckereignisse im Audit-Log.</p>
+            ) : exportEvents.slice(0, 12).map((event, index) => (
+              <div className="audit-row" key={`export-${event.timestamp}-${index}`}>
+                <strong>{event.action}</strong>
+                <span>{event.timestamp} · {event.employee_name || 'System'} · {event.entity_id || event.entity_type || '-'}</span>
+              </div>
+            ))}
+          </div>
+        </details>
+      </div>
+
+      <div className="admin-stack">
+        <section className="work-panel admin-section-card qs-admin-card">
+          <div className="section-head">
+            <h2>QS-Regeln</h2>
+            <span>{qualityRules.length} aktiv</span>
+          </div>
+          <div className="rules-grid">
+            {qualityRules.map((rule) => (
+              <div className={`rule-card rule-${rule.severity}`} key={rule.id}>
+                <strong>{rule.label}</strong>
+                <span>{rule.section} · {rule.severity}</span>
+              </div>
+            ))}
+          </div>
+        </section>
+      </div>
       </section>
     </main>
   );
