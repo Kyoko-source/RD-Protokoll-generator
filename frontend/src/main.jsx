@@ -64,6 +64,20 @@ const EMPLOYEE_QUALIFICATION_OPTIONS = [
   { value: 'Notfallsanitäter', label: 'Notfallsanitäter' },
   { value: 'Notarzt', label: 'Notarzt' }
 ];
+const EMPLOYEE_STATION_OPTIONS = [
+  { value: '', label: 'Keine Wache' },
+  { value: 'Gescher', label: 'Gescher' },
+  { value: 'Südlohn', label: 'Südlohn' },
+  { value: 'Isselburg', label: 'Isselburg' },
+  { value: 'Schöppingen', label: 'Schöppingen' },
+  { value: 'Bocholt', label: 'Bocholt' }
+];
+const EMPLOYEE_VEHICLE_OPTIONS = [
+  { value: '', label: 'Keine Angabe' },
+  { value: 'KTW', label: 'KTW' },
+  { value: 'RTW', label: 'RTW' },
+  { value: 'KTW/RTW', label: 'KTW & RTW' }
+];
 const FEEDBACK_STATUS_OPTIONS = ['offen', 'in Arbeit', 'beantwortet', 'erledigt', 'abgelehnt'];
 const FEEDBACK_STATUS_LABELS = {
   offen: 'Offen',
@@ -79,6 +93,14 @@ function roleLabel(role) {
 
 function qualificationLabel(qualification) {
   return EMPLOYEE_QUALIFICATION_OPTIONS.find((item) => item.value === qualification)?.label || 'Keine Angabe';
+}
+
+function stationLabel(station) {
+  return EMPLOYEE_STATION_OPTIONS.find((item) => item.value === station)?.label || 'Keine Wache';
+}
+
+function vehicleScopeLabel(vehicleScope) {
+  return EMPLOYEE_VEHICLE_OPTIONS.find((item) => item.value === vehicleScope)?.label || 'Keine Angabe';
 }
 
 function feedbackStatusLabel(status) {
@@ -2679,6 +2701,9 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [newName, setNewName] = useState('');
   const [newRole, setNewRole] = useState('employee');
   const [newQualification, setNewQualification] = useState('');
+  const [newStation, setNewStation] = useState('');
+  const [newVehicleScope, setNewVehicleScope] = useState('');
+  const [employeeSearch, setEmployeeSearch] = useState('');
   const [retentionDays, setRetentionDays] = useState(3650);
   const [securityLogRetentionDays, setSecurityLogRetentionDays] = useState(180);
   const [externalMapsEnabled, setExternalMapsEnabled] = useState(false);
@@ -2697,6 +2722,16 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const activeEmployeeCount = employees.filter((item) => item.active).length;
   const lockedEmployeeCount = employees.filter((item) => !item.active).length;
   const adminEmployeeCount = employees.filter((item) => item.role === 'admin').length;
+  const employeeSearchValue = employeeSearch.trim().toLowerCase();
+  const visibleEmployees = employeeSearchValue
+    ? employees.filter((item) => [
+        item.name,
+        item.station,
+        item.vehicle_scope,
+        item.qualification,
+        roleLabel(item.role)
+      ].join(' ').toLowerCase().includes(employeeSearchValue))
+    : employees;
   const privacyWarningCount = (privacy?.checklist || []).filter((item) => item.status === 'warning').length;
   const privacyOkCount = (privacy?.checklist || []).filter((item) => item.status === 'ok').length;
   const openFeedbackCount = feedbackCounts.offen || 0;
@@ -2743,12 +2778,20 @@ function AdminView({ session, employee, onBack, onLogout }) {
     try {
       const result = await api('/api/admin/employees', {
         method: 'POST',
-        body: JSON.stringify({ name: newName, role: newRole, qualification: newQualification })
+        body: JSON.stringify({
+          name: newName,
+          role: newRole,
+          qualification: newQualification,
+          station: newStation,
+          vehicle_scope: newVehicleScope
+        })
       }, session.token);
       setTemporaryPassword(`${result.employee.name}: ${result.temporary_password}`);
       setStatusText('Mitarbeiterprofil wurde angelegt.');
       setNewName('');
       setNewQualification('');
+      setNewStation('');
+      setNewVehicleScope('');
       await loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -3007,6 +3050,16 @@ function AdminView({ session, employee, onBack, onLogout }) {
                 <option key={qualification.value || 'none'} value={qualification.value}>{qualification.label}</option>
               ))}
             </select>
+            <select value={newStation} onChange={(event) => setNewStation(event.target.value)} aria-label="Rettungswache">
+              {EMPLOYEE_STATION_OPTIONS.map((station) => (
+                <option key={station.value || 'none'} value={station.value}>{station.label}</option>
+              ))}
+            </select>
+            <select value={newVehicleScope} onChange={(event) => setNewVehicleScope(event.target.value)} aria-label="Einsatzmittel">
+              {EMPLOYEE_VEHICLE_OPTIONS.map((vehicle) => (
+                <option key={vehicle.value || 'none'} value={vehicle.value}>{vehicle.label}</option>
+              ))}
+            </select>
             <select value={newRole} onChange={(event) => setNewRole(event.target.value)}>
               {EMPLOYEE_ROLE_OPTIONS.map((role) => (
                 <option key={role.value} value={role.value}>{role.label}</option>
@@ -3014,14 +3067,23 @@ function AdminView({ session, employee, onBack, onLogout }) {
             </select>
             <button type="submit"><UserPlus size={17} /> Anlegen</button>
           </form>
+          <label className="employee-search-field">
+            <Search size={17} />
+            <input
+              value={employeeSearch}
+              onChange={(event) => setEmployeeSearch(event.target.value)}
+              placeholder="Mitarbeiter, Wache, KTW oder RTW suchen"
+            />
+          </label>
           <div className="admin-list employee-list">
-            {employees.map((item) => (
+            {visibleEmployees.map((item) => (
               <div className={`admin-row employee-row ${item.active ? '' : 'employee-row-inactive'}`} key={item.id}>
                 <div className="employee-main">
                   <span className="employee-avatar">{(item.name || '?').slice(0, 1).toUpperCase()}</span>
                   <div>
                     <strong>{item.name}</strong>
                     <span>{qualificationLabel(item.qualification)} · {roleLabel(item.role)}</span>
+                    <small>{stationLabel(item.station)} · {vehicleScopeLabel(item.vehicle_scope)}</small>
                   </div>
                 </div>
                 <span className={`status-pill ${item.active ? 'status-active' : 'status-locked'}`}>{item.active ? 'aktiv' : 'gesperrt'}</span>
@@ -3029,6 +3091,16 @@ function AdminView({ session, employee, onBack, onLogout }) {
                   <select value={item.qualification || ''} onChange={(event) => updateEmployee(item, { qualification: event.target.value })} aria-label={`Qualifikation von ${item.name}`}>
                     {EMPLOYEE_QUALIFICATION_OPTIONS.map((qualification) => (
                       <option key={qualification.value || 'none'} value={qualification.value}>{qualification.label}</option>
+                    ))}
+                  </select>
+                  <select value={item.station || ''} onChange={(event) => updateEmployee(item, { station: event.target.value })} aria-label={`Rettungswache von ${item.name}`}>
+                    {EMPLOYEE_STATION_OPTIONS.map((station) => (
+                      <option key={station.value || 'none'} value={station.value}>{station.label}</option>
+                    ))}
+                  </select>
+                  <select value={item.vehicle_scope || ''} onChange={(event) => updateEmployee(item, { vehicle_scope: event.target.value })} aria-label={`Einsatzmittel von ${item.name}`}>
+                    {EMPLOYEE_VEHICLE_OPTIONS.map((vehicle) => (
+                      <option key={vehicle.value || 'none'} value={vehicle.value}>{vehicle.label}</option>
                     ))}
                   </select>
                   <select value={item.role} onChange={(event) => updateEmployee(item, { role: event.target.value })}>
@@ -3050,6 +3122,11 @@ function AdminView({ session, employee, onBack, onLogout }) {
                 </div>
               </div>
             ))}
+            {!visibleEmployees.length && (
+              <div className="empty-state compact-empty-state">
+                Keine Mitarbeiter gefunden.
+              </div>
+            )}
           </div>
           <div className="employee-insight-grid">
             <div className="employee-insight-card">

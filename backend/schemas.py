@@ -81,12 +81,16 @@ class EmployeeCreateRequest(BaseModel):
     name: str
     role: str = "employee"
     qualification: str = ""
+    station: str = ""
+    vehicle_scope: str = ""
 
 
 class EmployeeUpdateRequest(BaseModel):
     name: str | None = None
     role: str | None = None
     qualification: str | None = None
+    station: str | None = None
+    vehicle_scope: str | None = None
     active: bool | None = None
     reset_password: bool = False
 

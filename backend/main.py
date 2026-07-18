@@ -175,6 +175,8 @@ EMPLOYEE_QUALIFICATIONS = {
     "Notfallsanitäter",
     "Notarzt",
 }
+EMPLOYEE_STATIONS = {"", "Gescher", "Südlohn", "Isselburg", "Schöppingen", "Bocholt"}
+EMPLOYEE_VEHICLE_SCOPES = {"", "KTW", "RTW", "KTW/RTW"}
 
 app = FastAPI(title="NANA API", version="0.1.0")
 allowed_hosts = configured_allowed_hosts()
@@ -2159,6 +2161,8 @@ def public_employee(employee):
         "name": employee.get("name", ""),
         "role": employee.get("role", "employee"),
         "qualification": employee.get("qualification", ""),
+        "station": employee.get("station", ""),
+        "vehicle_scope": employee.get("vehicle_scope", ""),
         "must_change_password": bool(employee.get("must_change_password")),
     }
 
@@ -2220,6 +2224,16 @@ def normalize_employee_role(role):
 def normalize_employee_qualification(qualification):
     value = (qualification or "").strip()
     return value if value in EMPLOYEE_QUALIFICATIONS else ""
+
+
+def normalize_employee_station(station):
+    value = short_text(station, 120).strip()
+    return value if value in EMPLOYEE_STATIONS else ""
+
+
+def normalize_employee_vehicle_scope(vehicle_scope):
+    value = (vehicle_scope or "").strip()
+    return value if value in EMPLOYEE_VEHICLE_SCOPES else ""
 
 
 def password_policy_errors(password):
@@ -3079,6 +3093,8 @@ def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_adm
     name = payload.name.strip()
     role = normalize_employee_role(payload.role)
     qualification = normalize_employee_qualification(payload.qualification)
+    station = normalize_employee_station(payload.station)
+    vehicle_scope = normalize_employee_vehicle_scope(payload.vehicle_scope)
     if not name:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name fehlt.")
 
@@ -3088,6 +3104,8 @@ def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_adm
         "name": name,
         "role": role,
         "qualification": qualification,
+        "station": station,
+        "vehicle_scope": vehicle_scope,
         "active": True,
         "password_hash": "",
         "temp_password_hash": password_hash(temp_password),
@@ -3101,7 +3119,7 @@ def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_adm
         employee=employee,
         entity_type="employee",
         entity_id=new_employee["id"],
-        details={"role": role, "qualification": qualification},
+        details={"role": role, "qualification": qualification, "station": station, "vehicle_scope": vehicle_scope},
     )
     return {"employee": admin_employee(new_employee), "temporary_password": temp_password}
 
@@ -3119,6 +3137,10 @@ def update_employee(employee_id: str, payload: EmployeeUpdateRequest, employee=D
         changes["role"] = normalize_employee_role(payload.role)
     if payload.qualification is not None:
         changes["qualification"] = normalize_employee_qualification(payload.qualification)
+    if payload.station is not None:
+        changes["station"] = normalize_employee_station(payload.station)
+    if payload.vehicle_scope is not None:
+        changes["vehicle_scope"] = normalize_employee_vehicle_scope(payload.vehicle_scope)
     if payload.active is not None:
         if target.get("id") == employee.get("id") and payload.active is False:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Eigenes Admin-Profil kann nicht deaktiviert werden.")

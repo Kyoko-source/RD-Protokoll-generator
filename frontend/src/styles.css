@@ -2800,11 +2800,31 @@ form button,
 }
 
 .employee-create-form {
-  grid-template-columns: minmax(190px, 1fr) minmax(170px, 0.45fr) minmax(150px, 0.35fr) 126px;
+  grid-template-columns: minmax(150px, 1fr) minmax(160px, 0.72fr) minmax(150px, 0.7fr) minmax(120px, 0.52fr) minmax(130px, 0.52fr) 126px;
   padding: 12px;
   border-radius: 14px;
   background: rgba(4, 12, 24, 0.24);
   border: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.employee-search-field {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+  margin: 12px 0 14px;
+  padding: 0 12px;
+  min-height: 46px;
+  border-radius: 14px;
+  background: rgba(4, 12, 24, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(235, 244, 255, 0.66);
+}
+
+.employee-search-field input {
+  border: 0;
+  padding-left: 0;
+  background: transparent;
 }
 
 .admin-list,
@@ -2854,7 +2874,7 @@ form button,
 }
 
 .employee-row {
-  grid-template-columns: minmax(220px, 1fr) 92px minmax(260px, 0.85fr) minmax(260px, 0.75fr);
+  grid-template-columns: minmax(220px, 0.75fr) 92px minmax(420px, 1fr) minmax(260px, 0.66fr);
 }
 
 .employee-row-inactive {
@@ -2883,15 +2903,22 @@ form button,
 }
 
 .employee-main strong,
-.employee-main span {
+.employee-main span,
+.employee-main small {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.employee-main small {
+  color: rgba(99, 230, 190, 0.72);
+  font-size: 0.82rem;
+  font-weight: 820;
+}
+
 .employee-controls {
   display: grid !important;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 0.8fr);
+  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) minmax(96px, 0.68fr) minmax(110px, 0.7fr);
   gap: 10px !important;
 }
 
