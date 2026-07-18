@@ -3270,7 +3270,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
         </div>
       </section>
 
-      <section className="work-panel admin-section-card">
+      <section className="work-panel admin-section-card qs-admin-card">
         <div className="section-head">
           <h2>QS-Regeln</h2>
           <span>{qualityRules.length} aktiv</span>
@@ -3335,7 +3335,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
         </div>
       </details>
 
-      <details className="work-panel admin-section-card collapsible-panel">
+      <details className="work-panel admin-section-card collapsible-panel log-admin-card">
         <summary>
           <span>
             <strong>Exporthistorie</strong>

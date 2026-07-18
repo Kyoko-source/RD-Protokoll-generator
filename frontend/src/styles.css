@@ -2224,7 +2224,12 @@ form button,
   grid-column: 1 / -1;
 }
 
+.qs-admin-card {
+  grid-column: 2;
+}
+
 .log-admin-card {
+  grid-column: 1;
   align-self: start;
 }
 
@@ -4270,6 +4275,11 @@ legend {
   .toolbar-group-end {
     align-items: stretch;
     width: 100%;
+  }
+
+  .qs-admin-card,
+  .log-admin-card {
+    grid-column: auto;
   }
 
   .dispatch-alert-actions {
