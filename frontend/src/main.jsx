@@ -3137,7 +3137,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
       </section>
 
       <section className="admin-secondary-grid">
-      <section className="work-panel admin-section-card">
+      <section className="work-panel admin-section-card updates-admin-card">
         <div className="section-head">
           <h2>Patch Notes & Updates</h2>
           <span>{(announcementData.patch_notes || []).length} Patch Notes · {(announcementData.planned_updates || []).length} geplant</span>
@@ -3196,7 +3196,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
         </div>
       </section>
 
-      <section className="work-panel admin-section-card">
+      <section className="work-panel admin-section-card feedback-admin-card">
         <div className="section-head">
           <h2>Bugs/Wünsche</h2>
           <span>{feedbackItems.length} Meldungen · {feedbackCounts.offen || 0} offen</span>

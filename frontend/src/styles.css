@@ -2216,6 +2216,14 @@ form button,
   margin: 0;
 }
 
+.updates-admin-card {
+  grid-column: 1 / -1;
+}
+
+.feedback-admin-card {
+  grid-column: 1 / -1;
+}
+
 .admin-card {
   background:
     linear-gradient(135deg, rgba(23, 49, 84, 0.58) 0%, rgba(40, 45, 74, 0.48) 52%, rgba(23, 70, 65, 0.32) 100%),
@@ -2230,17 +2238,43 @@ form button,
 
 .admin-announcement-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(320px, 1fr));
+  gap: 18px;
+}
+
+.admin-announcement-grid article {
+  min-width: 0;
+  padding: 14px;
+  border-radius: 14px;
+  background: rgba(4, 12, 24, 0.22);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.admin-announcement-grid h3 {
+  margin: 0 0 12px;
 }
 
 .announcement-form {
-  grid-template-columns: minmax(160px, 0.7fr) minmax(180px, 1fr) minmax(260px, 1.4fr) auto;
-  align-items: stretch;
+  grid-template-columns: 1fr;
+  gap: 10px;
+  align-items: start;
+  margin-bottom: 14px;
+}
+
+.announcement-form input,
+.announcement-form textarea {
+  width: 100%;
+  min-width: 0;
 }
 
 .announcement-form textarea {
-  min-height: 72px;
+  min-height: 88px;
+  resize: vertical;
+}
+
+.announcement-form button {
+  width: fit-content;
+  min-width: 132px;
 }
 
 .deploy-note-box {
@@ -2276,6 +2310,21 @@ form button,
 
 .compact-admin-list {
   margin-top: 12px;
+}
+
+.compact-admin-list .admin-row {
+  grid-template-columns: minmax(0, 1fr) 128px;
+  align-items: start;
+}
+
+.compact-admin-list .admin-row span {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.compact-toolbar {
+  justify-content: flex-end;
+  margin-top: 14px;
 }
 
 .feedback-admin-list {
