@@ -2827,6 +2827,103 @@ form button,
   background: transparent;
 }
 
+.employee-filter-panel {
+  display: grid;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.employee-filter-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.employee-filter-row button {
+  min-height: 34px;
+  padding: 7px 12px;
+  border-radius: 999px;
+  color: rgba(235, 244, 255, 0.72);
+  background: rgba(4, 12, 24, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 0.86rem;
+}
+
+.employee-filter-row button.active,
+.station-summary-card.active {
+  color: #06111f;
+  background: linear-gradient(135deg, #63e6be 0%, #74b9ff 100%);
+  border-color: transparent;
+}
+
+.station-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.station-summary-card {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 9px;
+  align-items: center;
+  min-height: 76px;
+  padding: 11px;
+  border-radius: 14px;
+  text-align: left;
+  color: rgba(235, 244, 255, 0.74);
+  background: rgba(4, 12, 24, 0.28);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.station-summary-card svg {
+  color: #63e6be;
+}
+
+.station-summary-card span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.station-summary-card strong,
+.station-summary-card small,
+.station-summary-card em {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.station-summary-card strong {
+  color: #f7fbff;
+  font-size: 0.95rem;
+}
+
+.station-summary-card small,
+.station-summary-card em {
+  color: rgba(235, 244, 255, 0.62);
+  font-size: 0.82rem;
+  font-style: normal;
+  font-weight: 780;
+}
+
+.station-summary-card em {
+  grid-column: 2;
+}
+
+.station-summary-card.active svg,
+.station-summary-card.active strong,
+.station-summary-card.active small,
+.station-summary-card.active em {
+  color: #06111f;
+}
+
+.station-summary-card.muted {
+  cursor: default;
+  opacity: 0.72;
+}
+
 .admin-list,
 .privacy-list,
 .audit-list,
@@ -4313,6 +4410,7 @@ legend {
   .employee-controls,
   .employee-actions,
   .employee-insight-grid,
+  .station-summary-grid,
   .privacy-summary-grid,
   .privacy-settings-panel,
   .privacy-checklist,

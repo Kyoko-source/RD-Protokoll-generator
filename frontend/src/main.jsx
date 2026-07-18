@@ -2704,6 +2704,8 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [newStation, setNewStation] = useState('');
   const [newVehicleScope, setNewVehicleScope] = useState('');
   const [employeeSearch, setEmployeeSearch] = useState('');
+  const [employeeStationFilter, setEmployeeStationFilter] = useState('all');
+  const [employeeVehicleFilter, setEmployeeVehicleFilter] = useState('all');
   const [retentionDays, setRetentionDays] = useState(3650);
   const [securityLogRetentionDays, setSecurityLogRetentionDays] = useState(180);
   const [externalMapsEnabled, setExternalMapsEnabled] = useState(false);
@@ -2723,15 +2725,31 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const lockedEmployeeCount = employees.filter((item) => !item.active).length;
   const adminEmployeeCount = employees.filter((item) => item.role === 'admin').length;
   const employeeSearchValue = employeeSearch.trim().toLowerCase();
-  const visibleEmployees = employeeSearchValue
-    ? employees.filter((item) => [
+  const stationSummaries = EMPLOYEE_STATION_OPTIONS.filter((station) => station.value).map((station) => {
+    const stationEmployees = employees.filter((item) => item.station === station.value);
+    return {
+      ...station,
+      active: stationEmployees.filter((item) => item.active).length,
+      locked: stationEmployees.filter((item) => !item.active).length,
+      ktw: stationEmployees.filter((item) => ['KTW', 'KTW/RTW'].includes(item.vehicle_scope)).length,
+      rtw: stationEmployees.filter((item) => ['RTW', 'KTW/RTW'].includes(item.vehicle_scope)).length
+    };
+  });
+  const unassignedEmployeeCount = employees.filter((item) => !item.station).length;
+  const visibleEmployees = employees.filter((item) => {
+    const matchesSearch = !employeeSearchValue || [
         item.name,
         item.station,
         item.vehicle_scope,
         item.qualification,
         roleLabel(item.role)
-      ].join(' ').toLowerCase().includes(employeeSearchValue))
-    : employees;
+      ].join(' ').toLowerCase().includes(employeeSearchValue);
+    const matchesStation = employeeStationFilter === 'all' || item.station === employeeStationFilter;
+    const matchesVehicle = employeeVehicleFilter === 'all'
+      || item.vehicle_scope === employeeVehicleFilter
+      || (employeeVehicleFilter !== '' && item.vehicle_scope === 'KTW/RTW' && ['KTW', 'RTW'].includes(employeeVehicleFilter));
+    return matchesSearch && matchesStation && matchesVehicle;
+  });
   const privacyWarningCount = (privacy?.checklist || []).filter((item) => item.status === 'warning').length;
   const privacyOkCount = (privacy?.checklist || []).filter((item) => item.status === 'ok').length;
   const openFeedbackCount = feedbackCounts.offen || 0;
@@ -3075,6 +3093,65 @@ function AdminView({ session, employee, onBack, onLogout }) {
               placeholder="Mitarbeiter, Wache, KTW oder RTW suchen"
             />
           </label>
+          <div className="employee-filter-panel">
+            <div className="employee-filter-row" aria-label="Rettungswache filtern">
+              <button type="button" className={employeeStationFilter === 'all' ? 'active' : ''} onClick={() => setEmployeeStationFilter('all')}>
+                Alle
+              </button>
+              {EMPLOYEE_STATION_OPTIONS.filter((station) => station.value).map((station) => (
+                <button
+                  type="button"
+                  key={station.value}
+                  className={employeeStationFilter === station.value ? 'active' : ''}
+                  onClick={() => setEmployeeStationFilter(station.value)}
+                >
+                  {station.label}
+                </button>
+              ))}
+            </div>
+            <div className="employee-filter-row" aria-label="Einsatzmittel filtern">
+              <button type="button" className={employeeVehicleFilter === 'all' ? 'active' : ''} onClick={() => setEmployeeVehicleFilter('all')}>
+                Alle Mittel
+              </button>
+              {EMPLOYEE_VEHICLE_OPTIONS.filter((vehicle) => vehicle.value).map((vehicle) => (
+                <button
+                  type="button"
+                  key={vehicle.value}
+                  className={employeeVehicleFilter === vehicle.value ? 'active' : ''}
+                  onClick={() => setEmployeeVehicleFilter(vehicle.value)}
+                >
+                  {vehicle.label}
+                </button>
+              ))}
+            </div>
+          </div>
+          <div className="station-summary-grid">
+            {stationSummaries.map((station) => (
+              <button
+                type="button"
+                className={`station-summary-card ${employeeStationFilter === station.value ? 'active' : ''}`}
+                key={station.value}
+                onClick={() => setEmployeeStationFilter(station.value)}
+              >
+                <MapPinned size={17} />
+                <span>
+                  <strong>{station.label}</strong>
+                  <small>{station.active} aktiv · {station.locked} gesperrt</small>
+                </span>
+                <em>{station.ktw} KTW · {station.rtw} RTW</em>
+              </button>
+            ))}
+            {unassignedEmployeeCount > 0 && (
+              <div className="station-summary-card muted">
+                <MapPinned size={17} />
+                <span>
+                  <strong>Ohne Wache</strong>
+                  <small>{unassignedEmployeeCount} Profile</small>
+                </span>
+                <em>bitte zuweisen</em>
+              </div>
+            )}
+          </div>
           <div className="admin-list employee-list">
             {visibleEmployees.map((item) => (
               <div className={`admin-row employee-row ${item.active ? '' : 'employee-row-inactive'}`} key={item.id}>
