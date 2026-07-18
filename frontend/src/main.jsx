@@ -1324,6 +1324,7 @@ function Login({ onLogin }) {
   const [employees, setEmployees] = useState([]);
   const [employeeId, setEmployeeId] = useState('');
   const [employeeQuery, setEmployeeQuery] = useState('');
+  const [employeePickerOpen, setEmployeePickerOpen] = useState(false);
   const [password, setPassword] = useState('');
   const [adminName, setAdminName] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
@@ -1356,6 +1357,7 @@ function Login({ onLogin }) {
   function selectLoginEmployee(employee) {
     setEmployeeId(employee.id);
     setEmployeeQuery(`${employee.name} · ${qualificationLabel(employee.qualification)}`);
+    setEmployeePickerOpen(false);
   }
 
   function handleEmployeeSearchKey(event) {
@@ -1469,43 +1471,58 @@ function Login({ onLogin }) {
             <label>
               Mitarbeiter
               <div className="login-employee-picker">
-                <div className="login-employee-search">
-                  <Search size={17} />
-                  <input
-                    type="search"
-                    value={employeeQuery}
-                    onChange={(event) => {
-                      setEmployeeQuery(event.target.value);
-                      setEmployeeId('');
-                    }}
-                    onKeyDown={handleEmployeeSearchKey}
-                    onFocus={(event) => event.target.select()}
-                    placeholder="Name suchen"
-                    autoComplete="off"
-                  />
-                </div>
-                <div className="login-employee-results">
-                  {filteredLoginEmployees.slice(0, 6).map((employee) => (
-                    <button
-                      type="button"
-                      key={employee.id}
-                      className={employee.id === employeeId ? 'active' : ''}
-                      onClick={() => selectLoginEmployee(employee)}
-                    >
-                      <UserRound size={16} />
-                      <span>
-                        <strong>{employee.name}</strong>
-                        <small>{qualificationLabel(employee.qualification)} · {stationLabel(employee.station)} · {vehicleScopeLabel(employee.vehicle_scope)}</small>
-                      </span>
-                    </button>
-                  ))}
-                  {!filteredLoginEmployees.length && (
-                    <div className="login-employee-empty">Kein Mitarbeiter gefunden.</div>
-                  )}
-                </div>
-                {selectedEmployee && (
-                  <div className="login-employee-selected">
-                    Ausgewählt: <strong>{selectedEmployee.name}</strong>
+                <button
+                  type="button"
+                  className={`login-employee-toggle ${employeePickerOpen ? 'active' : ''}`}
+                  onClick={() => {
+                    setEmployeePickerOpen((current) => !current);
+                    setEmployeeQuery('');
+                  }}
+                  aria-expanded={employeePickerOpen}
+                >
+                  <UserRound size={17} />
+                  <span>
+                    <strong>{selectedEmployee?.name || 'Mitarbeiter auswählen'}</strong>
+                    <small>
+                      {selectedEmployee
+                        ? `${qualificationLabel(selectedEmployee.qualification)} · ${stationLabel(selectedEmployee.station)} · ${vehicleScopeLabel(selectedEmployee.vehicle_scope)}`
+                        : 'Aufklappen und Namen suchen'}
+                    </small>
+                  </span>
+                  <ChevronDown size={18} />
+                </button>
+                {employeePickerOpen && (
+                  <div className="login-employee-popover">
+                    <div className="login-employee-search">
+                      <Search size={17} />
+                      <input
+                        type="search"
+                        value={employeeQuery}
+                        onChange={(event) => {
+                          setEmployeeQuery(event.target.value);
+                        }}
+                        onKeyDown={handleEmployeeSearchKey}
+                        placeholder="Name suchen"
+                        autoComplete="off"
+                        autoFocus
+                      />
+                    </div>
+                    <div className="login-employee-results">
+                      {filteredLoginEmployees.slice(0, 8).map((employee) => (
+                        <button
+                          type="button"
+                          key={employee.id}
+                          className={employee.id === employeeId ? 'active' : ''}
+                          onClick={() => selectLoginEmployee(employee)}
+                        >
+                          <UserRound size={16} />
+                          <span>
+                            <strong>{employee.name}</strong>
+                            <small>{qualificationLabel(employee.qualification)} · {stationLabel(employee.station)} · {vehicleScopeLabel(employee.vehicle_scope)}</small>
+                          </span>
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 )}
               </div>

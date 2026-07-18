@@ -123,6 +123,67 @@ button {
   gap: 10px;
 }
 
+.login-employee-toggle {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 10px;
+  min-height: 58px;
+  padding: 10px 12px;
+  border-radius: 13px;
+  text-align: left;
+  color: rgba(235, 244, 255, 0.82);
+  background: rgba(4, 12, 24, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+}
+
+.login-employee-toggle.active {
+  border-color: rgba(99, 230, 190, 0.34);
+  box-shadow: 0 0 0 3px rgba(99, 230, 190, 0.08);
+}
+
+.login-employee-toggle svg:first-child {
+  color: #63e6be;
+}
+
+.login-employee-toggle svg:last-child {
+  justify-self: end;
+  color: rgba(235, 244, 255, 0.58);
+  transition: transform 160ms ease;
+}
+
+.login-employee-toggle.active svg:last-child {
+  transform: rotate(180deg);
+}
+
+.login-employee-toggle span {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.login-employee-toggle strong,
+.login-employee-toggle small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.login-employee-toggle small {
+  color: rgba(235, 244, 255, 0.62);
+  font-size: 0.84rem;
+  font-weight: 760;
+}
+
+.login-employee-popover {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border-radius: 15px;
+  background: rgba(4, 12, 24, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+}
+
 .login-employee-search {
   display: grid;
   grid-template-columns: 20px minmax(0, 1fr);
@@ -199,21 +260,6 @@ button {
 
 .login-employee-results button.active small {
   color: rgba(6, 17, 31, 0.78);
-}
-
-.login-employee-empty,
-.login-employee-selected {
-  padding: 9px 11px;
-  border-radius: 11px;
-  color: rgba(235, 244, 255, 0.64);
-  background: rgba(4, 12, 24, 0.22);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  font-size: 0.88rem;
-  font-weight: 760;
-}
-
-.login-employee-selected strong {
-  color: #f7fbff;
 }
 
 .panel-title {
