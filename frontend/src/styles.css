@@ -2874,7 +2874,8 @@ form button,
 }
 
 .employee-row {
-  grid-template-columns: minmax(220px, 0.75fr) 92px minmax(420px, 1fr) minmax(260px, 0.66fr);
+  grid-template-columns: minmax(260px, 1fr) 92px minmax(250px, 0.42fr);
+  align-items: start;
 }
 
 .employee-row-inactive {
@@ -2918,8 +2919,10 @@ form button,
 
 .employee-controls {
   display: grid !important;
-  grid-template-columns: minmax(120px, 1fr) minmax(120px, 1fr) minmax(96px, 0.68fr) minmax(110px, 0.7fr);
+  grid-column: 1 / -1;
+  grid-template-columns: minmax(170px, 1fr) minmax(150px, 0.85fr) minmax(118px, 0.62fr) minmax(130px, 0.65fr);
   gap: 10px !important;
+  padding-top: 2px;
 }
 
 .employee-actions {
