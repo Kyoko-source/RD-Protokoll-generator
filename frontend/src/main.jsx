@@ -1323,6 +1323,7 @@ const cancellationDetailSnippets = [
 function Login({ onLogin }) {
   const [employees, setEmployees] = useState([]);
   const [employeeId, setEmployeeId] = useState('');
+  const [employeeQuery, setEmployeeQuery] = useState('');
   const [password, setPassword] = useState('');
   const [adminName, setAdminName] = useState('');
   const [adminPassword, setAdminPassword] = useState('');
@@ -1334,10 +1335,36 @@ function Login({ onLogin }) {
     api('/api/auth/employees')
       .then((data) => {
         setEmployees(data.employees || []);
-        setEmployeeId(data.employees?.[0]?.id || '');
+        const firstEmployee = data.employees?.[0];
+        setEmployeeId(firstEmployee?.id || '');
+        setEmployeeQuery(firstEmployee ? `${firstEmployee.name} · ${qualificationLabel(firstEmployee.qualification)}` : '');
       })
       .catch((err) => setError(err.message));
   }, []);
+  const selectedEmployee = employees.find((employee) => employee.id === employeeId);
+  const employeeQueryValue = employeeQuery.trim().toLowerCase();
+  const filteredLoginEmployees = employeeQueryValue
+    ? employees.filter((employee) => [
+        employee.name,
+        employee.qualification,
+        roleLabel(employee.role),
+        employee.station,
+        employee.vehicle_scope
+      ].join(' ').toLowerCase().includes(employeeQueryValue))
+    : employees;
+
+  function selectLoginEmployee(employee) {
+    setEmployeeId(employee.id);
+    setEmployeeQuery(`${employee.name} · ${qualificationLabel(employee.qualification)}`);
+  }
+
+  function handleEmployeeSearchKey(event) {
+    if (event.key !== 'Enter') return;
+    const nextEmployee = filteredLoginEmployees[0];
+    if (!nextEmployee) return;
+    event.preventDefault();
+    selectLoginEmployee(nextEmployee);
+  }
 
   async function submitLogin(event) {
     event.preventDefault();
@@ -1441,13 +1468,47 @@ function Login({ onLogin }) {
           <form onSubmit={submitLogin}>
             <label>
               Mitarbeiter
-              <select value={employeeId} onChange={(event) => setEmployeeId(event.target.value)}>
-                {employees.map((employee) => (
-                  <option key={employee.id} value={employee.id}>
-                    {employee.name} · {qualificationLabel(employee.qualification)}
-                  </option>
-                ))}
-              </select>
+              <div className="login-employee-picker">
+                <div className="login-employee-search">
+                  <Search size={17} />
+                  <input
+                    type="search"
+                    value={employeeQuery}
+                    onChange={(event) => {
+                      setEmployeeQuery(event.target.value);
+                      setEmployeeId('');
+                    }}
+                    onKeyDown={handleEmployeeSearchKey}
+                    onFocus={(event) => event.target.select()}
+                    placeholder="Name suchen"
+                    autoComplete="off"
+                  />
+                </div>
+                <div className="login-employee-results">
+                  {filteredLoginEmployees.slice(0, 6).map((employee) => (
+                    <button
+                      type="button"
+                      key={employee.id}
+                      className={employee.id === employeeId ? 'active' : ''}
+                      onClick={() => selectLoginEmployee(employee)}
+                    >
+                      <UserRound size={16} />
+                      <span>
+                        <strong>{employee.name}</strong>
+                        <small>{qualificationLabel(employee.qualification)} · {stationLabel(employee.station)} · {vehicleScopeLabel(employee.vehicle_scope)}</small>
+                      </span>
+                    </button>
+                  ))}
+                  {!filteredLoginEmployees.length && (
+                    <div className="login-employee-empty">Kein Mitarbeiter gefunden.</div>
+                  )}
+                </div>
+                {selectedEmployee && (
+                  <div className="login-employee-selected">
+                    Ausgewählt: <strong>{selectedEmployee.name}</strong>
+                  </div>
+                )}
+              </div>
             </label>
             <label>
               Passwort
@@ -1457,7 +1518,7 @@ function Login({ onLogin }) {
                 onChange={(event) => setPassword(event.target.value)}
               />
             </label>
-            <button type="submit">Einloggen</button>
+            <button type="submit" disabled={!employeeId}>Einloggen</button>
           </form>
         )}
 
