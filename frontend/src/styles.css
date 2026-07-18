@@ -2201,7 +2201,19 @@ form button,
   display: grid;
   grid-template-columns: minmax(620px, 1.35fr) minmax(420px, 0.85fr);
   gap: 18px;
+  align-items: start;
   margin-bottom: 18px;
+}
+
+.admin-secondary-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+  align-items: start;
+}
+
+.admin-section-card {
+  margin: 0;
 }
 
 .admin-card {
@@ -2897,11 +2909,11 @@ form button,
 
 .privacy-settings-panel {
   display: grid;
-  grid-template-columns: minmax(130px, 0.75fr) minmax(130px, 0.75fr) minmax(220px, 1fr) minmax(126px, auto);
-  gap: 10px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
   align-items: stretch;
   margin-top: 14px;
-  padding: 12px;
+  padding: 14px;
   border-radius: 16px;
   background: rgba(4, 12, 24, 0.24);
   border: 1px solid rgba(255, 255, 255, 0.075);
@@ -2932,6 +2944,7 @@ form button,
 }
 
 .setting-toggle {
+  grid-column: 1 / -1;
   grid-template-columns: 20px minmax(0, 1fr);
   align-items: center;
   padding: 10px 12px;
@@ -2951,6 +2964,7 @@ form button,
 }
 
 .privacy-settings-panel button {
+  grid-column: 1 / -1;
   min-height: 44px;
   align-self: center;
   display: inline-flex;
@@ -2964,6 +2978,56 @@ form button,
   border-color: transparent;
   font-weight: 950;
   cursor: pointer;
+}
+
+.collapsible-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.collapsible-panel summary {
+  min-height: 66px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 18px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.collapsible-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.collapsible-panel summary span {
+  display: grid;
+  gap: 4px;
+}
+
+.collapsible-panel summary strong {
+  color: #f7fbff;
+  font-size: 1.08rem;
+}
+
+.collapsible-panel summary small {
+  color: rgba(235, 244, 255, 0.62);
+  font-weight: 780;
+}
+
+.collapsible-panel summary svg {
+  color: rgba(235, 244, 255, 0.62);
+  transition: transform 0.18s ease;
+}
+
+.collapsible-panel[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.collapsible-body {
+  max-height: 420px;
+  overflow: auto;
+  padding: 0 18px 18px;
 }
 
 .login-event-row {
@@ -4099,6 +4163,8 @@ legend {
   .support-grid,
   .candidate-grid,
   .admin-grid,
+  .admin-secondary-grid,
+  .admin-overview,
   .admin-announcement-grid,
   .finder-controls,
   .hospital-grid,
@@ -4112,6 +4178,11 @@ legend {
   .import-result,
   .inline-form,
   .admin-row,
+  .employee-controls,
+  .employee-actions,
+  .privacy-summary-grid,
+  .privacy-settings-panel,
+  .privacy-checklist,
   .login-event-row,
   .feedback-admin-row,
   .announcement-form,

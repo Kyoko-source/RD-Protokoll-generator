@@ -3136,7 +3136,8 @@ function AdminView({ session, employee, onBack, onLogout }) {
         </article>
       </section>
 
-      <section className="work-panel">
+      <section className="admin-secondary-grid">
+      <section className="work-panel admin-section-card">
         <div className="section-head">
           <h2>Patch Notes & Updates</h2>
           <span>{(announcementData.patch_notes || []).length} Patch Notes · {(announcementData.planned_updates || []).length} geplant</span>
@@ -3195,7 +3196,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
         </div>
       </section>
 
-      <section className="work-panel">
+      <section className="work-panel admin-section-card">
         <div className="section-head">
           <h2>Bugs/Wünsche</h2>
           <span>{feedbackItems.length} Meldungen · {feedbackCounts.offen || 0} offen</span>
@@ -3245,7 +3246,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
         </div>
       </section>
 
-      <section className="work-panel">
+      <section className="work-panel admin-section-card">
         <div className="section-head">
           <h2>Fall-Datenschutz</h2>
           <span>{cases.length} Einsätze</span>
@@ -3269,7 +3270,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
         </div>
       </section>
 
-      <section className="work-panel">
+      <section className="work-panel admin-section-card">
         <div className="section-head">
           <h2>QS-Regeln</h2>
           <span>{qualityRules.length} aktiv</span>
@@ -3284,7 +3285,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
         </div>
       </section>
 
-      <section className="work-panel">
+      <section className="work-panel admin-section-card">
         <div className="section-head">
           <h2>Audit-Log</h2>
           <span>letzte Ereignisse</span>
@@ -3299,12 +3300,15 @@ function AdminView({ session, employee, onBack, onLogout }) {
         </div>
       </section>
 
-      <section className="work-panel">
-        <div className="section-head">
-          <h2>Login-Historie</h2>
-          <span>{loginEvents.length} Anmeldungen</span>
-        </div>
-        <div className="login-event-list">
+      <details className="work-panel admin-section-card collapsible-panel">
+        <summary>
+          <span>
+            <strong>Login-Historie</strong>
+            <small>{loginEvents.length} Anmeldungen</small>
+          </span>
+          <ChevronDown size={18} />
+        </summary>
+        <div className="login-event-list collapsible-body">
           {loginEvents.length === 0 ? (
             <p className="muted">Noch keine Login-Daten vorhanden.</p>
           ) : loginEvents.slice(0, 20).map((event, index) => (
@@ -3324,14 +3328,17 @@ function AdminView({ session, employee, onBack, onLogout }) {
             </div>
           ))}
         </div>
-      </section>
+      </details>
 
-      <section className="work-panel">
-        <div className="section-head">
-          <h2>Exporthistorie</h2>
-          <span>{exportEvents.length} Ereignisse</span>
-        </div>
-        <div className="audit-list">
+      <details className="work-panel admin-section-card collapsible-panel">
+        <summary>
+          <span>
+            <strong>Exporthistorie</strong>
+            <small>{exportEvents.length} Ereignisse</small>
+          </span>
+          <ChevronDown size={18} />
+        </summary>
+        <div className="audit-list collapsible-body">
           {exportEvents.length === 0 ? (
             <p className="muted">Noch keine PDF- oder Druckereignisse im Audit-Log.</p>
           ) : exportEvents.slice(0, 12).map((event, index) => (
@@ -3341,6 +3348,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
             </div>
           ))}
         </div>
+      </details>
       </section>
     </main>
   );
