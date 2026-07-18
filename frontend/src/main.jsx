@@ -2695,9 +2695,11 @@ function AdminView({ session, employee, onBack, onLogout }) {
     ? feedbackItems
     : feedbackItems.filter((item) => (item.status || 'offen') === feedbackFilter);
   const activeEmployeeCount = employees.filter((item) => item.active).length;
+  const lockedEmployeeCount = employees.filter((item) => !item.active).length;
   const adminEmployeeCount = employees.filter((item) => item.role === 'admin').length;
   const privacyWarningCount = (privacy?.checklist || []).filter((item) => item.status === 'warning').length;
   const privacyOkCount = (privacy?.checklist || []).filter((item) => item.status === 'ok').length;
+  const openFeedbackCount = feedbackCounts.offen || 0;
 
   async function loadAdminData() {
     setError('');
@@ -3048,6 +3050,36 @@ function AdminView({ session, employee, onBack, onLogout }) {
                 </div>
               </div>
             ))}
+          </div>
+          <div className="employee-insight-grid">
+            <div className="employee-insight-card">
+              <CheckCircle2 size={18} />
+              <div>
+                <strong>{activeEmployeeCount} aktiv</strong>
+                <span>{lockedEmployeeCount} gesperrt</span>
+              </div>
+            </div>
+            <div className="employee-insight-card">
+              <ShieldCheck size={18} />
+              <div>
+                <strong>{adminEmployeeCount} Admins</strong>
+                <span>{employees.length - adminEmployeeCount} weitere Profile</span>
+              </div>
+            </div>
+            <div className="employee-insight-card">
+              <AlertTriangle size={18} />
+              <div>
+                <strong>{privacyWarningCount} Hinweise</strong>
+                <span>{privacyOkCount} Datenschutzpunkte ok</span>
+              </div>
+            </div>
+            <div className="employee-insight-card">
+              <MessageSquare size={18} />
+              <div>
+                <strong>{openFeedbackCount} offen</strong>
+                <span>{feedbackItems.length} Meldungen insgesamt</span>
+              </div>
+            </div>
           </div>
         </article>
 

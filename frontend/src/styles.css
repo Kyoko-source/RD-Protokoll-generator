@@ -2905,6 +2905,45 @@ form button,
   padding: 0;
 }
 
+.employee-insight-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 14px;
+}
+
+.employee-insight-card {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  gap: 10px;
+  align-items: center;
+  min-height: 74px;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(4, 12, 24, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.employee-insight-card svg {
+  color: #63e6be;
+}
+
+.employee-insight-card div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.employee-insight-card strong {
+  color: #f7fbff;
+}
+
+.employee-insight-card span {
+  color: rgba(235, 244, 255, 0.62);
+  font-size: 0.9rem;
+  font-weight: 760;
+}
+
 .admin-row div,
 .privacy-list div,
 .audit-row {
@@ -4243,6 +4282,7 @@ legend {
   .admin-row,
   .employee-controls,
   .employee-actions,
+  .employee-insight-grid,
   .privacy-summary-grid,
   .privacy-settings-panel,
   .privacy-checklist,
