@@ -62,20 +62,24 @@ class StorageAuthTests(unittest.TestCase):
             "qualification": "Rettungssanitäter",
             "station": "Gescher",
             "vehicle_scope": "KTW",
+            "on_shift": True,
             "active": True,
         })
 
         loaded = storage.get_employee("employee-1")
         self.assertEqual(loaded["station"], "Gescher")
         self.assertEqual(loaded["vehicle_scope"], "KTW")
+        self.assertTrue(loaded["on_shift"])
 
         updated = storage.update_employee_record("employee-1", {
             "station": "Bocholt",
             "vehicle_scope": "KTW/RTW",
+            "on_shift": False,
         })
 
         self.assertEqual(updated["station"], "Bocholt")
         self.assertEqual(updated["vehicle_scope"], "KTW/RTW")
+        self.assertFalse(updated["on_shift"])
         self.assertEqual(storage.load_employee_store()["employees"][0]["station"], "Bocholt")
 
     def test_finished_case_keeps_encrypted_payload_and_ruleset_version(self):

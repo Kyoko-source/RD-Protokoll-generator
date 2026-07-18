@@ -2944,11 +2944,19 @@ form button,
 }
 
 .employee-create-form {
-  grid-template-columns: minmax(150px, 1fr) minmax(160px, 0.72fr) minmax(150px, 0.7fr) minmax(120px, 0.52fr) minmax(130px, 0.52fr) 126px;
+  grid-template-columns: minmax(150px, 1fr) minmax(150px, 0.72fr) minmax(140px, 0.7fr) minmax(112px, 0.52fr) minmax(120px, 0.52fr) 108px 126px;
   padding: 12px;
   border-radius: 14px;
   background: rgba(4, 12, 24, 0.24);
   border: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.employee-shift-create {
+  min-height: 48px;
+  justify-content: center;
+  padding-inline: 10px;
+  color: rgba(247, 251, 255, 0.9);
+  font-weight: 900;
 }
 
 .employee-search-field {
@@ -3068,6 +3076,84 @@ form button,
   opacity: 0.72;
 }
 
+.employee-import-panel {
+  margin-bottom: 14px;
+  border-radius: 14px;
+  background: rgba(4, 12, 24, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+  overflow: hidden;
+}
+
+.employee-import-panel summary {
+  min-height: 58px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 0 14px;
+  cursor: pointer;
+  list-style: none;
+}
+
+.employee-import-panel summary::-webkit-details-marker {
+  display: none;
+}
+
+.employee-import-panel summary span {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.employee-import-panel summary strong,
+.employee-import-panel summary small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.employee-import-panel summary small {
+  color: rgba(235, 244, 255, 0.58);
+  font-weight: 760;
+}
+
+.employee-import-panel summary svg {
+  color: rgba(235, 244, 255, 0.62);
+  transition: transform 0.18s ease;
+}
+
+.employee-import-panel[open] summary svg {
+  transform: rotate(180deg);
+}
+
+.employee-import-body {
+  display: grid;
+  grid-template-columns: minmax(142px, 0.45fr) minmax(260px, 1fr) minmax(142px, 0.45fr);
+  gap: 10px;
+  padding: 0 14px 14px;
+  align-items: stretch;
+}
+
+.employee-import-body textarea {
+  min-height: 92px;
+  resize: vertical;
+}
+
+.employee-import-body button {
+  min-height: 44px;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 12px;
+  border-radius: 10px;
+  color: #06111f;
+  background: linear-gradient(135deg, #63e6be 0%, #74b9ff 100%);
+  border-color: transparent;
+  font-weight: 950;
+}
+
 .admin-list,
 .privacy-list,
 .audit-list,
@@ -3161,9 +3247,18 @@ form button,
 .employee-controls {
   display: grid !important;
   grid-column: 1 / -1;
-  grid-template-columns: minmax(170px, 1fr) minmax(150px, 0.85fr) minmax(118px, 0.62fr) minmax(130px, 0.65fr);
+  grid-template-columns: minmax(160px, 1fr) minmax(140px, 0.85fr) minmax(108px, 0.62fr) minmax(120px, 0.65fr) 104px;
   gap: 10px !important;
   padding-top: 2px;
+}
+
+.employee-shift-toggle {
+  min-height: 48px;
+  justify-content: center;
+  padding-inline: 9px;
+  color: rgba(247, 251, 255, 0.9);
+  font-weight: 900;
+  white-space: nowrap;
 }
 
 .employee-actions {
@@ -3401,6 +3496,21 @@ form button,
 
 .log-admin-card .collapsible-body {
   max-height: 320px;
+}
+
+.audit-filter-bar {
+  display: grid;
+  grid-template-columns: minmax(240px, 1fr) minmax(180px, 0.45fr);
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+.audit-search-field {
+  margin: 0;
+}
+
+.audit-filter-bar select {
+  min-height: 46px;
 }
 
 .login-event-row {

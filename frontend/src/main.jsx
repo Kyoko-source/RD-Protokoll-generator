@@ -103,6 +103,12 @@ function vehicleScopeLabel(vehicleScope) {
   return EMPLOYEE_VEHICLE_OPTIONS.find((item) => item.value === vehicleScope)?.label || 'Keine Angabe';
 }
 
+function employeeVehicleMatches(employeeVehicleScope, requestedVehicleScope) {
+  if (!requestedVehicleScope || !employeeVehicleScope) return false;
+  if (employeeVehicleScope === requestedVehicleScope) return true;
+  return employeeVehicleScope === 'KTW/RTW' && ['KTW', 'RTW'].includes(requestedVehicleScope);
+}
+
 function feedbackStatusLabel(status) {
   return FEEDBACK_STATUS_LABELS[status] || status || 'Offen';
 }
@@ -2781,9 +2787,12 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [newQualification, setNewQualification] = useState('');
   const [newStation, setNewStation] = useState('');
   const [newVehicleScope, setNewVehicleScope] = useState('');
+  const [newOnShift, setNewOnShift] = useState(false);
   const [employeeSearch, setEmployeeSearch] = useState('');
   const [employeeStationFilter, setEmployeeStationFilter] = useState('all');
   const [employeeVehicleFilter, setEmployeeVehicleFilter] = useState('all');
+  const [employeeCsvText, setEmployeeCsvText] = useState('');
+  const [auditFilter, setAuditFilter] = useState({ query: '', action: 'all' });
   const [retentionDays, setRetentionDays] = useState(3650);
   const [securityLogRetentionDays, setSecurityLogRetentionDays] = useState(180);
   const [externalMapsEnabled, setExternalMapsEnabled] = useState(false);
@@ -2801,7 +2810,21 @@ function AdminView({ session, employee, onBack, onLogout }) {
     : feedbackItems.filter((item) => (item.status || 'offen') === feedbackFilter);
   const activeEmployeeCount = employees.filter((item) => item.active).length;
   const lockedEmployeeCount = employees.filter((item) => !item.active).length;
+  const shiftEmployeeCount = employees.filter((item) => item.on_shift).length;
   const adminEmployeeCount = employees.filter((item) => item.role === 'admin').length;
+  const auditActionOptions = Array.from(new Set(auditEvents.map((event) => event.action).filter(Boolean))).sort();
+  const auditQueryValue = auditFilter.query.trim().toLowerCase();
+  const visibleAuditEvents = auditEvents.filter((event) => {
+    const matchesAction = auditFilter.action === 'all' || event.action === auditFilter.action;
+    const matchesQuery = !auditQueryValue || [
+      event.action,
+      event.employee_name,
+      event.entity_type,
+      event.entity_id,
+      event.timestamp
+    ].join(' ').toLowerCase().includes(auditQueryValue);
+    return matchesAction && matchesQuery;
+  });
   const employeeSearchValue = employeeSearch.trim().toLowerCase();
   const stationSummaries = EMPLOYEE_STATION_OPTIONS.filter((station) => station.value).map((station) => {
     const stationEmployees = employees.filter((item) => item.station === station.value);
@@ -2879,7 +2902,8 @@ function AdminView({ session, employee, onBack, onLogout }) {
           role: newRole,
           qualification: newQualification,
           station: newStation,
-          vehicle_scope: newVehicleScope
+          vehicle_scope: newVehicleScope,
+          on_shift: newOnShift
         })
       }, session.token);
       setTemporaryPassword(`${result.employee.name}: ${result.temporary_password}`);
@@ -2888,6 +2912,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
       setNewQualification('');
       setNewStation('');
       setNewVehicleScope('');
+      setNewOnShift(false);
       await loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -2927,6 +2952,39 @@ function AdminView({ session, employee, onBack, onLogout }) {
     try {
       await api(`/api/admin/employees/${item.id}`, { method: 'DELETE' }, session.token);
       setStatusText('Mitarbeiterprofil wurde gelöscht.');
+      await loadAdminData();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function exportEmployeesCsv() {
+    setError('');
+    setStatusText('');
+    try {
+      const file = await fileRequest('/api/admin/employees/export', {}, session.token);
+      downloadBlob(file.blob, file.filename || 'nana-mitarbeiter.csv');
+      setStatusText('Mitarbeiter-CSV wurde exportiert.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function importEmployeesCsv() {
+    setError('');
+    setStatusText('');
+    setTemporaryPassword('');
+    try {
+      const result = await api('/api/admin/employees/import', {
+        method: 'POST',
+        body: JSON.stringify({ csv_text: employeeCsvText })
+      }, session.token);
+      const tempPasswords = result.temporary_passwords || [];
+      if (tempPasswords.length) {
+        setTemporaryPassword(tempPasswords.map((item) => `${item.name}: ${item.temporary_password}`).join('\n'));
+      }
+      setEmployeeCsvText('');
+      setStatusText(`${result.created || 0} Mitarbeiter angelegt, ${result.updated || 0} aktualisiert.`);
       await loadAdminData();
     } catch (err) {
       setError(err.message);
@@ -3161,6 +3219,10 @@ function AdminView({ session, employee, onBack, onLogout }) {
                 <option key={role.value} value={role.value}>{role.label}</option>
               ))}
             </select>
+            <label className="checkbox-line employee-shift-create">
+              <input type="checkbox" checked={newOnShift} onChange={(event) => setNewOnShift(event.target.checked)} />
+              im Dienst
+            </label>
             <button type="submit"><UserPlus size={17} /> Anlegen</button>
           </form>
           <label className="employee-search-field">
@@ -3230,6 +3292,28 @@ function AdminView({ session, employee, onBack, onLogout }) {
               </div>
             )}
           </div>
+          <details className="employee-import-panel">
+            <summary>
+              <span>
+                <strong>Mitarbeiter Import/Export</strong>
+                <small>CSV mit Name, Wache, Fahrzeug und Dienststatus</small>
+              </span>
+              <ChevronDown size={18} />
+            </summary>
+            <div className="employee-import-body">
+              <button type="button" onClick={exportEmployeesCsv}>
+                <Download size={16} /> CSV exportieren
+              </button>
+              <textarea
+                value={employeeCsvText}
+                onChange={(event) => setEmployeeCsvText(event.target.value)}
+                placeholder="name,role,qualification,station,vehicle_scope,on_shift,active"
+              />
+              <button type="button" onClick={importEmployeesCsv} disabled={!employeeCsvText.trim()}>
+                <Save size={16} /> CSV importieren
+              </button>
+            </div>
+          </details>
           <div className="admin-list employee-list">
             {visibleEmployees.map((item) => (
               <div className={`admin-row employee-row ${item.active ? '' : 'employee-row-inactive'}`} key={item.id}>
@@ -3238,7 +3322,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
                   <div>
                     <strong>{item.name}</strong>
                     <span>{qualificationLabel(item.qualification)} · {roleLabel(item.role)}</span>
-                    <small>{stationLabel(item.station)} · {vehicleScopeLabel(item.vehicle_scope)}</small>
+                    <small>{stationLabel(item.station)} · {vehicleScopeLabel(item.vehicle_scope)}{item.on_shift ? ' · im Dienst' : ''}</small>
                   </div>
                 </div>
                 <span className={`status-pill ${item.active ? 'status-active' : 'status-locked'}`}>{item.active ? 'aktiv' : 'gesperrt'}</span>
@@ -3263,6 +3347,10 @@ function AdminView({ session, employee, onBack, onLogout }) {
                       <option key={role.value} value={role.value}>{role.label}</option>
                     ))}
                   </select>
+                  <label className="checkbox-line employee-shift-toggle">
+                    <input type="checkbox" checked={Boolean(item.on_shift)} onChange={(event) => updateEmployee(item, { on_shift: event.target.checked })} />
+                    Dienst
+                  </label>
                 </div>
                 <div className="employee-actions">
                   <button type="button" onClick={() => updateEmployee(item, { active: !item.active })}>
@@ -3288,7 +3376,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
               <CheckCircle2 size={18} />
               <div>
                 <strong>{activeEmployeeCount} aktiv</strong>
-                <span>{lockedEmployeeCount} gesperrt</span>
+                <span>{shiftEmployeeCount} im Dienst · {lockedEmployeeCount} gesperrt</span>
               </div>
             </div>
             <div className="employee-insight-card">
@@ -3544,9 +3632,27 @@ function AdminView({ session, employee, onBack, onLogout }) {
             <ChevronDown size={18} />
           </summary>
           <div className="audit-list collapsible-body">
+            <div className="audit-filter-bar">
+              <label className="employee-search-field audit-search-field">
+                <Search size={17} />
+                <input
+                  value={auditFilter.query}
+                  onChange={(event) => setAuditFilter((current) => ({ ...current, query: event.target.value }))}
+                  placeholder="Aktion, Mitarbeiter oder Objekt suchen"
+                />
+              </label>
+              <select value={auditFilter.action} onChange={(event) => setAuditFilter((current) => ({ ...current, action: event.target.value }))}>
+                <option value="all">Alle Aktionen</option>
+                {auditActionOptions.map((action) => (
+                  <option key={action} value={action}>{action}</option>
+                ))}
+              </select>
+            </div>
             {auditEvents.length === 0 ? (
               <p className="muted">Noch keine Audit-Ereignisse vorhanden.</p>
-            ) : auditEvents.slice(0, 10).map((event, index) => (
+            ) : visibleAuditEvents.length === 0 ? (
+              <p className="muted">Keine Ereignisse für diesen Filter.</p>
+            ) : visibleAuditEvents.slice(0, 16).map((event, index) => (
               <div className="audit-row" key={`${event.timestamp}-${index}`}>
                 <strong>{event.action}</strong>
                 <span>{event.timestamp} · {event.employee_name || 'System'} · {event.entity_type || '-'}</span>
@@ -4013,10 +4119,28 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
   ];
 
   const selectableCrewEmployees = useMemo(() => crewEmployees.filter((item) => item.active !== false), [crewEmployees]);
-  const transportLeaderOptions = useMemo(() => selectableCrewEmployees.filter((item) => !['azubi', 'bufdi', 'praktikant'].includes(item.role)), [selectableCrewEmployees]);
+  const sortedCrewEmployees = useMemo(() => {
+    const currentStation = employee?.station || '';
+    const currentVehicleScope = employee?.vehicle_scope || '';
+    function scoreCrewMember(item) {
+      let score = 0;
+      if (item.on_shift) score += 100;
+      if (currentStation && item.station === currentStation) score += 40;
+      if (employeeVehicleMatches(item.vehicle_scope, currentVehicleScope)) score += 25;
+      if (item.role === 'admin') score += 4;
+      if (item.qualification) score += 2;
+      return score;
+    }
+    return [...selectableCrewEmployees].sort((left, right) => {
+      const scoreDelta = scoreCrewMember(right) - scoreCrewMember(left);
+      if (scoreDelta !== 0) return scoreDelta;
+      return (left.name || '').localeCompare(right.name || '', 'de');
+    });
+  }, [selectableCrewEmployees, employee?.station, employee?.vehicle_scope]);
+  const transportLeaderOptions = useMemo(() => sortedCrewEmployees.filter((item) => !['azubi', 'bufdi', 'praktikant'].includes(item.role)), [sortedCrewEmployees]);
   const driverOptions = transportLeaderOptions;
-  const azubiOptions = useMemo(() => selectableCrewEmployees.filter((item) => item.role === 'azubi'), [selectableCrewEmployees]);
-  const traineeOptions = useMemo(() => selectableCrewEmployees.filter((item) => ['praktikant', 'bufdi'].includes(item.role)), [selectableCrewEmployees]);
+  const azubiOptions = useMemo(() => sortedCrewEmployees.filter((item) => item.role === 'azubi'), [sortedCrewEmployees]);
+  const traineeOptions = useMemo(() => sortedCrewEmployees.filter((item) => ['praktikant', 'bufdi'].includes(item.role)), [sortedCrewEmployees]);
 
   function employeeById(employeeId) {
     return selectableCrewEmployees.find((item) => item.id === employeeId);
@@ -4202,7 +4326,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
             <option value="">Auswählen</option>
             {options.map((item) => (
               <option key={`${idKey}-${item.id}`} value={item.id}>
-                {item.name} · {roleLabel(item.role)}
+                {item.name} · {roleLabel(item.role)} · {stationLabel(item.station)}{item.on_shift ? ' · Dienst' : ''}
               </option>
             ))}
           </select>

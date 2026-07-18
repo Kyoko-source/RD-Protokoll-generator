@@ -83,6 +83,7 @@ class EmployeeCreateRequest(BaseModel):
     qualification: str = ""
     station: str = ""
     vehicle_scope: str = ""
+    on_shift: bool = False
 
 
 class EmployeeUpdateRequest(BaseModel):
@@ -91,8 +92,13 @@ class EmployeeUpdateRequest(BaseModel):
     qualification: str | None = None
     station: str | None = None
     vehicle_scope: str | None = None
+    on_shift: bool | None = None
     active: bool | None = None
     reset_password: bool = False
+
+
+class EmployeeImportRequest(BaseModel):
+    csv_text: str = ""
 
 
 class AnnouncementItem(BaseModel):

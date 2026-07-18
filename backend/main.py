@@ -4,6 +4,8 @@ import os
 import html
 import hashlib
 import re
+import csv
+import io
 import urllib.error
 import urllib.request
 from urllib.parse import urlparse
@@ -23,6 +25,7 @@ from backend.schemas import (
     AnnouncementsRequest,
     DraftRequest,
     EmployeeCreateRequest,
+    EmployeeImportRequest,
     EmployeeUpdateRequest,
     FeedbackRequest,
     FeedbackUpdateRequest,
@@ -2163,6 +2166,7 @@ def public_employee(employee):
         "qualification": employee.get("qualification", ""),
         "station": employee.get("station", ""),
         "vehicle_scope": employee.get("vehicle_scope", ""),
+        "on_shift": bool(employee.get("on_shift")),
         "must_change_password": bool(employee.get("must_change_password")),
     }
 
@@ -2234,6 +2238,35 @@ def normalize_employee_station(station):
 def normalize_employee_vehicle_scope(vehicle_scope):
     value = (vehicle_scope or "").strip()
     return value if value in EMPLOYEE_VEHICLE_SCOPES else ""
+
+
+def parse_bool_flag(value):
+    if isinstance(value, bool):
+        return value
+    return str(value or "").strip().lower() in {"1", "true", "ja", "yes", "y", "aktiv", "dienst"}
+
+
+def employee_csv_response(employees):
+    output = io.StringIO()
+    fieldnames = ["id", "name", "role", "qualification", "station", "vehicle_scope", "on_shift", "active"]
+    writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\n")
+    writer.writeheader()
+    for item in employees:
+        writer.writerow({
+            "id": item.get("id", ""),
+            "name": item.get("name", ""),
+            "role": item.get("role", "employee"),
+            "qualification": item.get("qualification", ""),
+            "station": item.get("station", ""),
+            "vehicle_scope": item.get("vehicle_scope", ""),
+            "on_shift": "1" if item.get("on_shift") else "0",
+            "active": "1" if item.get("active", True) else "0",
+        })
+    return Response(
+        output.getvalue(),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": 'attachment; filename="nana-mitarbeiter.csv"'},
+    )
 
 
 def password_policy_errors(password):
@@ -3088,6 +3121,69 @@ def admin_employees(employee=Depends(require_admin)):
     return {"employees": [admin_employee(item) for item in store.get("employees", [])]}
 
 
+@app.get("/api/admin/employees/export")
+def export_employees(employee=Depends(require_admin)):
+    store = load_employee_store()
+    audit("api_employees_exported", employee=employee, details={"count": len(store.get("employees", []))})
+    return employee_csv_response([admin_employee(item) for item in store.get("employees", [])])
+
+
+@app.post("/api/admin/employees/import")
+def import_employees(payload: EmployeeImportRequest, employee=Depends(require_admin)):
+    csv_text = (payload.csv_text or "").strip()
+    if not csv_text:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="CSV fehlt.")
+    reader = csv.DictReader(io.StringIO(csv_text))
+    if not reader.fieldnames or "name" not in {field.strip() for field in reader.fieldnames if field}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="CSV braucht mindestens die Spalte name.")
+
+    store = load_employee_store()
+    employees = store.get("employees", [])
+    by_id = {item.get("id", ""): item for item in employees if item.get("id")}
+    by_name = {item.get("name", "").strip().lower(): item for item in employees if item.get("name")}
+    created = 0
+    updated = 0
+    temporary_passwords = []
+    for raw_row in reader:
+        row = {(key or "").strip(): value for key, value in raw_row.items()}
+        name = (row.get("name") or "").strip()
+        if not name:
+            continue
+        target = by_id.get((row.get("id") or "").strip()) or by_name.get(name.lower())
+        active_raw = row.get("active")
+        changes = {
+            "name": name,
+            "role": normalize_employee_role((row.get("role") or "employee").strip()),
+            "qualification": normalize_employee_qualification(row.get("qualification")),
+            "station": normalize_employee_station(row.get("station")),
+            "vehicle_scope": normalize_employee_vehicle_scope(row.get("vehicle_scope")),
+            "on_shift": parse_bool_flag(row.get("on_shift")),
+            "active": True if active_raw is None or str(active_raw).strip() == "" else parse_bool_flag(active_raw),
+        }
+        if target:
+            update_employee_record(target["id"], changes)
+            updated += 1
+            continue
+        temp_password = secrets.token_urlsafe(18)
+        new_employee = {
+            "id": new_token()[:16],
+            **changes,
+            "password_hash": "",
+            "temp_password_hash": password_hash(temp_password),
+            "must_change_password": True,
+            "created_at": local_now().isoformat(timespec="seconds"),
+            "password_changed_at": "",
+        }
+        create_employee_record(new_employee)
+        by_id[new_employee["id"]] = new_employee
+        by_name[new_employee["name"].strip().lower()] = new_employee
+        temporary_passwords.append({"name": new_employee["name"], "temporary_password": temp_password})
+        created += 1
+
+    audit("api_employees_imported", employee=employee, details={"created": created, "updated": updated})
+    return {"created": created, "updated": updated, "temporary_passwords": temporary_passwords}
+
+
 @app.post("/api/admin/employees")
 def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_admin)):
     name = payload.name.strip()
@@ -3106,6 +3202,7 @@ def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_adm
         "qualification": qualification,
         "station": station,
         "vehicle_scope": vehicle_scope,
+        "on_shift": bool(payload.on_shift),
         "active": True,
         "password_hash": "",
         "temp_password_hash": password_hash(temp_password),
@@ -3119,7 +3216,7 @@ def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_adm
         employee=employee,
         entity_type="employee",
         entity_id=new_employee["id"],
-        details={"role": role, "qualification": qualification, "station": station, "vehicle_scope": vehicle_scope},
+        details={"role": role, "qualification": qualification, "station": station, "vehicle_scope": vehicle_scope, "on_shift": bool(payload.on_shift)},
     )
     return {"employee": admin_employee(new_employee), "temporary_password": temp_password}
 
@@ -3141,6 +3238,8 @@ def update_employee(employee_id: str, payload: EmployeeUpdateRequest, employee=D
         changes["station"] = normalize_employee_station(payload.station)
     if payload.vehicle_scope is not None:
         changes["vehicle_scope"] = normalize_employee_vehicle_scope(payload.vehicle_scope)
+    if payload.on_shift is not None:
+        changes["on_shift"] = bool(payload.on_shift)
     if payload.active is not None:
         if target.get("id") == employee.get("id") and payload.active is False:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Eigenes Admin-Profil kann nicht deaktiviert werden.")
