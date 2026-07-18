@@ -54,6 +54,30 @@ class StorageAuthTests(unittest.TestCase):
         self.assertIsNone(storage.get_auth_session("session-token"))
         self.assertIsNone(storage.get_password_change_token("change-token"))
 
+    def test_employee_station_and_vehicle_scope_roundtrip(self):
+        storage.create_employee_record({
+            "id": "employee-1",
+            "name": "Test",
+            "role": "employee",
+            "qualification": "Rettungssanitäter",
+            "station": "Gescher",
+            "vehicle_scope": "KTW",
+            "active": True,
+        })
+
+        loaded = storage.get_employee("employee-1")
+        self.assertEqual(loaded["station"], "Gescher")
+        self.assertEqual(loaded["vehicle_scope"], "KTW")
+
+        updated = storage.update_employee_record("employee-1", {
+            "station": "Bocholt",
+            "vehicle_scope": "KTW/RTW",
+        })
+
+        self.assertEqual(updated["station"], "Bocholt")
+        self.assertEqual(updated["vehicle_scope"], "KTW/RTW")
+        self.assertEqual(storage.load_employee_store()["employees"][0]["station"], "Bocholt")
+
     def test_finished_case_keeps_encrypted_payload_and_ruleset_version(self):
         storage.save_finished_case({
             "id": "case-1",

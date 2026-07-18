@@ -40,6 +40,8 @@ def init_database():
                 name TEXT NOT NULL,
                 role TEXT NOT NULL DEFAULT 'employee',
                 qualification TEXT NOT NULL DEFAULT '',
+                station TEXT NOT NULL DEFAULT '',
+                vehicle_scope TEXT NOT NULL DEFAULT '',
                 active INTEGER NOT NULL DEFAULT 1,
                 password_hash TEXT NOT NULL DEFAULT '',
                 temp_password_hash TEXT NOT NULL DEFAULT '',
@@ -110,6 +112,10 @@ def init_database():
         }
         if "qualification" not in existing_employee_columns:
             connection.execute("ALTER TABLE employees ADD COLUMN qualification TEXT NOT NULL DEFAULT ''")
+        if "station" not in existing_employee_columns:
+            connection.execute("ALTER TABLE employees ADD COLUMN station TEXT NOT NULL DEFAULT ''")
+        if "vehicle_scope" not in existing_employee_columns:
+            connection.execute("ALTER TABLE employees ADD COLUMN vehicle_scope TEXT NOT NULL DEFAULT ''")
         if "status" not in existing_case_columns:
             connection.execute("ALTER TABLE finished_cases ADD COLUMN status TEXT NOT NULL DEFAULT 'active'")
         if "anonymized_at" not in existing_case_columns:
@@ -245,6 +251,8 @@ def _employee_from_row(row):
         "name": row["name"],
         "role": row["role"],
         "qualification": row["qualification"] or "",
+        "station": row["station"] or "",
+        "vehicle_scope": row["vehicle_scope"] or "",
         "active": bool(row["active"]),
         "password_hash": row["password_hash"] or "",
         "temp_password_hash": row["temp_password_hash"] or "",
@@ -278,14 +286,16 @@ def save_employee_store(store):
             connection.execute(
                 """
                 INSERT INTO employees (
-                    id, name, role, qualification, active, password_hash, temp_password_hash,
+                    id, name, role, qualification, station, vehicle_scope, active, password_hash, temp_password_hash,
                     must_change_password, created_at, password_changed_at
                 )
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 ON CONFLICT(id) DO UPDATE SET
                     name = excluded.name,
                     role = excluded.role,
                     qualification = excluded.qualification,
+                    station = excluded.station,
+                    vehicle_scope = excluded.vehicle_scope,
                     active = excluded.active,
                     password_hash = excluded.password_hash,
                     temp_password_hash = excluded.temp_password_hash,
@@ -298,6 +308,8 @@ def save_employee_store(store):
                     employee["name"],
                     employee.get("role", "employee"),
                     employee.get("qualification", ""),
+                    employee.get("station", ""),
+                    employee.get("vehicle_scope", ""),
                     1 if employee.get("active", True) else 0,
                     employee.get("password_hash", ""),
                     employee.get("temp_password_hash", ""),
@@ -326,16 +338,18 @@ def create_employee_record(employee):
         connection.execute(
             """
             INSERT INTO employees (
-                id, name, role, qualification, active, password_hash, temp_password_hash,
+                id, name, role, qualification, station, vehicle_scope, active, password_hash, temp_password_hash,
                 must_change_password, created_at, password_changed_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 employee["id"],
                 employee["name"],
                 employee.get("role", "employee"),
                 employee.get("qualification", ""),
+                employee.get("station", ""),
+                employee.get("vehicle_scope", ""),
                 1 if employee.get("active", True) else 0,
                 employee.get("password_hash", ""),
                 employee.get("temp_password_hash", ""),
@@ -353,6 +367,8 @@ def update_employee_record(employee_id, changes):
         "name",
         "role",
         "qualification",
+        "station",
+        "vehicle_scope",
         "active",
         "password_hash",
         "temp_password_hash",
