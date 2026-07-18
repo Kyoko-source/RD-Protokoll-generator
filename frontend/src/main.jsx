@@ -2694,6 +2694,10 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const visibleFeedbackItems = feedbackFilter === 'alle'
     ? feedbackItems
     : feedbackItems.filter((item) => (item.status || 'offen') === feedbackFilter);
+  const activeEmployeeCount = employees.filter((item) => item.active).length;
+  const adminEmployeeCount = employees.filter((item) => item.role === 'admin').length;
+  const privacyWarningCount = (privacy?.checklist || []).filter((item) => item.status === 'warning').length;
+  const privacyOkCount = (privacy?.checklist || []).filter((item) => item.status === 'ok').length;
 
   async function loadAdminData() {
     setError('');
@@ -2948,9 +2952,9 @@ function AdminView({ session, employee, onBack, onLogout }) {
         </div>
       </header>
 
-      <section className="protocol-toolbar">
-        <button type="button" onClick={onBack}>Zurück zum Hauptmenü</button>
-        <button type="button" onClick={loadAdminData}>Aktualisieren</button>
+      <section className="protocol-toolbar admin-toolbar">
+        <button type="button" onClick={onBack}><ArrowLeft size={17} /> Hauptmenü</button>
+        <button type="button" onClick={loadAdminData}><RotateCcw size={17} /> Aktualisieren</button>
       </section>
 
       {error && <div className="error-box">{error}</div>}
@@ -2962,13 +2966,39 @@ function AdminView({ session, employee, onBack, onLogout }) {
         </div>
       )}
 
-      <section className="admin-grid">
-        <article className="work-panel">
+      <section className="admin-overview">
+        <div className="admin-metric metric-teal">
+          <span>Aktive Profile</span>
+          <strong>{activeEmployeeCount}</strong>
+          <small>{employees.length} insgesamt</small>
+        </div>
+        <div className="admin-metric metric-blue">
+          <span>Admins</span>
+          <strong>{adminEmployeeCount}</strong>
+          <small>rollenbasierter Zugriff</small>
+        </div>
+        <div className="admin-metric metric-green">
+          <span>Datenschutz</span>
+          <strong>{privacyOkCount}</strong>
+          <small>{privacyWarningCount} Hinweise</small>
+        </div>
+        <div className="admin-metric metric-rose">
+          <span>Fällige Löschung</span>
+          <strong>{privacy?.expired_cases || 0}</strong>
+          <small>{securityLogRetentionDays || 180} Tage Logs</small>
+        </div>
+      </section>
+
+      <section className="admin-grid admin-primary-grid">
+        <article className="work-panel admin-card employee-admin-card">
           <div className="section-head">
-            <h2>Mitarbeiter</h2>
+            <div>
+              <h2>Mitarbeiter</h2>
+              <p>Konten, Rollen und Einmalpasswörter</p>
+            </div>
             <span>{employees.length} Profile</span>
           </div>
-          <form className="inline-form" onSubmit={createEmployee}>
+          <form className="inline-form employee-create-form" onSubmit={createEmployee}>
             <input value={newName} onChange={(event) => setNewName(event.target.value)} placeholder="Name" />
             <select value={newQualification} onChange={(event) => setNewQualification(event.target.value)} aria-label="Qualifikation">
               {EMPLOYEE_QUALIFICATION_OPTIONS.map((qualification) => (
@@ -2982,87 +3012,109 @@ function AdminView({ session, employee, onBack, onLogout }) {
             </select>
             <button type="submit"><UserPlus size={17} /> Anlegen</button>
           </form>
-          <div className="admin-list">
+          <div className="admin-list employee-list">
             {employees.map((item) => (
-              <div className="admin-row" key={item.id}>
-                <div>
-                  <strong>{item.name}</strong>
-                  <span>{qualificationLabel(item.qualification)} · {roleLabel(item.role)} · {item.active ? 'aktiv' : 'gesperrt'}</span>
+              <div className={`admin-row employee-row ${item.active ? '' : 'employee-row-inactive'}`} key={item.id}>
+                <div className="employee-main">
+                  <span className="employee-avatar">{(item.name || '?').slice(0, 1).toUpperCase()}</span>
+                  <div>
+                    <strong>{item.name}</strong>
+                    <span>{qualificationLabel(item.qualification)} · {roleLabel(item.role)}</span>
+                  </div>
                 </div>
-                <select value={item.qualification || ''} onChange={(event) => updateEmployee(item, { qualification: event.target.value })} aria-label={`Qualifikation von ${item.name}`}>
-                  {EMPLOYEE_QUALIFICATION_OPTIONS.map((qualification) => (
-                    <option key={qualification.value || 'none'} value={qualification.value}>{qualification.label}</option>
-                  ))}
-                </select>
-                <select value={item.role} onChange={(event) => updateEmployee(item, { role: event.target.value })}>
-                  {EMPLOYEE_ROLE_OPTIONS.map((role) => (
-                    <option key={role.value} value={role.value}>{role.label}</option>
-                  ))}
-                </select>
-                <button type="button" onClick={() => updateEmployee(item, { active: !item.active })}>
-                  {item.active ? 'Sperren' : 'Aktivieren'}
-                </button>
-                <button type="button" onClick={() => updateEmployee(item, { reset_password: true })}>
-                  <RotateCcw size={16} /> OTP
-                </button>
-                <button type="button" className="danger-button" onClick={() => deleteEmployee(item)}>
-                  <Trash2 size={16} /> Löschen
-                </button>
+                <span className={`status-pill ${item.active ? 'status-active' : 'status-locked'}`}>{item.active ? 'aktiv' : 'gesperrt'}</span>
+                <div className="employee-controls">
+                  <select value={item.qualification || ''} onChange={(event) => updateEmployee(item, { qualification: event.target.value })} aria-label={`Qualifikation von ${item.name}`}>
+                    {EMPLOYEE_QUALIFICATION_OPTIONS.map((qualification) => (
+                      <option key={qualification.value || 'none'} value={qualification.value}>{qualification.label}</option>
+                    ))}
+                  </select>
+                  <select value={item.role} onChange={(event) => updateEmployee(item, { role: event.target.value })}>
+                    {EMPLOYEE_ROLE_OPTIONS.map((role) => (
+                      <option key={role.value} value={role.value}>{role.label}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="employee-actions">
+                  <button type="button" onClick={() => updateEmployee(item, { active: !item.active })}>
+                    {item.active ? 'Sperren' : 'Aktivieren'}
+                  </button>
+                  <button type="button" onClick={() => updateEmployee(item, { reset_password: true })}>
+                    <RotateCcw size={16} /> OTP
+                  </button>
+                  <button type="button" className="danger-button" onClick={() => deleteEmployee(item)} aria-label={`${item.name} löschen`}>
+                    <Trash2 size={16} />
+                  </button>
+                </div>
               </div>
             ))}
           </div>
         </article>
 
-        <article className="work-panel">
+        <article className="work-panel admin-card privacy-admin-card">
           <div className="section-head">
-            <h2>Datenschutz</h2>
+            <div>
+              <h2>Datenschutz</h2>
+              <p>Verschlüsselung, Aufbewahrung und Löschläufe</p>
+            </div>
             <span>{privacy?.encryption?.enabled ? 'Verschlüsselung aktiv' : 'Prüfen'}</span>
           </div>
-          <div className="privacy-list">
-            <div>
-              <strong>Speicher-Schutz</strong>
-              <span>{privacy?.encryption?.provider || 'wird geladen'}</span>
+          <div className="privacy-summary-grid">
+            <div className="privacy-summary-item">
+              <ShieldCheck size={18} />
+              <div>
+                <strong>Speicher-Schutz</strong>
+                <span>{privacy?.encryption?.provider || 'wird geladen'}</span>
+              </div>
             </div>
-            <div>
-              <strong>Schlüsselquelle</strong>
-              <span>{privacy?.encryption?.key_source || '-'}</span>
+            <div className="privacy-summary-item">
+              <Lock size={18} />
+              <div>
+                <strong>Schlüsselquelle</strong>
+                <span>{privacy?.encryption?.key_source || '-'}</span>
+              </div>
             </div>
-            <div>
-              <strong>Sitzungssperre</strong>
-              <span>{privacy?.session_minutes || 30} Minuten Backend · 20 Minuten Oberfläche</span>
+            <div className="privacy-summary-item">
+              <Activity size={18} />
+              <div>
+                <strong>Sitzungssperre</strong>
+                <span>{privacy?.session_minutes || 30} Minuten Backend · 20 Minuten Oberfläche</span>
+              </div>
             </div>
-            <div>
-              <strong>Audit-Log</strong>
-              <span>{privacy?.audit_events || 0} letzte Ereignisse abrufbar · {privacy?.security_log_retention_days || 180} Tage Aufbewahrung</span>
-            </div>
-            <div>
-              <strong>Abgelaufene Fälle</strong>
-              <span>{privacy?.expired_cases || 0} nach Aufbewahrungsfrist fällig</span>
-            </div>
-            <div>
-              <strong>Externe Karten</strong>
-              <span>{privacy?.external_maps_enabled ? 'aktiviert' : 'deaktiviert'}</span>
+            <div className="privacy-summary-item">
+              <ClipboardList size={18} />
+              <div>
+                <strong>Audit-Log</strong>
+                <span>{privacy?.audit_events || 0} Ereignisse · {privacy?.security_log_retention_days || 180} Tage</span>
+              </div>
             </div>
           </div>
-          <div className="inline-form">
-            <label>
-              Einsatzdaten
+
+          <div className="privacy-settings-panel">
+            <label className="setting-field">
+              <span>Einsatzdaten</span>
               <input value={retentionDays} onChange={(event) => setRetentionDays(event.target.value)} inputMode="numeric" />
+              <small>Tage Aufbewahrung</small>
             </label>
-            <label>
-              Sicherheitslogs
+            <label className="setting-field">
+              <span>Sicherheitslogs</span>
               <input value={securityLogRetentionDays} onChange={(event) => setSecurityLogRetentionDays(event.target.value)} inputMode="numeric" />
+              <small>Tage Aufbewahrung</small>
             </label>
-            <label className="checkbox-line">
+            <label className="setting-toggle">
               <input
                 type="checkbox"
                 checked={externalMapsEnabled}
                 onChange={(event) => setExternalMapsEnabled(event.target.checked)}
               />
-              Externe Kartenlinks erlauben
+              <span>
+                <strong>Externe Kartenlinks</strong>
+                <small>{externalMapsEnabled ? 'aktiviert' : 'deaktiviert'}</small>
+              </span>
             </label>
-            <button type="button" onClick={saveRetention}>Aufbewahrung speichern</button>
+            <button type="button" onClick={saveRetention}><Save size={17} /> Speichern</button>
           </div>
+
           <div className="privacy-actions">
             <button type="button" className="danger-button" onClick={purgeExpiredCases}>
               <Trash2 size={16} /> Abgelaufene Fälle löschen
@@ -3071,6 +3123,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
               <Trash2 size={16} /> Alte Logs löschen
             </button>
           </div>
+
           <div className="privacy-checklist">
             {(privacy?.checklist || []).map((item) => (
               <div className={`privacy-check privacy-${item.status}`} key={item.label}>

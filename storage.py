@@ -675,6 +675,84 @@ def encrypt_existing_patient_data():
                     ),
                 )
                 changed += 1
+
+        audit_rows = connection.execute(
+            """
+            SELECT id, timestamp, employee_id, employee_name, action,
+                   entity_type, entity_id, details_json
+            FROM audit_log
+            """
+        ).fetchall()
+        for row in audit_rows:
+            updates = {}
+            for column in ("timestamp", "employee_id", "employee_name", "action", "entity_type", "entity_id", "details_json"):
+                if not str(row[column]).startswith(ENCRYPTED_PREFIX):
+                    updates[column] = _encrypt_text(row[column])
+            if updates:
+                connection.execute(
+                    """
+                    UPDATE audit_log
+                    SET timestamp = ?,
+                        employee_id = ?,
+                        employee_name = ?,
+                        action = ?,
+                        entity_type = ?,
+                        entity_id = ?,
+                        details_json = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        updates.get("timestamp", row["timestamp"]),
+                        updates.get("employee_id", row["employee_id"]),
+                        updates.get("employee_name", row["employee_name"]),
+                        updates.get("action", row["action"]),
+                        updates.get("entity_type", row["entity_type"]),
+                        updates.get("entity_id", row["entity_id"]),
+                        updates.get("details_json", row["details_json"]),
+                        row["id"],
+                    ),
+                )
+                changed += 1
+
+        login_rows = connection.execute(
+            """
+            SELECT id, timestamp, employee_id, employee_name, device_id,
+                   device_name, user_agent, ip_address, source
+            FROM login_events
+            """
+        ).fetchall()
+        for row in login_rows:
+            updates = {}
+            for column in ("timestamp", "employee_id", "employee_name", "device_id", "device_name", "user_agent", "ip_address", "source"):
+                if not str(row[column]).startswith(ENCRYPTED_PREFIX):
+                    updates[column] = _encrypt_text(row[column])
+            if updates:
+                connection.execute(
+                    """
+                    UPDATE login_events
+                    SET timestamp = ?,
+                        employee_id = ?,
+                        employee_name = ?,
+                        device_id = ?,
+                        device_name = ?,
+                        user_agent = ?,
+                        ip_address = ?,
+                        source = ?
+                    WHERE id = ?
+                    """,
+                    (
+                        updates.get("timestamp", row["timestamp"]),
+                        updates.get("employee_id", row["employee_id"]),
+                        updates.get("employee_name", row["employee_name"]),
+                        updates.get("device_id", row["device_id"]),
+                        updates.get("device_name", row["device_name"]),
+                        updates.get("user_agent", row["user_agent"]),
+                        updates.get("ip_address", row["ip_address"]),
+                        updates.get("source", row["source"]),
+                        row["id"],
+                    ),
+                )
+                changed += 1
         connection.commit()
     return changed
 
@@ -913,13 +991,13 @@ def write_audit_event(event):
             VALUES (?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                event["timestamp"],
-                event.get("employee_id", ""),
-                event.get("employee_name", ""),
-                event["action"],
-                event.get("entity_type", ""),
-                event.get("entity_id", ""),
-                json.dumps(details, ensure_ascii=False),
+                _encrypt_text(event["timestamp"]),
+                _encrypt_text(event.get("employee_id", "")),
+                _encrypt_text(event.get("employee_name", "")),
+                _encrypt_text(event["action"]),
+                _encrypt_text(event.get("entity_type", "")),
+                _encrypt_text(event.get("entity_id", "")),
+                _encrypt_text(json.dumps(details, ensure_ascii=False)),
             ),
         )
         connection.commit()
@@ -942,17 +1020,18 @@ def list_audit_events(limit=100):
 
     events = []
     for row in rows:
+        details_json = _decrypt_text(row["details_json"])
         try:
-            details = json.loads(row["details_json"])
+            details = json.loads(details_json)
         except json.JSONDecodeError:
             details = {}
         events.append({
-            "timestamp": row["timestamp"],
-            "employee_id": row["employee_id"],
-            "employee_name": row["employee_name"],
-            "action": row["action"],
-            "entity_type": row["entity_type"],
-            "entity_id": row["entity_id"],
+            "timestamp": _decrypt_text(row["timestamp"]),
+            "employee_id": _decrypt_text(row["employee_id"]),
+            "employee_name": _decrypt_text(row["employee_name"]),
+            "action": _decrypt_text(row["action"]),
+            "entity_type": _decrypt_text(row["entity_type"]),
+            "entity_id": _decrypt_text(row["entity_id"]),
             "details": details,
         })
     return events
@@ -970,14 +1049,14 @@ def write_login_event(event):
             VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                event.get("timestamp", ""),
-                event.get("employee_id", ""),
-                event.get("employee_name", ""),
-                event.get("device_id", ""),
-                event.get("device_name", ""),
-                event.get("user_agent", ""),
-                event.get("ip_address", ""),
-                event.get("source", "login"),
+                _encrypt_text(event.get("timestamp", "")),
+                _encrypt_text(event.get("employee_id", "")),
+                _encrypt_text(event.get("employee_name", "")),
+                _encrypt_text(event.get("device_id", "")),
+                _encrypt_text(event.get("device_name", "")),
+                _encrypt_text(event.get("user_agent", "")),
+                _encrypt_text(event.get("ip_address", "")),
+                _encrypt_text(event.get("source", "login")),
             ),
         )
         connection.commit()
@@ -1000,14 +1079,14 @@ def list_login_events(limit=100):
 
     return [
         {
-            "timestamp": row["timestamp"],
-            "employee_id": row["employee_id"],
-            "employee_name": row["employee_name"],
-            "device_id": row["device_id"],
-            "device_name": row["device_name"],
-            "user_agent": row["user_agent"],
-            "ip_address": row["ip_address"],
-            "source": row["source"],
+            "timestamp": _decrypt_text(row["timestamp"]),
+            "employee_id": _decrypt_text(row["employee_id"]),
+            "employee_name": _decrypt_text(row["employee_name"]),
+            "device_id": _decrypt_text(row["device_id"]),
+            "device_name": _decrypt_text(row["device_name"]),
+            "user_agent": _decrypt_text(row["user_agent"]),
+            "ip_address": _decrypt_text(row["ip_address"]),
+            "source": _decrypt_text(row["source"]),
         }
         for row in rows
     ]
@@ -1019,14 +1098,31 @@ def delete_security_events_before(cutoff_timestamp):
     if not cutoff:
         return {"audit_log": 0, "login_events": 0}
     with _connect() as connection:
-        audit_deleted = connection.execute(
-            "DELETE FROM audit_log WHERE timestamp < ?",
-            (cutoff,),
-        ).rowcount
-        login_deleted = connection.execute(
-            "DELETE FROM login_events WHERE timestamp < ?",
-            (cutoff,),
-        ).rowcount
+        audit_ids = [
+            row["id"]
+            for row in connection.execute("SELECT id, timestamp FROM audit_log").fetchall()
+            if (timestamp := _decrypt_text(row["timestamp"])) and timestamp < cutoff
+        ]
+        login_ids = [
+            row["id"]
+            for row in connection.execute("SELECT id, timestamp FROM login_events").fetchall()
+            if (timestamp := _decrypt_text(row["timestamp"])) and timestamp < cutoff
+        ]
+
+        audit_deleted = 0
+        login_deleted = 0
+        if audit_ids:
+            placeholders = ",".join("?" for _ in audit_ids)
+            audit_deleted = connection.execute(
+                f"DELETE FROM audit_log WHERE id IN ({placeholders})",
+                audit_ids,
+            ).rowcount
+        if login_ids:
+            placeholders = ",".join("?" for _ in login_ids)
+            login_deleted = connection.execute(
+                f"DELETE FROM login_events WHERE id IN ({placeholders})",
+                login_ids,
+            ).rowcount
         connection.commit()
     return {
         "audit_log": max(0, audit_deleted),

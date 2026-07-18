@@ -82,6 +82,82 @@ class StorageAuthTests(unittest.TestCase):
         self.assertTrue(row["patient_json"].startswith(storage.ENCRYPTED_PREFIX))
         self.assertTrue(row["protocol_text"].startswith(storage.ENCRYPTED_PREFIX))
 
+    def test_security_events_keep_encrypted_metadata_and_roundtrip(self):
+        storage.write_audit_event({
+            "timestamp": "2026-07-18T10:00:00",
+            "employee_id": "employee-1",
+            "employee_name": "Admin",
+            "action": "api_login_success",
+            "entity_type": "session",
+            "entity_id": "session-1",
+            "details": {"role": "admin"},
+        })
+        storage.write_login_event({
+            "timestamp": "2026-07-18T10:01:00",
+            "employee_id": "employee-1",
+            "employee_name": "Admin",
+            "device_id": "device-hash",
+            "device_name": "Tablet 1",
+            "user_agent": "Chrome / Windows",
+            "ip_address": "192.168.1.0",
+            "source": "login",
+        })
+
+        self.assertEqual(storage.list_audit_events()[0]["employee_name"], "Admin")
+        self.assertEqual(storage.list_audit_events()[0]["details"]["role"], "admin")
+        self.assertEqual(storage.list_login_events()[0]["device_name"], "Tablet 1")
+
+        with storage._connect() as connection:
+            audit = connection.execute("SELECT * FROM audit_log").fetchone()
+            login = connection.execute("SELECT * FROM login_events").fetchone()
+
+        for column in ("timestamp", "employee_id", "employee_name", "action", "entity_type", "entity_id", "details_json"):
+            self.assertTrue(audit[column].startswith(storage.ENCRYPTED_PREFIX), column)
+        for column in ("timestamp", "employee_id", "employee_name", "device_id", "device_name", "user_agent", "ip_address", "source"):
+            self.assertTrue(login[column].startswith(storage.ENCRYPTED_PREFIX), column)
+
+    def test_existing_security_events_are_encrypted_and_purgeable(self):
+        storage.init_database()
+        with storage._connect() as connection:
+            connection.execute(
+                """
+                INSERT INTO audit_log (
+                    timestamp, employee_id, employee_name, action,
+                    entity_type, entity_id, details_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+                """,
+                ("2026-07-01T10:00:00", "employee-1", "Admin", "api_login_success", "session", "session-1", "{}"),
+            )
+            connection.execute(
+                """
+                INSERT INTO login_events (
+                    timestamp, employee_id, employee_name, device_id,
+                    device_name, user_agent, ip_address, source
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                ("2026-07-20T10:00:00", "employee-1", "Admin", "device-hash", "Tablet 1", "Chrome / Windows", "192.168.1.0", "login"),
+            )
+            connection.commit()
+
+        changed = storage.encrypt_existing_patient_data()
+        self.assertEqual(changed, 2)
+
+        with storage._connect() as connection:
+            audit = connection.execute("SELECT timestamp, employee_name FROM audit_log").fetchone()
+            login = connection.execute("SELECT timestamp, device_name FROM login_events").fetchone()
+
+        self.assertTrue(audit["timestamp"].startswith(storage.ENCRYPTED_PREFIX))
+        self.assertTrue(audit["employee_name"].startswith(storage.ENCRYPTED_PREFIX))
+        self.assertTrue(login["timestamp"].startswith(storage.ENCRYPTED_PREFIX))
+        self.assertTrue(login["device_name"].startswith(storage.ENCRYPTED_PREFIX))
+
+        deleted = storage.delete_security_events_before("2026-07-10T00:00:00")
+
+        self.assertEqual(deleted, {"audit_log": 1, "login_events": 0})
+        self.assertEqual(storage.list_login_events()[0]["employee_name"], "Admin")
+
 
 if __name__ == "__main__":
     unittest.main()
