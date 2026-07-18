@@ -21,6 +21,9 @@ NANA_ENV=production
 NANA_DB_PATH=/data/nana.db
 NANA_DATA_KEY=<langer-zufaelliger-schluessel>
 NANA_ALLOWED_ORIGINS=https://nana.example.de
+NANA_ALLOWED_HOSTS=nana.example.de,localhost,127.0.0.1,nana
+NANA_MAX_REQUEST_BODY_BYTES=2097152
+NANA_ENABLE_BEARER_AUTH=0
 ```
 
 Auf dem Server:
@@ -44,6 +47,26 @@ python -c "import secrets; print(secrets.token_urlsafe(48))"
 ```
 
 ## Container bauen und starten
+
+Vor jedem Deployment lokal Backend, Datenbank und API pruefen:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File scripts\verify_nana.ps1
+```
+
+Frontend-Production-Build direkt im Frontend-Ordner pruefen:
+
+```powershell
+cd frontend
+npm.cmd run build
+cd ..
+```
+
+Wenn Docker lokal verfuegbar ist, zusaetzlich den Image-Build pruefen:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File scripts\verify_nana.ps1 -Docker
+```
 
 Nur NANA hinter externem Reverse Proxy:
 
@@ -71,6 +94,32 @@ http://127.0.0.1:8000
 
 Nach vorne ins Internet sollte nur der HTTPS-Reverse-Proxy zeigen.
 
+## Server-Check nach Deployment
+
+Nach jedem Server-Deployment pruefen:
+
+```bash
+docker compose -f deploy/docker-compose.https.example.yml ps
+curl -fsS http://127.0.0.1:8000/api/health
+```
+
+Die Health-Antwort sollte mindestens zeigen:
+
+- `status: ok`
+- `database.ok: true`
+- `frontend_ready: true`
+- `encryption.enabled: true`
+- `encryption.key_source: environment` im Produktionsbetrieb
+
+Danach im Browser pruefen:
+
+- Login funktioniert.
+- Adminbereich laedt.
+- Entwurf speichern funktioniert.
+- Einsatz abschliessen funktioniert.
+- PDF-Export funktioniert.
+- Datenschutzseite zeigt den externen Datenschluessel als aktiv.
+
 ## HTTPS mit Caddy
 
 `deploy/caddy/Caddyfile.example` auf dem Server kopieren und `nana.example.de` durch die echte Domain ersetzen.
@@ -83,7 +132,14 @@ Wenn `deploy/docker-compose.https.example.yml` genutzt wird, spricht Caddy inter
 Backup:
 
 ```powershell
+$env:BACKUP_PASSPHRASE="<lange-zufaellige-backup-passphrase>"
 powershell ./deploy/scripts/backup_nana.ps1
+```
+
+Unverschluesselte lokale Entwicklungsbackups sind nur mit expliziter Bestaetigung moeglich:
+
+```powershell
+powershell ./deploy/scripts/backup_nana.ps1 -AllowPlaintextDevelopmentBackup
 ```
 
 Restore:

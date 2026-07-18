@@ -1,4 +1,4 @@
-const CACHE_NAME = 'nana-app-shell-v4';
+const CACHE_NAME = 'nana-app-shell-v5';
 const APP_SHELL = [
   '/',
   '/manifest.webmanifest',
@@ -34,7 +34,7 @@ self.addEventListener('fetch', (event) => {
   const request = event.request;
   const url = new URL(request.url);
 
-  if (url.pathname.startsWith('/api/')) {
+  if (url.origin !== self.location.origin || url.pathname.startsWith('/api/')) {
     return;
   }
 
@@ -48,6 +48,12 @@ self.addEventListener('fetch', (event) => {
         })
         .catch(() => caches.match('/'))
     );
+    return;
+  }
+
+  const cacheableAsset = request.method === 'GET'
+    && (APP_SHELL.includes(url.pathname) || url.pathname.startsWith('/assets/'));
+  if (!cacheableAsset) {
     return;
   }
 

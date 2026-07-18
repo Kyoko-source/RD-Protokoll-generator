@@ -10,8 +10,10 @@ nana.example.de {
         X-Content-Type-Options "nosniff"
         Referrer-Policy "no-referrer"
         Permissions-Policy "camera=(), microphone=(), geolocation=()"
-        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'"
+        X-Robots-Tag "noindex, nofollow"
+        Content-Security-Policy "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; frame-src 'none'; frame-ancestors 'none'; base-uri 'self'; form-action 'self'; manifest-src 'self'; worker-src 'self'; upgrade-insecure-requests"
         X-Frame-Options "DENY"
+        Cache-Control "no-store"
     }
 
     reverse_proxy nana:8000

@@ -4,11 +4,10 @@ Notfall-Aufzeichnungs- und Nachbearbeitungs-Assistent.
 
 ## Aktueller Stand
 
-- `App.py`: funktionierender Streamlit-Prototyp
-- `backend/`: neues FastAPI-Backend fuer die kuenftige App
-- `frontend/`: neues React/Vite-Frontend als PWA-Grundlage
+- `backend/`: FastAPI-Backend fuer API, Auth, Datenschutz, Protokolle und Serverbetrieb
+- `frontend/`: React/Vite-Frontend als PWA
 
-Die neue App-Struktur wird parallel aufgebaut, damit der Prototyp weiter nutzbar bleibt.
+Die fruehere Streamlit-Version wurde entfernt. NANA laeuft jetzt ueber Backend und Frontend.
 
 ## Lokal starten
 
@@ -16,6 +15,15 @@ PC:
 
 ```powershell
 powershell.exe -ExecutionPolicy Bypass -File scripts\start_nana_app.ps1
+```
+
+Vor Deployments pruefen:
+
+```powershell
+powershell.exe -ExecutionPolicy Bypass -File scripts\verify_nana.ps1
+cd frontend
+npm.cmd run build
+cd ..
 ```
 
 Danach im Browser:

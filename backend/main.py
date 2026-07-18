@@ -2,33 +2,66 @@ import secrets
 import json
 import os
 import html
+import hashlib
 import re
 import urllib.error
 import urllib.request
+from urllib.parse import urlparse
 from pathlib import Path
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 
 from fastapi import Depends, FastAPI, Header, HTTPException, Request, status
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse, HTMLResponse, Response
 from fastapi.staticfiles import StaticFiles
 from fpdf import FPDF
-from pydantic import BaseModel
 
+from backend.schemas import (
+    AnnouncementItem,
+    AnnouncementsRequest,
+    DraftRequest,
+    EmployeeCreateRequest,
+    EmployeeUpdateRequest,
+    FeedbackRequest,
+    FeedbackUpdateRequest,
+    FirstAdminRequest,
+    HospitalSaveRequest,
+    IcdLookupRequest,
+    IcdSearchRequest,
+    InterfaceImportRequest,
+    LoginRequest,
+    MedicationCalcRequest,
+    PasswordChangeRequest,
+    PrintAuditRequest,
+    ProtocolRequest,
+    ReauthRequest,
+    RetentionRequest,
+)
 from backend.security import expires_at, is_expired, new_token, password_hash, verify_password
 from device_guides import DEVICE_GUIDES
 from hospital_finder import CATEGORIES, HOSPITALS, TOWNS, distance_km
 from interfaces import build_fhir_bundle, build_nana_case_export, parse_corpuls_import, parse_dispatch_import
 from storage import (
     anonymize_finished_case,
+    create_employee_record,
     delete_finished_case,
+    delete_auth_failure,
+    delete_auth_session,
+    delete_employee_record,
     delete_expired_finished_cases,
+    delete_password_change_token,
     delete_security_events_before,
+    database_health_status,
     encrypt_existing_patient_data,
     encryption_status,
+    get_auth_failure,
+    get_auth_session,
+    get_employee,
     get_finished_case,
     get_app_setting,
+    get_password_change_token,
     init_database,
     list_audit_events,
     list_expired_finished_cases,
@@ -36,10 +69,15 @@ from storage import (
     list_login_events,
     load_case_draft_store,
     load_employee_store,
+    purge_expired_auth_state,
     save_case_draft_store,
+    save_auth_failure,
+    save_auth_session,
     save_employee_store,
     save_finished_case,
+    save_password_change_token,
     set_app_setting,
+    update_employee_record,
     write_audit_event,
     write_login_event,
 )
@@ -53,11 +91,15 @@ def local_now():
 
 SESSION_MINUTES = 30
 PASSWORD_CHANGE_MINUTES = 10
+MAX_REQUEST_BODY_BYTES = int(os.getenv("NANA_MAX_REQUEST_BODY_BYTES", str(2 * 1024 * 1024)))
+AUTH_COOKIE_NAME = "nana_session"
+CSRF_COOKIE_NAME = "nana_csrf"
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIST = PROJECT_ROOT / "frontend" / "dist"
 NANA_ENV = os.getenv("NANA_ENV", "development").strip().lower()
 NANA_RELEASE_SHA = os.getenv("NANA_RELEASE_SHA", "local").strip() or "local"
 NANA_RELEASE_DATE = os.getenv("NANA_RELEASE_DATE", "").strip()
+MEDICAL_RULESET_VERSION = "NANA-SOP-2026.07"
 
 
 def production_mode():
@@ -87,15 +129,41 @@ def configured_cors_origins():
     configured = os.getenv("NANA_ALLOWED_ORIGINS", "").strip()
     if configured:
         return [origin.strip() for origin in configured.split(",") if origin.strip()]
+    if production_mode():
+        return []
     return ["http://localhost:5173", "http://127.0.0.1:5173"]
+
+
+def configured_allowed_hosts():
+    configured = os.getenv("NANA_ALLOWED_HOSTS", "").strip()
+    if configured:
+        return [host.strip() for host in configured.split(",") if host.strip()]
+    hosts = []
+    for origin in configured_cors_origins():
+        parsed = urlparse(origin)
+        if parsed.hostname:
+            hosts.append(parsed.hostname)
+    return sorted(set(hosts))
+
+
+def parse_stored_datetime(value):
+    if hasattr(value, "isoformat"):
+        return value
+    raw = str(value or "").strip()
+    if not raw:
+        return None
+    try:
+        return datetime.fromisoformat(raw)
+    except ValueError:
+        try:
+            return datetime.fromisoformat(raw.replace(" ", "T"))
+        except ValueError:
+            return None
 
 
 if production_mode() and not os.getenv("NANA_DATA_KEY", "").strip():
     raise RuntimeError("NANA_DATA_KEY muss im Produktionsbetrieb gesetzt sein.")
 
-sessions = {}
-password_change_tokens = {}
-auth_failures = {}
 AUTH_MAX_FAILURES = 5
 AUTH_LOCK_MINUTES = 15
 EMPLOYEE_ROLES = {"employee", "admin", "bufdi", "azubi", "praktikant"}
@@ -109,132 +177,62 @@ EMPLOYEE_QUALIFICATIONS = {
 }
 
 app = FastAPI(title="NANA API", version="0.1.0")
+allowed_hosts = configured_allowed_hosts()
+if production_mode() and allowed_hosts:
+    app.add_middleware(TrustedHostMiddleware, allowed_hosts=allowed_hosts)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=configured_cors_origins(),
     allow_origin_regex=None if production_mode() else r"http://(localhost|127\.0\.0\.1|10\.\d+\.\d+\.\d+|192\.168\.\d+\.\d+|172\.(1[6-9]|2\d|3[0-1])\.\d+\.\d+):5173",
     allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_headers=["Authorization", "Content-Type", "X-NANA-CSRF"],
 )
 
 
-class LoginRequest(BaseModel):
-    employee_id: str
-    password: str
-    device_id: str = ""
-    device_name: str = ""
-    user_agent: str = ""
-
-
-class ReauthRequest(LoginRequest):
-    restore_shift: bool = True
-
-
-class PasswordChangeRequest(BaseModel):
-    token: str
-    new_password: str
-    device_id: str = ""
-    device_name: str = ""
-    user_agent: str = ""
-
-
-class FirstAdminRequest(BaseModel):
-    name: str
-    password: str
-    device_id: str = ""
-    device_name: str = ""
-    user_agent: str = ""
-
-
-class DraftRequest(BaseModel):
-    patient: dict
-
-
-class ProtocolRequest(BaseModel):
-    patient: dict
-    force_finish: bool = False
-
-
-class MedicationCalcRequest(BaseModel):
-    sop: str = "Anaphylaxie (SOPKB0105)"
-    age: float = 30
-    weight: float = 70
-    pregnant: str = "Nein"
-    inputs: dict = {}
-
-
-class PrintAuditRequest(BaseModel):
-    case_id: str | None = None
-    source: str = "draft"
-
-
-class InterfaceImportRequest(BaseModel):
-    source: str = "dispatch"
-    payload: str
-
-
-class IcdLookupRequest(BaseModel):
-    code: str
-
-
-class IcdSearchRequest(BaseModel):
-    query: str = ""
-    limit: int = 80
-
-
-class HospitalSaveRequest(BaseModel):
-    id: str | None = None
-    name: str
-    country: str = "DE"
-    address: str = ""
-    town: str = ""
-    phone: str = ""
-    categories: list[str] = []
-    estimated_minutes: int | None = None
-    source: str = ""
-
-
-class EmployeeCreateRequest(BaseModel):
-    name: str
-    role: str = "employee"
-    qualification: str = ""
-
-
-class EmployeeUpdateRequest(BaseModel):
-    name: str | None = None
-    role: str | None = None
-    qualification: str | None = None
-    active: bool | None = None
-    reset_password: bool = False
-
-
-class AnnouncementItem(BaseModel):
-    title: str = ""
-    body: str = ""
-    published_at: str = ""
-
-
-class AnnouncementsRequest(BaseModel):
-    patch_notes: list[AnnouncementItem] = []
-    planned_updates: list[AnnouncementItem] = []
-
-
-class FeedbackRequest(BaseModel):
-    kind: str = "Bug"
-    title: str = ""
-    message: str = ""
-
-
-class FeedbackUpdateRequest(BaseModel):
-    status: str = "offen"
-    answer: str = ""
-
-
-class RetentionRequest(BaseModel):
-    retention_days: int = 3650
-    security_log_retention_days: int = 180
-    external_maps_enabled: bool = False
+@app.middleware("http")
+async def security_headers(request: Request, call_next):
+    content_length = request.headers.get("content-length")
+    if content_length and content_length.isdigit() and int(content_length) > MAX_REQUEST_BODY_BYTES:
+        return Response(
+            content='{"detail":"Anfrage ist zu groß."}',
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
+            media_type="application/json",
+            headers={"Cache-Control": "no-store"},
+        )
+    response = await call_next(request)
+    response.headers.setdefault("X-Content-Type-Options", "nosniff")
+    response.headers.setdefault("Referrer-Policy", "no-referrer")
+    response.headers.setdefault("Permissions-Policy", "camera=(), microphone=(), geolocation=()")
+    response.headers.setdefault("X-Frame-Options", "DENY")
+    response.headers.setdefault("X-Robots-Tag", "noindex, nofollow")
+    csp = (
+        "default-src 'self'; "
+        "script-src 'self'; "
+        "style-src 'self' 'unsafe-inline'; "
+        "img-src 'self' data:; "
+        "font-src 'self' data:; "
+        "connect-src 'self'; "
+        "object-src 'none'; "
+        "frame-src 'none'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'self'; "
+        "form-action 'self'; "
+        "manifest-src 'self'; "
+        "worker-src 'self'"
+    )
+    if production_mode():
+        csp = f"{csp}; upgrade-insecure-requests"
+    response.headers.setdefault(
+        "Content-Security-Policy",
+        csp,
+    )
+    if request.url.path.startswith("/api/"):
+        response.headers.setdefault("Cache-Control", "no-store")
+        response.headers.setdefault("Pragma", "no-cache")
+    if production_mode():
+        response.headers.setdefault("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+    return response
 
 
 def default_patient_case():
@@ -1086,7 +1084,13 @@ def calculate_medication(payload):
 
     if payload.pregnant == "Ja":
         notes.append("Schwangerschaft: frühe ärztliche Rücksprache einplanen.")
-    return {"sop": sop, "medications": meds, "actions": actions, "notes": notes}
+    return {
+        "sop": sop,
+        "medications": meds,
+        "actions": actions,
+        "notes": notes,
+        "ruleset_version": MEDICAL_RULESET_VERSION,
+    }
 
 
 def quality_item(rule_id, status_value, message, severity="warning"):
@@ -1651,15 +1655,26 @@ def pdf_response(filename, pdf_bytes):
     return Response(
         content=pdf_bytes,
         media_type="application/pdf",
-        headers={"Content-Disposition": f'attachment; filename="{safe_filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_filename}"',
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
 def json_attachment(filename, payload):
+    safe_filename = "".join(char for char in filename if char.isalnum() or char in ["-", "_", "."])
     return Response(
         content=json.dumps(payload, ensure_ascii=False, indent=2),
         media_type="application/json",
-        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+        headers={
+            "Content-Disposition": f'attachment; filename="{safe_filename}"',
+            "Cache-Control": "no-store",
+            "Pragma": "no-cache",
+            "X-Content-Type-Options": "nosniff",
+        },
     )
 
 
@@ -1920,12 +1935,151 @@ def audit(action, employee=None, entity_type="", entity_id="", details=None):
         "action": action,
         "entity_type": entity_type,
         "entity_id": entity_id,
-        "details": details or {},
+        "details": redact_audit_details(details or {}),
     })
+
+
+def redact_audit_details(details):
+    if not isinstance(details, dict):
+        return {}
+    allowed_keys = {
+        "approach_fields",
+        "case_ids",
+        "count",
+        "critical_count",
+        "criticals",
+        "cutoff",
+        "date",
+        "deleted",
+        "external_maps_enabled",
+        "fields",
+        "force_finish",
+        "format",
+        "had_pending",
+        "kind",
+        "level",
+        "locked_until",
+        "patch_notes",
+        "pending_id",
+        "quality_score",
+        "qualification",
+        "reset_password",
+        "restore_shift",
+        "retention_days",
+        "role",
+        "score",
+        "security_log_retention_days",
+        "source",
+        "status",
+        "warning_count",
+        "warnings",
+    }
+    redacted = {}
+    for key, value in details.items():
+        if key not in allowed_keys:
+            continue
+        if isinstance(value, str):
+            redacted[key] = short_text(value, 160)
+        elif hasattr(value, "isoformat"):
+            redacted[key] = value.isoformat()
+        elif isinstance(value, list):
+            redacted[key] = [short_text(item, 80) for item in value[:30]]
+        elif isinstance(value, (bool, int, float)) or value is None:
+            redacted[key] = value
+        else:
+            redacted[key] = short_text(value, 160)
+    return redacted
 
 
 def short_text(value, limit=240):
     return str(value or "").strip()[:limit]
+
+
+def hashed_identifier(value, length=20):
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    salt = os.getenv("NANA_LOG_SALT", os.getenv("NANA_DATA_KEY", "nana-local-log-salt"))
+    digest = hashlib.sha256(f"{salt}:{raw}".encode("utf-8")).hexdigest()
+    return digest[:length]
+
+
+def session_cookie_secure():
+    return production_mode()
+
+
+def set_session_cookie(response: Response, token, csrf_token=""):
+    response.set_cookie(
+        AUTH_COOKIE_NAME,
+        token,
+        max_age=SESSION_MINUTES * 60,
+        httponly=True,
+        secure=session_cookie_secure(),
+        samesite="strict" if production_mode() else "lax",
+        path="/",
+    )
+    if csrf_token:
+        response.set_cookie(
+            CSRF_COOKIE_NAME,
+            csrf_token,
+            max_age=SESSION_MINUTES * 60,
+            httponly=False,
+            secure=session_cookie_secure(),
+            samesite="strict" if production_mode() else "lax",
+            path="/",
+        )
+
+
+def clear_session_cookie(response: Response):
+    response.delete_cookie(AUTH_COOKIE_NAME, path="/")
+    response.delete_cookie(CSRF_COOKIE_NAME, path="/")
+
+
+def new_session_for_employee(response: Response, employee):
+    token = new_token()
+    csrf_token = new_token()
+    save_auth_session(token, employee["id"], expires_at(SESSION_MINUTES), csrf_token=csrf_token)
+    set_session_cookie(response, token, csrf_token)
+    return token
+
+
+def assert_cookie_csrf(request: Request, session):
+    if request.method.upper() not in {"POST", "PUT", "PATCH", "DELETE"}:
+        return
+    expected = session.get("csrf_token", "")
+    supplied_cookie = request.cookies.get(CSRF_COOKIE_NAME, "")
+    supplied_header = request.headers.get("x-nana-csrf", "")
+    if (
+        not expected
+        or not secrets.compare_digest(supplied_cookie, expected)
+        or not secrets.compare_digest(supplied_header, expected)
+    ):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="CSRF-Schutz fehlgeschlagen.")
+
+
+def coarse_user_agent(value):
+    raw = short_text(value, 180)
+    if not raw:
+        return ""
+    browser = "Browser"
+    if "Edg/" in raw:
+        browser = "Edge"
+    elif "Chrome/" in raw:
+        browser = "Chrome"
+    elif "Firefox/" in raw:
+        browser = "Firefox"
+    elif "Safari/" in raw:
+        browser = "Safari"
+    os_label = "Unbekannt"
+    if "Windows" in raw:
+        os_label = "Windows"
+    elif "Android" in raw:
+        os_label = "Android"
+    elif "iPhone" in raw or "iPad" in raw:
+        os_label = "iOS"
+    elif "Mac OS" in raw:
+        os_label = "macOS"
+    return f"{browser} / {os_label}"
 
 
 def client_ip(request: Request):
@@ -1934,8 +2088,8 @@ def client_ip(request: Request):
         return short_text(anonymize_ip(forwarded_for.split(",")[0]), 80)
     real_ip = request.headers.get("x-real-ip", "")
     if real_ip:
-        return short_text(anonymize_ip(real_ip), 80)
-    return short_text(anonymize_ip(request.client.host if request.client else ""), 80)
+        return hashed_identifier(anonymize_ip(real_ip))
+    return hashed_identifier(anonymize_ip(request.client.host if request.client else ""))
 
 
 def anonymize_ip(value):
@@ -1957,41 +2111,41 @@ def auth_failure_key(employee_id, request: Request):
 
 def assert_auth_not_locked(employee_id, request: Request):
     key = auth_failure_key(employee_id, request)
-    entry = auth_failures.get(key)
+    entry = get_auth_failure(key)
     if not entry:
         return
-    locked_until = entry.get("locked_until")
+    locked_until = parse_stored_datetime(entry.get("locked_until"))
     if locked_until and not is_expired(locked_until):
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
             detail="Zu viele Fehlversuche. Bitte später erneut versuchen.",
         )
     if locked_until:
-        auth_failures.pop(key, None)
+        delete_auth_failure(key)
 
 
 def register_auth_failure(employee_id, request: Request):
     key = auth_failure_key(employee_id, request)
-    entry = auth_failures.get(key, {"count": 0, "first_failed_at": local_now().isoformat(timespec="seconds")})
+    entry = get_auth_failure(key) or {"count": 0, "first_failed_at": local_now().isoformat(timespec="seconds")}
     entry["count"] = int(entry.get("count", 0)) + 1
     entry["last_failed_at"] = local_now().isoformat(timespec="seconds")
     if entry["count"] >= AUTH_MAX_FAILURES:
         entry["locked_until"] = expires_at(AUTH_LOCK_MINUTES)
-    auth_failures[key] = entry
+    save_auth_failure(key, entry)
     return entry
 
 
 def clear_auth_failures(employee_id, request: Request):
-    auth_failures.pop(auth_failure_key(employee_id, request), None)
+    delete_auth_failure(auth_failure_key(employee_id, request))
 
 
 def record_login_event(employee, payload, request: Request, source="login"):
-    user_agent = short_text(getattr(payload, "user_agent", "") or request.headers.get("user-agent", ""), 500)
+    user_agent = coarse_user_agent(getattr(payload, "user_agent", "") or request.headers.get("user-agent", ""))
     write_login_event({
         "timestamp": local_now().isoformat(timespec="seconds"),
         "employee_id": employee.get("id", ""),
         "employee_name": employee.get("name", ""),
-        "device_id": short_text(getattr(payload, "device_id", ""), 120),
+        "device_id": hashed_identifier(getattr(payload, "device_id", "")),
         "device_name": short_text(getattr(payload, "device_name", ""), 160),
         "user_agent": user_agent,
         "ip_address": client_ip(request),
@@ -2020,28 +2174,35 @@ def admin_employee(employee):
 
 
 def find_employee(employee_id):
-    store = load_employee_store()
-    for employee in store.get("employees", []):
-        if employee.get("id") == employee_id and employee.get("active", True):
-            return employee
-    return None
+    return get_employee(employee_id, active_only=True)
 
 
-def current_employee(authorization: str | None = Header(default=None)):
-    if not authorization or not authorization.startswith("Bearer "):
+def current_employee(request: Request, response: Response, authorization: str | None = Header(default=None)):
+    token = ""
+    cookie_authenticated = False
+    bearer_allowed = not production_mode() or os.getenv("NANA_ENABLE_BEARER_AUTH", "").strip() == "1"
+    if bearer_allowed and authorization and authorization.startswith("Bearer "):
+        token = authorization.removeprefix("Bearer ").strip()
+    if not token:
+        token = request.cookies.get(AUTH_COOKIE_NAME, "").strip()
+        cookie_authenticated = bool(token)
+    if not token:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Nicht angemeldet.")
 
-    token = authorization.removeprefix("Bearer ").strip()
-    session = sessions.get(token)
-    if not session or is_expired(session.get("expires_at")):
-        sessions.pop(token, None)
+    session = get_auth_session(token)
+    session_expires_at = parse_stored_datetime(session.get("expires_at")) if session else None
+    if not session or not session_expires_at or is_expired(session_expires_at):
+        delete_auth_session(token)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Sitzung abgelaufen.")
+    if cookie_authenticated:
+        assert_cookie_csrf(request, session)
 
     employee = find_employee(session.get("employee_id"))
     if not employee:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Profil nicht gefunden.")
 
-    session["expires_at"] = expires_at(SESSION_MINUTES)
+    save_auth_session(token, employee["id"], expires_at(SESSION_MINUTES))
+    set_session_cookie(response, token, session.get("csrf_token", ""))
     return employee
 
 
@@ -2061,15 +2222,62 @@ def normalize_employee_qualification(qualification):
     return value if value in EMPLOYEE_QUALIFICATIONS else ""
 
 
+def password_policy_errors(password):
+    value = str(password or "")
+    errors = []
+    if len(value) < 14:
+        errors.append("mindestens 14 Zeichen")
+    if not re.search(r"[a-zäöüß]", value):
+        errors.append("Kleinbuchstaben")
+    if not re.search(r"[A-ZÄÖÜ]", value):
+        errors.append("Grossbuchstaben")
+    if not re.search(r"\d", value):
+        errors.append("Zahlen")
+    if not re.search(r"[^A-Za-zÄÖÜäöüß0-9]", value):
+        errors.append("Sonderzeichen")
+    return errors
+
+
+def assert_strong_password(password):
+    errors = password_policy_errors(password)
+    if errors:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Passwort muss enthalten: {', '.join(errors)}.",
+        )
+
+
 @app.on_event("startup")
 def startup():
     init_database()
+    purge_expired_auth_state(local_now().isoformat(timespec="seconds"))
     encrypt_existing_patient_data()
 
 
 @app.get("/api/health")
 def health():
-    return {"status": "ok", "app": "NANA"}
+    database = database_health_status()
+    frontend_ready = (FRONTEND_DIST / "index.html").exists()
+    encryption = encryption_status()
+    bearer_allowed = not production_mode() or os.getenv("NANA_ENABLE_BEARER_AUTH", "").strip() == "1"
+    return {
+        "status": "ok" if database.get("ok") else "degraded",
+        "app": "NANA",
+        "environment": NANA_ENV,
+        "release": clean_text(NANA_RELEASE_SHA, 80),
+        "database": database,
+        "frontend_ready": frontend_ready,
+        "encryption": {
+            "enabled": bool(encryption.get("enabled")),
+            "key_source": encryption.get("key_source", ""),
+        },
+        "security": {
+            "bearer_auth_enabled": bearer_allowed,
+            "trusted_hosts_configured": bool(allowed_hosts),
+            "max_request_body_bytes": MAX_REQUEST_BODY_BYTES,
+        },
+        "ruleset_version": MEDICAL_RULESET_VERSION,
+    }
 
 
 @app.get("/api/auth/employees")
@@ -2080,7 +2288,7 @@ def employees():
 
 
 @app.post("/api/auth/login")
-def login(payload: LoginRequest, request: Request):
+def login(payload: LoginRequest, request: Request, response: Response):
     assert_auth_not_locked(payload.employee_id, request)
     employee = find_employee(payload.employee_id)
     if not employee:
@@ -2096,10 +2304,7 @@ def login(payload: LoginRequest, request: Request):
                 audit("api_login_locked", employee=employee, details={"locked_until": failure["locked_until"]})
             raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Einmalpasswort ist falsch.")
         change_token = new_token()
-        password_change_tokens[change_token] = {
-            "employee_id": employee["id"],
-            "expires_at": expires_at(PASSWORD_CHANGE_MINUTES),
-        }
+        save_password_change_token(change_token, employee["id"], expires_at(PASSWORD_CHANGE_MINUTES))
         clear_auth_failures(payload.employee_id, request)
         audit("api_temporary_password_accepted", employee=employee)
         return {"status": "password_change_required", "token": change_token, "employee": public_employee(employee)}
@@ -2112,15 +2317,14 @@ def login(payload: LoginRequest, request: Request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Passwort ist falsch.")
 
     clear_auth_failures(payload.employee_id, request)
-    token = new_token()
-    sessions[token] = {"employee_id": employee["id"], "expires_at": expires_at(SESSION_MINUTES)}
+    new_session_for_employee(response, employee)
     record_login_event(employee, payload, request, source="login")
     audit("api_login_success", employee=employee, details={"role": employee.get("role", "employee")})
-    return {"status": "authenticated", "token": token, "employee": public_employee(employee)}
+    return {"status": "authenticated", "employee": public_employee(employee)}
 
 
 @app.post("/api/auth/reauth")
-def reauth(payload: ReauthRequest, request: Request):
+def reauth(payload: ReauthRequest, request: Request, response: Response):
     assert_auth_not_locked(payload.employee_id, request)
     employee = find_employee(payload.employee_id)
     if not employee:
@@ -2139,22 +2343,20 @@ def reauth(payload: ReauthRequest, request: Request):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Passwort ist falsch.")
 
     clear_auth_failures(payload.employee_id, request)
-    token = new_token()
-    sessions[token] = {"employee_id": employee["id"], "expires_at": expires_at(SESSION_MINUTES)}
+    new_session_for_employee(response, employee)
     record_login_event(employee, payload, request, source="reauth")
     audit("api_reauth_success", employee=employee, details={"restore_shift": bool(payload.restore_shift)})
-    return {"status": "authenticated", "token": token, "employee": public_employee(employee), "restored": True}
+    return {"status": "authenticated", "employee": public_employee(employee), "restored": True}
 
 
 @app.post("/api/auth/setup-first-admin")
-def setup_first_admin(payload: FirstAdminRequest, request: Request):
+def setup_first_admin(payload: FirstAdminRequest, request: Request, response: Response):
     store = load_employee_store()
     if store.get("employees"):
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Erster Admin existiert bereits.")
     if not payload.name.strip():
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name fehlt.")
-    if len(payload.password) < 12:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwort muss mindestens 12 Zeichen haben.")
+    assert_strong_password(payload.password)
 
     employee = {
         "id": new_token()[:16],
@@ -2169,51 +2371,47 @@ def setup_first_admin(payload: FirstAdminRequest, request: Request):
     }
     save_employee_store({"employees": [employee]})
 
-    token = new_token()
-    sessions[token] = {"employee_id": employee["id"], "expires_at": expires_at(SESSION_MINUTES)}
+    new_session_for_employee(response, employee)
     record_login_event(employee, payload, request, source="first_admin")
     audit("api_first_admin_created", employee=employee)
     audit("api_login_success", employee=employee, details={"role": "admin"})
-    return {"status": "authenticated", "token": token, "employee": public_employee(employee)}
+    return {"status": "authenticated", "employee": public_employee(employee)}
 
 
 @app.post("/api/auth/set-password")
-def set_password(payload: PasswordChangeRequest, request: Request):
-    pending = password_change_tokens.get(payload.token)
-    if not pending or is_expired(pending.get("expires_at")):
-        password_change_tokens.pop(payload.token, None)
+def set_password(payload: PasswordChangeRequest, request: Request, response: Response):
+    pending = get_password_change_token(payload.token)
+    pending_expires_at = parse_stored_datetime(pending.get("expires_at")) if pending else None
+    if not pending or not pending_expires_at or is_expired(pending_expires_at):
+        delete_password_change_token(payload.token)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Passwortwechsel ist abgelaufen.")
-    if len(payload.new_password) < 12:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Passwort muss mindestens 12 Zeichen haben.")
+    assert_strong_password(payload.new_password)
 
-    store = load_employee_store()
-    employee = None
-    for item in store.get("employees", []):
-        if item.get("id") == pending["employee_id"]:
-            employee = item
-            break
+    employee = get_employee(pending["employee_id"])
     if not employee:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Profil nicht gefunden.")
 
-    employee["password_hash"] = password_hash(payload.new_password)
-    employee["temp_password_hash"] = ""
-    employee["must_change_password"] = False
-    employee["password_changed_at"] = local_now().isoformat(timespec="seconds")
-    save_employee_store(store)
-    password_change_tokens.pop(payload.token, None)
+    employee = update_employee_record(employee["id"], {
+        "password_hash": password_hash(payload.new_password),
+        "temp_password_hash": "",
+        "must_change_password": False,
+        "password_changed_at": local_now().isoformat(timespec="seconds"),
+    })
+    delete_password_change_token(payload.token)
 
-    token = new_token()
-    sessions[token] = {"employee_id": employee["id"], "expires_at": expires_at(SESSION_MINUTES)}
+    new_session_for_employee(response, employee)
     record_login_event(employee, payload, request, source="password_set")
     audit("api_initial_password_set", employee=employee)
     audit("api_login_success", employee=employee, details={"role": employee.get("role", "employee")})
-    return {"status": "authenticated", "token": token, "employee": public_employee(employee)}
+    return {"status": "authenticated", "employee": public_employee(employee)}
 
 
 @app.post("/api/auth/logout")
-def logout(employee=Depends(current_employee), authorization: str | None = Header(default=None)):
-    token = authorization.removeprefix("Bearer ").strip() if authorization else ""
-    sessions.pop(token, None)
+def logout(request: Request, response: Response, employee=Depends(current_employee), authorization: str | None = Header(default=None)):
+    bearer_allowed = not production_mode() or os.getenv("NANA_ENABLE_BEARER_AUTH", "").strip() == "1"
+    token = authorization.removeprefix("Bearer ").strip() if bearer_allowed and authorization else request.cookies.get(AUTH_COOKIE_NAME, "").strip()
+    delete_auth_session(token)
+    clear_session_cookie(response)
     audit("api_logout", employee=employee)
     return {"status": "ok"}
 
@@ -2544,6 +2742,7 @@ def protocol_medication_calculator(payload: MedicationCalcRequest, employee=Depe
 @app.post("/api/protocol/quality")
 def protocol_quality(payload: ProtocolRequest, employee=Depends(current_employee)):
     result = assess_protocol_quality(sanitize_pilot_patient(payload.patient))
+    result["ruleset_version"] = MEDICAL_RULESET_VERSION
     audit(
         "api_protocol_quality_checked",
         employee=employee,
@@ -2567,6 +2766,7 @@ def protocol_pdf(payload: ProtocolRequest, employee=Depends(current_employee)):
             "Mitarbeiter": employee.get("name", ""),
             "Zusammenfassung": summary,
             "Quelle": "laufender Entwurf",
+            "Regelstand": MEDICAL_RULESET_VERSION,
         },
     )
     audit(
@@ -2596,6 +2796,7 @@ def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
         "patient": patient,
         "protocol_text": protocol_text,
         "retention_until": retention_until,
+        "ruleset_version": MEDICAL_RULESET_VERSION,
     })
 
     store = load_case_draft_store()
@@ -2611,7 +2812,13 @@ def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
         entity_id=case_id,
         details={"quality_score": quality["score"], "warnings": quality["warning_count"], "criticals": quality["critical_count"], "force_finish": payload.force_finish},
     )
-    return {"status": "finished", "case_id": case_id, "protocol_text": protocol_text, "quality": quality}
+    return {
+        "status": "finished",
+        "case_id": case_id,
+        "protocol_text": protocol_text,
+        "quality": quality,
+        "ruleset_version": MEDICAL_RULESET_VERSION,
+    }
 
 
 @app.get("/api/cases/{case_id}/pdf")
@@ -2634,6 +2841,7 @@ def case_pdf(case_id: str, employee=Depends(current_employee)):
             "Mitarbeiter": item.get("employee_name", ""),
             "Zusammenfassung": item.get("summary", ""),
             "Aufbewahrung bis": item.get("retention_until", ""),
+            "Regelstand": item.get("ruleset_version", MEDICAL_RULESET_VERSION),
         },
     )
     audit(
@@ -2672,7 +2880,7 @@ def admin_login_events(employee=Depends(require_admin)):
 
 @app.get("/api/admin/quality-rules")
 def admin_quality_rules(employee=Depends(require_admin)):
-    return {"rules": QUALITY_RULES}
+    return {"rules": QUALITY_RULES, "ruleset_version": MEDICAL_RULESET_VERSION}
 
 
 @app.post("/api/admin/interfaces/import")
@@ -2727,6 +2935,7 @@ def admin_export_draft(export_format: str, employee=Depends(require_admin)):
         "employee": employee.get("name", ""),
         "exported_by": employee.get("id", ""),
         "source": "admin_draft",
+        "ruleset_version": MEDICAL_RULESET_VERSION,
     }
     if export_format == "nana":
         payload = build_nana_case_export(patient, protocol_text, metadata)
@@ -2758,6 +2967,7 @@ def admin_export_case(case_id: str, export_format: str, employee=Depends(require
         "completed_at": item.get("completed_at", ""),
         "exported_by": employee.get("id", ""),
         "source": "finished_case",
+        "ruleset_version": item.get("ruleset_version", MEDICAL_RULESET_VERSION),
     }
     if export_format == "nana":
         payload = build_nana_case_export(item.get("patient", {}), item.get("protocol_text", ""), metadata)
@@ -2785,6 +2995,7 @@ def admin_privacy(employee=Depends(require_admin)):
     external_maps_enabled = bool(get_app_setting("external_maps_enabled", False))
     audit_count = len(list_audit_events(limit=500))
     encryption = encryption_status()
+    bearer_allowed = not production_mode() or os.getenv("NANA_ENABLE_BEARER_AUTH", "").strip() == "1"
     return {
         "encryption": encryption,
         "retention_days": retention_days,
@@ -2797,6 +3008,8 @@ def admin_privacy(employee=Depends(require_admin)):
             {"label": "Verschlüsselung Patientendaten", "status": "ok" if encryption.get("enabled") else "warning", "detail": encryption.get("provider", "")},
             {"label": "Externer Datenschlüssel", "status": "ok" if encryption.get("key_source") == "environment" else "warning", "detail": encryption.get("production_hint", "")},
             {"label": "Rollenbasierter Admin-Zugriff", "status": "ok", "detail": "Admin-Endpunkte sind rollenbeschränkt."},
+            {"label": "Host-Whitelist", "status": "ok" if allowed_hosts else "warning", "detail": ", ".join(allowed_hosts) if allowed_hosts else "NANA_ALLOWED_ORIGINS oder NANA_ALLOWED_HOSTS setzen."},
+            {"label": "Bearer-Token", "status": "warning" if bearer_allowed and production_mode() else "ok", "detail": "aktiviert" if bearer_allowed else "in Produktion deaktiviert"},
             {"label": "Login-Schutz", "status": "ok", "detail": f"{AUTH_MAX_FAILURES} Fehlversuche, dann {AUTH_LOCK_MINUTES} Minuten Sperre."},
             {"label": "Sitzungssperre", "status": "ok", "detail": f"Backend {SESSION_MINUTES} Minuten, Oberfläche 20 Minuten."},
             {"label": "Aufbewahrungsfrist", "status": "ok" if retention_days <= 3650 else "warning", "detail": f"{retention_days} Tage konfiguriert."},
@@ -2869,8 +3082,7 @@ def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_adm
     if not name:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Name fehlt.")
 
-    store = load_employee_store()
-    temp_password = secrets.token_urlsafe(9)
+    temp_password = secrets.token_urlsafe(18)
     new_employee = {
         "id": new_token()[:16],
         "name": name,
@@ -2883,8 +3095,7 @@ def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_adm
         "created_at": local_now().isoformat(timespec="seconds"),
         "password_changed_at": "",
     }
-    store.setdefault("employees", []).append(new_employee)
-    save_employee_store(store)
+    create_employee_record(new_employee)
     audit(
         "api_employee_created",
         employee=employee,
@@ -2897,35 +3108,33 @@ def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_adm
 
 @app.put("/api/admin/employees/{employee_id}")
 def update_employee(employee_id: str, payload: EmployeeUpdateRequest, employee=Depends(require_admin)):
-    store = load_employee_store()
-    target = None
-    for item in store.get("employees", []):
-        if item.get("id") == employee_id:
-            target = item
-            break
+    target = get_employee(employee_id)
     if not target:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mitarbeiter nicht gefunden.")
 
+    changes = {}
     if payload.name is not None and payload.name.strip():
-        target["name"] = payload.name.strip()
+        changes["name"] = payload.name.strip()
     if payload.role is not None:
-        target["role"] = normalize_employee_role(payload.role)
+        changes["role"] = normalize_employee_role(payload.role)
     if payload.qualification is not None:
-        target["qualification"] = normalize_employee_qualification(payload.qualification)
+        changes["qualification"] = normalize_employee_qualification(payload.qualification)
     if payload.active is not None:
         if target.get("id") == employee.get("id") and payload.active is False:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Eigenes Admin-Profil kann nicht deaktiviert werden.")
-        target["active"] = bool(payload.active)
+        changes["active"] = bool(payload.active)
 
     temp_password = ""
     if payload.reset_password:
-        temp_password = secrets.token_urlsafe(9)
-        target["password_hash"] = ""
-        target["temp_password_hash"] = password_hash(temp_password)
-        target["must_change_password"] = True
-        target["password_changed_at"] = ""
+        temp_password = secrets.token_urlsafe(18)
+        changes.update({
+            "password_hash": "",
+            "temp_password_hash": password_hash(temp_password),
+            "must_change_password": True,
+            "password_changed_at": "",
+        })
 
-    save_employee_store(store)
+    target = update_employee_record(employee_id, changes) or target
     audit(
         "api_employee_updated",
         employee=employee,
@@ -2957,8 +3166,7 @@ def delete_employee(employee_id: str, employee=Depends(require_admin)):
     if target.get("role") == "admin" and not remaining_admins:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Der letzte aktive Admin kann nicht gelöscht werden.")
 
-    store["employees"] = [item for item in employees if item.get("id") != employee_id]
-    save_employee_store(store)
+    delete_employee_record(employee_id)
     audit(
         "api_employee_deleted",
         employee=employee,

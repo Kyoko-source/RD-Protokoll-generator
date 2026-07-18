@@ -828,6 +828,19 @@ function buildCancellationText(cancellation) {
   ].join('\n');
 }
 
+function readCookie(name) {
+  const prefix = `${name}=`;
+  return document.cookie
+    .split(';')
+    .map((item) => item.trim())
+    .find((item) => item.startsWith(prefix))
+    ?.slice(prefix.length) || '';
+}
+
+function isUnsafeMethod(method = 'GET') {
+  return !['GET', 'HEAD', 'OPTIONS', 'TRACE'].includes(String(method || 'GET').toUpperCase());
+}
+
 function api(path, options = {}, token = '') {
   const headers = {
     'Content-Type': 'application/json',
@@ -836,7 +849,11 @@ function api(path, options = {}, token = '') {
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  return fetch(`${API_BASE}${path}`, { ...options, headers })
+  if (!token && isUnsafeMethod(options.method)) {
+    const csrf = readCookie('nana_csrf');
+    if (csrf) headers['X-NANA-CSRF'] = csrf;
+  }
+  return fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' })
     .then(async (response) => {
       const data = await response.json().catch(() => ({}));
       if (!response.ok) {
@@ -863,7 +880,11 @@ async function fileRequest(path, options = {}, token = '') {
   if (token) {
     headers.Authorization = `Bearer ${token}`;
   }
-  const response = await fetch(`${API_BASE}${path}`, { ...options, headers });
+  if (!token && isUnsafeMethod(options.method)) {
+    const csrf = readCookie('nana_csrf');
+    if (csrf) headers['X-NANA-CSRF'] = csrf;
+  }
+  const response = await fetch(`${API_BASE}${path}`, { ...options, headers, credentials: 'include' });
   if (!response.ok) {
     const data = await response.json().catch(() => ({}));
     if (response.status === 401) {
@@ -3819,7 +3840,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       await api('/api/draft', {
         method: 'PUT',
         body: JSON.stringify({ patient: nextPatient })
-      }, result.token);
+      });
       skipNextDraftReload.current = true;
       setPatient(nextPatient);
       saveLocalShiftCrew(result.employee?.id, nextCrew);
@@ -6360,7 +6381,9 @@ function App() {
       localStorage.removeItem('nana_session');
     }
     const raw = sessionStorage.getItem('nana_session');
-    return raw ? JSON.parse(raw) : null;
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    return parsed?.employee ? { employee: parsed.employee, lastActivity: parsed.lastActivity || Date.now() } : null;
   });
   const [lockedSession, setLockedSession] = useState(() => {
     const raw = localStorage.getItem('nana_locked_session');
@@ -6374,7 +6397,7 @@ function App() {
   const [standalone, setStandalone] = useState(() => isStandaloneApp());
 
   function handleLogin(result) {
-    const nextSession = { token: result.token, employee: result.employee, lastActivity: Date.now() };
+    const nextSession = { employee: result.employee, lastActivity: Date.now() };
     sessionStorage.setItem('nana_session', JSON.stringify(nextSession));
     localStorage.removeItem('nana_locked_session');
     setLockedSession(null);
@@ -6382,7 +6405,7 @@ function App() {
   }
 
   function handleRestoreSession(result) {
-    const nextSession = { token: result.token, employee: result.employee, lastActivity: Date.now() };
+    const nextSession = { employee: result.employee, lastActivity: Date.now() };
     sessionStorage.setItem('nana_session', JSON.stringify(nextSession));
     localStorage.removeItem('nana_locked_session');
     setLockedSession(null);

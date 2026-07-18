@@ -1,6 +1,6 @@
 # NANA Backend
 
-FastAPI-Grundgeruest fuer die spaetere NANA-App.
+FastAPI-Backend fuer die NANA-App.
 
 ## Start
 
@@ -8,5 +8,5 @@ FastAPI-Grundgeruest fuer die spaetere NANA-App.
 uvicorn backend.main:app --reload --port 8000
 ```
 
-Das Backend nutzt aktuell dieselbe SQLite-Datenbank wie der Streamlit-Prototyp.
+Das Backend nutzt SQLite als lokale Datenbank.
 Patientendaten werden nicht an externe Systeme uebertragen.

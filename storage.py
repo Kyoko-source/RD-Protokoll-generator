@@ -3,22 +3,36 @@ import hashlib
 import json
 import os
 import sqlite3
+from contextlib import contextmanager
 
 from cryptography.fernet import Fernet, InvalidToken
 
 
 DB_PATH = os.getenv("NANA_DB_PATH", "nana.db")
 ENCRYPTED_PREFIX = "nana-fernet:v1:"
+SCHEMA_VERSION = 2
 
 
+@contextmanager
 def _connect():
     connection = sqlite3.connect(DB_PATH)
     connection.row_factory = sqlite3.Row
-    return connection
+    try:
+        yield connection
+    finally:
+        connection.close()
 
 
 def init_database():
     with _connect() as connection:
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS schema_migrations (
+                version INTEGER PRIMARY KEY,
+                applied_at TEXT NOT NULL
+            )
+            """
+        )
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS employees (
@@ -104,6 +118,8 @@ def init_database():
             connection.execute("ALTER TABLE finished_cases ADD COLUMN deleted_at TEXT NOT NULL DEFAULT ''")
         if "retention_until" not in existing_case_columns:
             connection.execute("ALTER TABLE finished_cases ADD COLUMN retention_until TEXT NOT NULL DEFAULT ''")
+        if "ruleset_version" not in existing_case_columns:
+            connection.execute("ALTER TABLE finished_cases ADD COLUMN ruleset_version TEXT NOT NULL DEFAULT ''")
         connection.execute(
             """
             CREATE TABLE IF NOT EXISTS app_settings (
@@ -111,6 +127,48 @@ def init_database():
                 value_json TEXT NOT NULL
             )
             """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auth_sessions (
+                token TEXT PRIMARY KEY,
+                employee_id TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                csrf_token TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        existing_session_columns = {
+            row["name"] for row in connection.execute("PRAGMA table_info(auth_sessions)").fetchall()
+        }
+        if "csrf_token" not in existing_session_columns:
+            connection.execute("ALTER TABLE auth_sessions ADD COLUMN csrf_token TEXT NOT NULL DEFAULT ''")
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS password_change_tokens (
+                token TEXT PRIMARY KEY,
+                employee_id TEXT NOT NULL,
+                expires_at TEXT NOT NULL
+            )
+            """
+        )
+        connection.execute(
+            """
+            CREATE TABLE IF NOT EXISTS auth_failures (
+                failure_key TEXT PRIMARY KEY,
+                count INTEGER NOT NULL DEFAULT 0,
+                first_failed_at TEXT NOT NULL DEFAULT '',
+                last_failed_at TEXT NOT NULL DEFAULT '',
+                locked_until TEXT NOT NULL DEFAULT ''
+            )
+            """
+        )
+        connection.execute(
+            """
+            INSERT OR IGNORE INTO schema_migrations (version, applied_at)
+            VALUES (?, datetime('now'))
+            """,
+            (SCHEMA_VERSION,),
         )
         connection.commit()
 
@@ -251,6 +309,87 @@ def save_employee_store(store):
         connection.commit()
 
 
+def get_employee(employee_id, active_only=False):
+    init_database()
+    query = "SELECT * FROM employees WHERE id = ?"
+    params = [employee_id]
+    if active_only:
+        query += " AND active = 1"
+    with _connect() as connection:
+        row = connection.execute(query, params).fetchone()
+    return _employee_from_row(row) if row else None
+
+
+def create_employee_record(employee):
+    init_database()
+    with _connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO employees (
+                id, name, role, qualification, active, password_hash, temp_password_hash,
+                must_change_password, created_at, password_changed_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                employee["id"],
+                employee["name"],
+                employee.get("role", "employee"),
+                employee.get("qualification", ""),
+                1 if employee.get("active", True) else 0,
+                employee.get("password_hash", ""),
+                employee.get("temp_password_hash", ""),
+                1 if employee.get("must_change_password", True) else 0,
+                employee.get("created_at", ""),
+                employee.get("password_changed_at", ""),
+            ),
+        )
+        connection.commit()
+
+
+def update_employee_record(employee_id, changes):
+    init_database()
+    allowed = {
+        "name",
+        "role",
+        "qualification",
+        "active",
+        "password_hash",
+        "temp_password_hash",
+        "must_change_password",
+        "created_at",
+        "password_changed_at",
+    }
+    updates = {key: value for key, value in changes.items() if key in allowed}
+    if not updates:
+        return get_employee(employee_id)
+    columns = []
+    values = []
+    for key, value in updates.items():
+        columns.append(f"{key} = ?")
+        if key in {"active", "must_change_password"}:
+            values.append(1 if value else 0)
+        else:
+            values.append(value)
+    values.append(employee_id)
+    with _connect() as connection:
+        connection.execute(
+            f"UPDATE employees SET {', '.join(columns)} WHERE id = ?",
+            values,
+        )
+        connection.commit()
+    return get_employee(employee_id)
+
+
+def delete_employee_record(employee_id):
+    init_database()
+    with _connect() as connection:
+        connection.execute("DELETE FROM case_drafts WHERE employee_id = ?", (employee_id,))
+        deleted = connection.execute("DELETE FROM employees WHERE id = ?", (employee_id,)).rowcount
+        connection.commit()
+    return deleted > 0
+
+
 def load_case_draft_store():
     init_database()
     with _connect() as connection:
@@ -302,20 +441,21 @@ def save_finished_case(case_record):
             """
             INSERT INTO finished_cases (
                 id, employee_id, employee_name, completed_at,
-                summary, patient_json, protocol_text, status, retention_until
+                summary, patient_json, protocol_text, status, retention_until, ruleset_version
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 case_record["id"],
                 case_record["employee_id"],
                 case_record.get("employee_name", ""),
                 case_record["completed_at"],
-                case_record.get("summary", ""),
+                _encrypt_text(case_record.get("summary", "")),
                 _json_dumps_secure(case_record.get("patient", {})),
                 _encrypt_text(case_record.get("protocol_text", "")),
                 case_record.get("status", "active"),
                 case_record.get("retention_until", ""),
+                case_record.get("ruleset_version", ""),
             ),
         )
         connection.commit()
@@ -326,7 +466,7 @@ def list_finished_cases(employee_id=None, search="", include_deleted=False, limi
     safe_limit = max(1, min(int(limit or 100), 1000))
     query = """
         SELECT id, employee_id, employee_name, completed_at, summary, protocol_text,
-               status, anonymized_at, deleted_at, retention_until
+               status, anonymized_at, deleted_at, retention_until, ruleset_version
         FROM finished_cases
     """
     params = []
@@ -354,12 +494,13 @@ def list_finished_cases(employee_id=None, search="", include_deleted=False, limi
             "employee_id": row["employee_id"],
             "employee_name": row["employee_name"],
             "completed_at": row["completed_at"],
-            "summary": row["summary"],
+            "summary": _decrypt_text(row["summary"]),
             "protocol_text": _decrypt_text(row["protocol_text"]),
             "status": row["status"],
             "anonymized_at": row["anonymized_at"],
             "deleted_at": row["deleted_at"],
             "retention_until": row["retention_until"],
+            "ruleset_version": row["ruleset_version"],
         }
         for row in rows
     ]
@@ -392,13 +533,14 @@ def get_finished_case(case_id):
         "employee_id": row["employee_id"],
         "employee_name": row["employee_name"],
         "completed_at": row["completed_at"],
-        "summary": row["summary"],
+        "summary": _decrypt_text(row["summary"]),
         "patient": patient,
         "protocol_text": _decrypt_text(row["protocol_text"]),
         "status": row["status"],
         "anonymized_at": row["anonymized_at"],
         "deleted_at": row["deleted_at"],
         "retention_until": row["retention_until"],
+        "ruleset_version": row["ruleset_version"],
     }
 
 
@@ -420,14 +562,20 @@ def anonymize_finished_case(case_id, timestamp):
             """
             UPDATE finished_cases
             SET status = 'anonymized',
-                summary = 'Anonymisierter Einsatz',
+                summary = ?,
                 patient_json = ?,
-                protocol_text = 'Dieser Einsatz wurde datenschutzbedingt anonymisiert.',
+                protocol_text = ?,
                 employee_name = '',
                 anonymized_at = ?
             WHERE id = ? AND status != 'deleted'
             """,
-            (_json_dumps_secure(anonymized_patient), timestamp, case_id),
+            (
+                _encrypt_text("Anonymisierter Einsatz"),
+                _json_dumps_secure(anonymized_patient),
+                _encrypt_text("Dieser Einsatz wurde datenschutzbedingt anonymisiert."),
+                timestamp,
+                case_id,
+            ),
         )
         connection.commit()
 
@@ -439,14 +587,14 @@ def delete_finished_case(case_id, timestamp):
             """
             UPDATE finished_cases
             SET status = 'deleted',
-                summary = 'Geloeschter Einsatz',
-                patient_json = '{}',
-                protocol_text = '',
+                summary = ?,
+                patient_json = ?,
+                protocol_text = ?,
                 employee_name = '',
                 deleted_at = ?
             WHERE id = ?
             """,
-            (timestamp, case_id),
+            (_encrypt_text("Geloeschter Einsatz"), _json_dumps_secure({}), _encrypt_text(""), timestamp, case_id),
         )
         connection.commit()
 
@@ -473,7 +621,7 @@ def list_expired_finished_cases(today):
             "employee_id": row["employee_id"],
             "employee_name": row["employee_name"],
             "completed_at": row["completed_at"],
-            "summary": row["summary"],
+            "summary": _decrypt_text(row["summary"]),
             "status": row["status"],
             "anonymized_at": row["anonymized_at"],
             "deleted_at": row["deleted_at"],
@@ -503,9 +651,11 @@ def encrypt_existing_patient_data():
                 )
                 changed += 1
 
-        case_rows = connection.execute("SELECT id, patient_json, protocol_text FROM finished_cases").fetchall()
+        case_rows = connection.execute("SELECT id, summary, patient_json, protocol_text FROM finished_cases").fetchall()
         for row in case_rows:
             updates = {}
+            if not str(row["summary"]).startswith(ENCRYPTED_PREFIX):
+                updates["summary"] = _encrypt_text(row["summary"])
             if not str(row["patient_json"]).startswith(ENCRYPTED_PREFIX):
                 updates["patient_json"] = _encrypt_text(row["patient_json"])
             if not str(row["protocol_text"]).startswith(ENCRYPTED_PREFIX):
@@ -514,10 +664,11 @@ def encrypt_existing_patient_data():
                 connection.execute(
                     """
                     UPDATE finished_cases
-                    SET patient_json = ?, protocol_text = ?
+                    SET summary = ?, patient_json = ?, protocol_text = ?
                     WHERE id = ?
                     """,
                     (
+                        updates.get("summary", row["summary"]),
                         updates.get("patient_json", row["patient_json"]),
                         updates.get("protocol_text", row["protocol_text"]),
                         row["id"],
@@ -552,6 +703,198 @@ def set_app_setting(key, value):
             (key, json.dumps(value, ensure_ascii=False)),
         )
         connection.commit()
+
+
+def database_health_status():
+    init_database()
+    with _connect() as connection:
+        quick_check = connection.execute("PRAGMA quick_check").fetchone()[0]
+        migration = connection.execute(
+            "SELECT MAX(version) AS version FROM schema_migrations"
+        ).fetchone()
+        tables = {
+            row["name"]
+            for row in connection.execute("SELECT name FROM sqlite_master WHERE type = 'table'").fetchall()
+        }
+    expected_tables = {
+        "employees",
+        "case_drafts",
+        "finished_cases",
+        "audit_log",
+        "login_events",
+        "app_settings",
+        "schema_migrations",
+        "auth_sessions",
+        "password_change_tokens",
+        "auth_failures",
+    }
+    missing_tables = sorted(expected_tables - tables)
+    return {
+        "ok": quick_check == "ok" and not missing_tables,
+        "quick_check": quick_check,
+        "schema_version": migration["version"] if migration else None,
+        "missing_tables": missing_tables,
+    }
+
+
+def _stored_datetime(value):
+    if hasattr(value, "isoformat"):
+        return value.isoformat()
+    return str(value or "")
+
+
+def save_auth_session(token, employee_id, expires_at, csrf_token=""):
+    init_database()
+    with _connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO auth_sessions (token, employee_id, expires_at, csrf_token)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(token) DO UPDATE SET
+                employee_id = excluded.employee_id,
+                expires_at = excluded.expires_at,
+                csrf_token = COALESCE(NULLIF(excluded.csrf_token, ''), auth_sessions.csrf_token)
+            """,
+            (token, employee_id, _stored_datetime(expires_at), csrf_token),
+        )
+        connection.commit()
+
+
+def get_auth_session(token):
+    init_database()
+    with _connect() as connection:
+        row = connection.execute(
+            "SELECT token, employee_id, expires_at, csrf_token FROM auth_sessions WHERE token = ?",
+            (token,),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "token": row["token"],
+        "employee_id": row["employee_id"],
+        "expires_at": row["expires_at"],
+        "csrf_token": row["csrf_token"],
+    }
+
+
+def delete_auth_session(token):
+    init_database()
+    with _connect() as connection:
+        connection.execute("DELETE FROM auth_sessions WHERE token = ?", (token,))
+        connection.commit()
+
+
+def save_password_change_token(token, employee_id, expires_at):
+    init_database()
+    with _connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO password_change_tokens (token, employee_id, expires_at)
+            VALUES (?, ?, ?)
+            ON CONFLICT(token) DO UPDATE SET
+                employee_id = excluded.employee_id,
+                expires_at = excluded.expires_at
+            """,
+            (token, employee_id, _stored_datetime(expires_at)),
+        )
+        connection.commit()
+
+
+def get_password_change_token(token):
+    init_database()
+    with _connect() as connection:
+        row = connection.execute(
+            "SELECT token, employee_id, expires_at FROM password_change_tokens WHERE token = ?",
+            (token,),
+        ).fetchone()
+    if not row:
+        return None
+    return {"token": row["token"], "employee_id": row["employee_id"], "expires_at": row["expires_at"]}
+
+
+def delete_password_change_token(token):
+    init_database()
+    with _connect() as connection:
+        connection.execute("DELETE FROM password_change_tokens WHERE token = ?", (token,))
+        connection.commit()
+
+
+def get_auth_failure(failure_key):
+    init_database()
+    with _connect() as connection:
+        row = connection.execute(
+            """
+            SELECT failure_key, count, first_failed_at, last_failed_at, locked_until
+            FROM auth_failures
+            WHERE failure_key = ?
+            """,
+            (failure_key,),
+        ).fetchone()
+    if not row:
+        return None
+    return {
+        "failure_key": row["failure_key"],
+        "count": row["count"],
+        "first_failed_at": row["first_failed_at"],
+        "last_failed_at": row["last_failed_at"],
+        "locked_until": row["locked_until"],
+    }
+
+
+def save_auth_failure(failure_key, failure):
+    init_database()
+    with _connect() as connection:
+        connection.execute(
+            """
+            INSERT INTO auth_failures (
+                failure_key, count, first_failed_at, last_failed_at, locked_until
+            )
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(failure_key) DO UPDATE SET
+                count = excluded.count,
+                first_failed_at = excluded.first_failed_at,
+                last_failed_at = excluded.last_failed_at,
+                locked_until = excluded.locked_until
+            """,
+            (
+                failure_key,
+                int(failure.get("count", 0)),
+                failure.get("first_failed_at", ""),
+                failure.get("last_failed_at", ""),
+                _stored_datetime(failure.get("locked_until", "")),
+            ),
+        )
+        connection.commit()
+
+
+def delete_auth_failure(failure_key):
+    init_database()
+    with _connect() as connection:
+        connection.execute("DELETE FROM auth_failures WHERE failure_key = ?", (failure_key,))
+        connection.commit()
+
+
+def purge_expired_auth_state(now_iso):
+    init_database()
+    with _connect() as connection:
+        session_deleted = connection.execute(
+            "DELETE FROM auth_sessions WHERE expires_at < ?",
+            (now_iso,),
+        ).rowcount
+        token_deleted = connection.execute(
+            "DELETE FROM password_change_tokens WHERE expires_at < ?",
+            (now_iso,),
+        ).rowcount
+        failure_deleted = connection.execute(
+            "DELETE FROM auth_failures WHERE locked_until != '' AND locked_until < ?",
+            (now_iso,),
+        ).rowcount
+        connection.commit()
+    return {
+        "auth_sessions": max(0, session_deleted),
+        "password_change_tokens": max(0, token_deleted),
+        "auth_failures": max(0, failure_deleted),
+    }
 
 
 def write_audit_event(event):
