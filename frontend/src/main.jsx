@@ -1362,10 +1362,6 @@ function StartPortal({ onOpenEinsatz, onOpenShift }) {
           <h1>Willkommen zurück!</h1>
           <p>Schicht vorbereiten, Einsatz öffnen und danach ohne Umwege dokumentieren.</p>
         </div>
-        <div className="start-status">
-          <ShieldCheck size={18} />
-          <span>Geschützter Rettungsdienst-Arbeitsplatz</span>
-        </div>
       </section>
 
       <section className="start-grid" aria-label="Startbereiche">
