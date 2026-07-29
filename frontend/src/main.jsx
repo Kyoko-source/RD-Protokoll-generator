@@ -4,6 +4,7 @@ import {
   Activity,
   AlertTriangle,
   ArrowLeft,
+  ArrowRight,
   ArrowRightLeft,
   Building2,
   Brain,
@@ -1352,9 +1353,13 @@ function StartPortal({ onOpenEinsatz, onOpenShift }) {
   return (
     <main className="start-shell">
       <section className="start-hero">
-        <div>
-          <span className="start-kicker">NANA</span>
-          <h1>Start</h1>
+        <div className="start-copy">
+          <div className="start-logo-line">
+            <span className="start-logo">NANA</span>
+            <Activity size={46} />
+          </div>
+          <span className="start-kicker">Notfall-Aufzeichnungs- und Nachbearbeitungs-Assistent</span>
+          <h1>Willkommen zurück!</h1>
           <p>Schicht vorbereiten, Einsatz öffnen und danach ohne Umwege dokumentieren.</p>
         </div>
         <div className="start-status">
@@ -1365,15 +1370,23 @@ function StartPortal({ onOpenEinsatz, onOpenShift }) {
 
       <section className="start-grid" aria-label="Startbereiche">
         <button type="button" className="start-card start-card-primary" onClick={onOpenEinsatz}>
-          <FileText size={34} />
-          <span>Einsatz</span>
-          <small>Zum bisherigen Einsatzmenü</small>
+          <span className="start-card-icon"><FileText size={34} /></span>
+          <strong>Einsatz</strong>
+          <small>Schichtvorbereitung, Einsatz öffnen und ohne Umwege dokumentieren.</small>
+          <span className="start-card-action">Zum Einsatzmenü <ArrowRight size={18} /></span>
         </button>
         <button type="button" className="start-card" onClick={onOpenShift}>
-          <UserPlus size={34} />
-          <span>Schicht</span>
-          <small>TF, Teampartner und Mitfahrende setzen</small>
+          <span className="start-card-icon"><UserPlus size={34} /></span>
+          <strong>Schicht</strong>
+          <small>Team, Fahrzeug und Mitfahrende verwalten und Schicht starten.</small>
+          <span className="start-card-action">Zur Schichtverwaltung <ArrowRight size={18} /></span>
         </button>
+      </section>
+
+      <section className="start-footer">
+        <span><ShieldCheck size={17} /> Offlinefähig</span>
+        <span><Activity size={17} /> Automatische Sicherung</span>
+        <span><Lock size={17} /> DSGVO-konform</span>
       </section>
     </main>
   );
