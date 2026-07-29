@@ -1386,13 +1386,12 @@ function StartPortal({ onOpenEinsatz, onOpenShift }) {
       <section className="start-footer">
         <span><ShieldCheck size={17} /> Offlinefähig</span>
         <span><Activity size={17} /> Automatische Sicherung</span>
-        <span><Lock size={17} /> DSGVO-konform</span>
       </section>
     </main>
   );
 }
 
-function ShiftLogin({ onBack, onLogin }) {
+function ShiftLogin({ onBack, onShiftSaved }) {
   const [employees, setEmployees] = useState([]);
   const [leaderId, setLeaderId] = useState('');
   const [partnerId, setPartnerId] = useState('');
@@ -1455,7 +1454,7 @@ function ShiftLogin({ onBack, onLogin }) {
         return;
       }
       persistShift(result);
-      onLogin(result);
+      onShiftSaved();
     } catch (err) {
       setError(err.message);
     }
@@ -1470,7 +1469,7 @@ function ShiftLogin({ onBack, onLogin }) {
         body: JSON.stringify({ token: pendingChange.token, new_password: newPassword, ...browserDeviceInfo() })
       });
       persistShift(result);
-      onLogin(result);
+      onShiftSaved();
     } catch (err) {
       setError(err.message);
     }
@@ -7626,6 +7625,16 @@ function App() {
     setSession(nextSession);
   }
 
+  function handleShiftSaved(result) {
+    const nextSession = { employee: result.employee, lastActivity: Date.now() };
+    sessionStorage.setItem('nana_session', JSON.stringify(nextSession));
+    localStorage.removeItem('nana_locked_session');
+    setLockedSession(null);
+    setPendingSession(null);
+    setSession(nextSession);
+    setEntryView('start');
+  }
+
   function lockCurrentSession(currentSession = session) {
     if (!currentSession?.employee) {
       handleLogout();
@@ -7759,12 +7768,12 @@ function App() {
     return <ReauthLock lockedSession={lockedSession} onRestore={handleRestoreSession} onSwitchUser={handleLogout} />;
   }
 
-  if (!session && entryView === 'start') {
-    return <StartPortal onOpenEinsatz={() => setEntryView('login')} onOpenShift={() => setEntryView('shift')} />;
+  if (entryView === 'start') {
+    return <StartPortal onOpenEinsatz={() => setEntryView(session ? 'dashboard' : 'login')} onOpenShift={() => setEntryView('shift')} />;
   }
 
-  if (!session && entryView === 'shift') {
-    return <ShiftLogin onBack={() => setEntryView('start')} onLogin={handleLogin} />;
+  if (entryView === 'shift') {
+    return <ShiftLogin onBack={() => setEntryView('start')} onShiftSaved={handleShiftSaved} />;
   }
 
   return session
