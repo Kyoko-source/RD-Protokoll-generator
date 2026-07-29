@@ -2521,7 +2521,6 @@ def dashboard(employee=Depends(current_employee)):
         {"id": "approach", "label": "Anfahrt & Lage", "subtitle": "Karten, Street View, Tempolimit"},
         {"id": "hospital", "label": "Krankenhaus Finder", "subtitle": "Geeignete Zielklinik"},
         {"id": "icd10", "label": "ICD10 Code", "subtitle": "Code dekodieren"},
-        {"id": "devices", "label": "Geräte", "subtitle": "Kurzreferenzen"},
     ]
     if employee.get("role") == "admin":
         tiles.append({"id": "interfaces", "label": "Schnittstellen", "subtitle": "Import und Export"})
