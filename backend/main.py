@@ -464,6 +464,29 @@ def clear_employee_pending_dispatch(employee):
         save_case_draft_store(store)
 
 
+def dispatch_target_summary(employee):
+    return {
+        "id": employee.get("id", ""),
+        "name": employee.get("name", ""),
+        "role": employee.get("role", "employee"),
+        "qualification": employee.get("qualification", ""),
+        "station": employee.get("station", ""),
+        "vehicle_scope": employee.get("vehicle_scope", ""),
+        "on_shift": bool(employee.get("on_shift")),
+        "active": bool(employee.get("active", True)),
+    }
+
+
+def resolve_dispatch_target(actor, target_employee_id=""):
+    target_id = (target_employee_id or "").strip()
+    if not target_id:
+        return actor
+    target = get_employee(target_id)
+    if not target or not target.get("active", True):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zielprofil für den Testeinsatz nicht gefunden oder gesperrt.")
+    return target
+
+
 def add_paragraph(title, sentences):
     documented = [str(sentence).strip() for sentence in sentences if valid(sentence)]
     if not documented:
@@ -2651,6 +2674,21 @@ def dismiss_pending_dispatch(employee=Depends(current_employee)):
     return {"status": "dismissed"}
 
 
+@app.get("/api/admin/interfaces/dispatch-targets")
+def admin_interface_dispatch_targets(employee=Depends(require_admin_permission("interfaces"))):
+    employees = [
+        dispatch_target_summary(item)
+        for item in load_employee_store().get("employees", [])
+        if item.get("active", True)
+    ]
+    return {
+        "targets": sorted(
+            employees,
+            key=lambda item: (not item.get("on_shift"), item.get("station", ""), item.get("vehicle_scope", ""), item.get("name", "")),
+        )
+    }
+
+
 @app.get("/api/announcements")
 def announcements(employee=Depends(current_employee)):
     store = announcements_store()
@@ -3058,12 +3096,20 @@ def admin_interface_import(payload: InterfaceImportRequest, employee=Depends(req
     patient = load_employee_patient_draft(employee)
     if source == "dispatch":
         imported = parse_dispatch_import(payload.payload)
-        pending = save_employee_pending_dispatch(employee, imported, payload.payload)
+        target_employee = resolve_dispatch_target(employee, payload.target_employee_id)
+        pending = save_employee_pending_dispatch(target_employee, imported, payload.payload)
         audit(
             "api_dispatch_pending_received",
             employee=employee,
             entity_type="case_draft",
-            details={"source": source, "fields": sorted(imported.keys()), "pending_id": pending.get("id", "")},
+            entity_id=target_employee.get("id", ""),
+            details={
+                "source": source,
+                "fields": sorted(imported.keys()),
+                "pending_id": pending.get("id", ""),
+                "target_employee_id": target_employee.get("id", ""),
+                "target_employee_name": target_employee.get("name", ""),
+            },
         )
         return {
             "status": "pending",
@@ -3071,6 +3117,7 @@ def admin_interface_import(payload: InterfaceImportRequest, employee=Depends(req
             "imported": imported,
             "pending": pending,
             "approach": approach_from_dispatch(imported),
+            "target": dispatch_target_summary(target_employee),
         }
     elif source == "corpuls":
         imported = parse_corpuls_import(payload.payload)

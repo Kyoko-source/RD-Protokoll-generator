@@ -113,6 +113,16 @@ function vehicleScopeLabel(vehicleScope) {
   return EMPLOYEE_VEHICLE_OPTIONS.find((item) => item.value === vehicleScope)?.label || 'Keine Angabe';
 }
 
+function dispatchTargetLabel(target) {
+  if (!target) return 'Eigenes Profil';
+  return [
+    target.name,
+    stationLabel(target.station),
+    vehicleScopeLabel(target.vehicle_scope),
+    target.on_shift ? 'im Dienst' : 'nicht im Dienst'
+  ].filter(Boolean).join(' · ');
+}
+
 function adminPermissionLabel(permission) {
   return ADMIN_PERMISSION_OPTIONS.find((item) => item.value === permission)?.label || permission;
 }
@@ -2178,8 +2188,23 @@ function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, 
 
 function InterfacesView({ session, employee, connectivity, onBack, onOpenProtocol, onLogout }) {
   const [cases, setCases] = useState([]);
+  const [interfaceMode, setInterfaceMode] = useState('test');
+  const [dispatchTargets, setDispatchTargets] = useState([]);
   const [source, setSource] = useState('dispatch');
   const [payload, setPayload] = useState('');
+  const [testDispatch, setTestDispatch] = useState({
+    targetEmployeeId: '',
+    einsatznummer: '',
+    stichwort: 'Testeinsatz',
+    meldebild: '',
+    strasse: 'Zeilstraße',
+    hausnummer: '',
+    ort: 'Borken',
+    koordinaten: '',
+    fahrzeug: '',
+    leitstelle: 'NANA Testleitstelle',
+    bemerkung: 'Testeinsatz aus NANA. Nicht real disponieren.'
+  });
   const [importResult, setImportResult] = useState(null);
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
@@ -2188,7 +2213,55 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
     api('/api/cases', {}, session.token)
       .then((data) => setCases(data.cases || []))
       .catch((err) => setError(err.message));
+    api('/api/admin/interfaces/dispatch-targets', {}, session.token)
+      .then((data) => setDispatchTargets(data.targets || []))
+      .catch(() => setDispatchTargets([]));
   }, [session.token]);
+
+  const selectedDispatchTarget = dispatchTargets.find((item) => item.id === testDispatch.targetEmployeeId) || null;
+
+  function updateTestDispatch(key, value) {
+    setTestDispatch((current) => ({ ...current, [key]: value }));
+  }
+
+  function buildTestDispatchPayload() {
+    const now = new Date();
+    const fallbackNumber = `TEST-${now.toISOString().slice(0, 16).replace(/[-:T]/g, '')}`;
+    return {
+      einsatznummer: testDispatch.einsatznummer.trim() || fallbackNumber,
+      stichwort: testDispatch.stichwort.trim() || 'Testeinsatz',
+      meldebild: testDispatch.meldebild.trim(),
+      strasse: testDispatch.strasse.trim(),
+      hausnummer: testDispatch.hausnummer.trim(),
+      ort: testDispatch.ort.trim(),
+      koordinaten: testDispatch.koordinaten.trim(),
+      fahrzeug: testDispatch.fahrzeug.trim() || selectedDispatchTarget?.vehicle_scope || '',
+      leitstelle: testDispatch.leitstelle.trim() || 'NANA Testleitstelle',
+      alarmzeit: now.toLocaleString('de-DE', { dateStyle: 'short', timeStyle: 'short' }),
+      bemerkung: testDispatch.bemerkung.trim()
+    };
+  }
+
+  async function sendTestDispatch() {
+    setError('');
+    setStatusText('');
+    setImportResult(null);
+    try {
+      const dispatchPayload = buildTestDispatchPayload();
+      const result = await api('/api/admin/interfaces/import', {
+        method: 'POST',
+        body: JSON.stringify({
+          source: 'dispatch',
+          payload: JSON.stringify(dispatchPayload, null, 2),
+          target_employee_id: testDispatch.targetEmployeeId
+        })
+      }, session.token);
+      setImportResult(result);
+      setStatusText(`Testeinsatz wartet bei ${result.target?.name || employee?.name || 'dem Zielprofil'} im Hauptmenü.`);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   async function importPayload() {
     setError('');
@@ -2258,10 +2331,131 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
       {error && <div className="error-box">{error}</div>}
       {statusText && <div className="success-box">{statusText}</div>}
 
+      <section className="interface-tabs" aria-label="Schnittstellenbereiche">
+        <button type="button" className={interfaceMode === 'test' ? 'active' : ''} onClick={() => setInterfaceMode('test')}>
+          <Megaphone size={17} /> Testeinsatz
+        </button>
+        <button type="button" className={interfaceMode === 'import' ? 'active' : ''} onClick={() => setInterfaceMode('import')}>
+          <Cable size={17} /> Rohimport
+        </button>
+        <button type="button" className={interfaceMode === 'export' ? 'active' : ''} onClick={() => setInterfaceMode('export')}>
+          <Download size={17} /> Export
+        </button>
+      </section>
+
+      {interfaceMode === 'test' && (
+      <section className="interface-grid">
+        <article className="work-panel interface-test-panel">
+          <div className="section-head">
+            <div>
+              <h2>Testeinsatz anlegen</h2>
+              <p>Erzeugt einen wartenden Leitstellen-Einsatz im gewählten Zielprofil.</p>
+            </div>
+            <span>Testmodus</span>
+          </div>
+          <div className="interface-import test-dispatch-form">
+            <label>
+              Zielprofil / iPad-Sitzung
+              <select value={testDispatch.targetEmployeeId} onChange={(event) => updateTestDispatch('targetEmployeeId', event.target.value)}>
+                <option value="">Eigenes Profil ({employee?.name || 'angemeldet'})</option>
+                {dispatchTargets.map((target) => (
+                  <option key={target.id} value={target.id}>{dispatchTargetLabel(target)}</option>
+                ))}
+              </select>
+            </label>
+            <label>
+              Einsatznummer
+              <input value={testDispatch.einsatznummer} onChange={(event) => updateTestDispatch('einsatznummer', event.target.value)} placeholder="automatisch, wenn leer" />
+            </label>
+            <label>
+              Einsatzstichwort
+              <input value={testDispatch.stichwort} onChange={(event) => updateTestDispatch('stichwort', event.target.value)} placeholder="z.B. VU, ACS, Atemnot" />
+            </label>
+            <label>
+              Meldebild
+              <input value={testDispatch.meldebild} onChange={(event) => updateTestDispatch('meldebild', event.target.value)} placeholder="optional" />
+            </label>
+            <label>
+              Straße
+              <input value={testDispatch.strasse} onChange={(event) => updateTestDispatch('strasse', event.target.value)} />
+            </label>
+            <label>
+              Hausnummer
+              <input value={testDispatch.hausnummer} onChange={(event) => updateTestDispatch('hausnummer', event.target.value)} />
+            </label>
+            <label>
+              Ort
+              <input value={testDispatch.ort} onChange={(event) => updateTestDispatch('ort', event.target.value)} />
+            </label>
+            <label>
+              Koordinaten
+              <input value={testDispatch.koordinaten} onChange={(event) => updateTestDispatch('koordinaten', event.target.value)} placeholder="51.8431, 6.8579" />
+            </label>
+            <label>
+              Fahrzeugkennung
+              <input value={testDispatch.fahrzeug} onChange={(event) => updateTestDispatch('fahrzeug', event.target.value)} placeholder="z.B. RTW 1, KTW 2" />
+            </label>
+            <label>
+              Leitstelle
+              <input value={testDispatch.leitstelle} onChange={(event) => updateTestDispatch('leitstelle', event.target.value)} />
+            </label>
+            <label className="full-span">
+              Bemerkung
+              <textarea value={testDispatch.bemerkung} onChange={(event) => updateTestDispatch('bemerkung', event.target.value)} rows={3} />
+            </label>
+            <button type="button" className="full-span" onClick={sendTestDispatch}>
+              <Megaphone size={17} /> Testeinsatz senden
+            </button>
+          </div>
+          {importResult && (
+            <div className="import-result">
+              {importResult.target && (
+                <div>
+                  <strong>Ziel</strong>
+                  <span>{dispatchTargetLabel(importResult.target)}</span>
+                </div>
+              )}
+              {Object.entries(importResult.imported || {}).map(([key, value]) => (
+                <div key={key}>
+                  <strong>{key}</strong>
+                  <span>{String(value)}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </article>
+
+        <article className="work-panel interface-routing-panel">
+          <div className="section-head">
+            <div>
+              <h2>Zustellung</h2>
+              <p>Aktueller Stand der iPad-/Fahrzeuglogik.</p>
+            </div>
+            <span>{dispatchTargets.filter((target) => target.on_shift).length} im Dienst</span>
+          </div>
+          <div className="privacy-list">
+            <div>
+              <strong>Heute</strong>
+              <span>Ein Testeinsatz wird an das gewählte Zielprofil zugestellt und erscheint dort im Hauptmenü als wartender Leitstellen-Einsatz.</span>
+            </div>
+            <div>
+              <strong>Fahrzeugkennung</strong>
+              <span>Die Kennung wird im Einsatz mitgeführt und angezeigt, entscheidet aber noch nicht automatisch über ein physisches iPad.</span>
+            </div>
+            <div>
+              <strong>Nächster Schritt</strong>
+              <span>Für echte Leitstellenanbindung braucht NANA eigene Fahrzeug- und Geräte-Stammdaten, zum Beispiel RTW 1 mit zugeordnetem iPad und aktivem Zielprofil.</span>
+            </div>
+          </div>
+        </article>
+      </section>
+      )}
+
+      {interfaceMode === 'import' && (
       <section className="interface-grid">
         <article className="work-panel">
           <div className="section-head">
-            <h2>Import</h2>
+            <h2>Rohimport</h2>
             <span>Admin-only</span>
           </div>
           <div className="interface-import">
@@ -2287,6 +2481,12 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
           </div>
           {importResult && (
             <div className="import-result">
+              {importResult.target && (
+                <div>
+                  <strong>Ziel</strong>
+                  <span>{dispatchTargetLabel(importResult.target)}</span>
+                </div>
+              )}
               {Object.entries(importResult.imported || {}).map(([key, value]) => (
                 <div key={key}>
                   <strong>{key}</strong>
@@ -2296,7 +2496,11 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
             </div>
           )}
         </article>
+      </section>
+      )}
 
+      {interfaceMode === 'export' && (
+      <section className="interface-grid">
         <article className="work-panel">
           <div className="section-head">
             <h2>Entwurf exportieren</h2>
@@ -2326,6 +2530,7 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
           </div>
         </article>
       </section>
+      )}
 
       <section className="work-panel">
         <div className="section-head">

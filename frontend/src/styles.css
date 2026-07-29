@@ -2595,6 +2595,38 @@ form button,
   margin-bottom: 18px;
 }
 
+.interface-tabs {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 16px;
+  padding: 6px;
+  border-radius: 14px;
+  background: rgba(4, 12, 24, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.interface-tabs button {
+  min-height: 42px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 14px;
+  border-radius: 10px;
+  color: rgba(235, 244, 255, 0.72);
+  background: transparent;
+  border: 1px solid transparent;
+  font-weight: 880;
+  cursor: pointer;
+}
+
+.interface-tabs button.active {
+  color: #f7fbff;
+  background: linear-gradient(135deg, rgba(24, 109, 196, 0.84), rgba(13, 203, 182, 0.72));
+  border-color: rgba(125, 211, 252, 0.28);
+}
+
 .finder-controls {
   display: grid;
   grid-template-columns: minmax(220px, 0.6fr) minmax(260px, 1fr);
@@ -2925,6 +2957,19 @@ form button,
 .interface-import {
   display: grid;
   gap: 14px;
+}
+
+.test-dispatch-form {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.test-dispatch-form label:first-child,
+.test-dispatch-form .full-span {
+  grid-column: 1 / -1;
+}
+
+.interface-routing-panel {
+  align-content: start;
 }
 
 .interface-import button,
@@ -4780,6 +4825,7 @@ legend {
   .interface-grid,
   .export-actions,
   .import-result,
+  .test-dispatch-form,
   .inline-form,
   .admin-row,
   .employee-controls,

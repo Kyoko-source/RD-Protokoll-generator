@@ -54,6 +54,7 @@ class PrintAuditRequest(BaseModel):
 class InterfaceImportRequest(BaseModel):
     source: str = "dispatch"
     payload: str
+    target_employee_id: str = ""
 
 
 class IcdLookupRequest(BaseModel):
