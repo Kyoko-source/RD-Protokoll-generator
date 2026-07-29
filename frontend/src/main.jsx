@@ -15,6 +15,7 @@ import {
   Download,
   ExternalLink,
   FileText,
+  Gauge,
   HeartPulse,
   Home,
   Lock,
@@ -1255,9 +1256,6 @@ function approachLinks(locationText) {
   const coords = parseCoordinates(trimmed);
   const query = coords ? `${coords.lat},${coords.lng}` : trimmed;
   const encoded = encodeURIComponent(query);
-  const overpassQuery = coords
-    ? `[out:json][timeout:20];way(around:35,${coords.lat},${coords.lng})[highway];out tags geom;`
-    : '';
   return {
     query,
     coords,
@@ -1268,9 +1266,6 @@ function approachLinks(locationText) {
       : `https://www.google.com/maps/search/?api=1&query=${encoded}`,
     osm: coords
       ? `https://www.openstreetmap.org/?mlat=${coords.lat}&mlon=${coords.lng}#map=18/${coords.lat}/${coords.lng}`
-      : `https://www.openstreetmap.org/search?query=${encoded}`,
-    maxspeed: coords
-      ? `https://overpass-turbo.eu/?Q=${encodeURIComponent(overpassQuery)}`
       : `https://www.openstreetmap.org/search?query=${encoded}`
   };
 }
@@ -1713,11 +1708,14 @@ function ApproachView({ session, employee, onBack, onLogout }) {
   const [notes, setNotes] = useState('');
   const [draftSource, setDraftSource] = useState(null);
   const [externalMapsEnabled, setExternalMapsEnabled] = useState(false);
+  const [speedLimits, setSpeedLimits] = useState({ status: 'idle', speeds: [], streetName: '', streetNames: [], message: '' });
   const [error, setError] = useState('');
   const links = approachLinks(location);
   const hasLocation = Boolean(location.trim());
   const linksEnabled = hasLocation && externalMapsEnabled;
   const linkClass = linksEnabled ? 'approach-link' : 'approach-link disabled';
+  const speedLat = links.coords?.lat;
+  const speedLng = links.coords?.lng;
 
   useEffect(() => {
     let cancelled = false;
@@ -1740,6 +1738,75 @@ function ApproachView({ session, employee, onBack, onLogout }) {
       cancelled = true;
     };
   }, [session.token]);
+
+  useEffect(() => {
+    if (!externalMapsEnabled) {
+      setSpeedLimits({ status: 'disabled', speeds: [], streetName: '', streetNames: [], message: 'Externe Kartendienste sind deaktiviert.' });
+      return;
+    }
+    if (speedLat == null || speedLng == null) {
+      setSpeedLimits({ status: hasLocation ? 'needs-coordinates' : 'idle', speeds: [], streetName: '', streetNames: [], message: '' });
+      return;
+    }
+    let cancelled = false;
+    setSpeedLimits((current) => ({ ...current, status: 'loading', message: '' }));
+    api(`/api/approach/speed-limits?lat=${encodeURIComponent(speedLat)}&lng=${encodeURIComponent(speedLng)}`, {}, session.token)
+      .then((data) => {
+        if (cancelled) return;
+        setSpeedLimits({
+          status: (data.speeds || []).length ? 'ready' : 'empty',
+          speeds: data.speeds || [],
+          streetName: data.street_name || '',
+          streetNames: data.street_names || [],
+          source: data.source || '',
+          message: data.message || ''
+        });
+      })
+      .catch((err) => {
+        if (!cancelled) {
+          setSpeedLimits({ status: 'error', speeds: [], streetName: '', streetNames: [], message: err.message });
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [externalMapsEnabled, hasLocation, session.token, speedLat, speedLng]);
+
+  function renderSpeedLimitInsight() {
+    const speeds = speedLimits.speeds || [];
+    const place = speedLimits.streetName
+      ? `Auf der ${speedLimits.streetName}`
+      : speedLimits.streetNames?.length
+        ? 'Im direkten Umfeld'
+        : 'Am Einsatzort';
+    const speedText = speeds.length === 1
+      ? `${place} ist ein Tempolimit erfasst.`
+      : `${place} sind mehrere Tempolimits erfasst.`;
+
+    return (
+      <div className={`speed-limit-insight ${speedLimits.status}`}>
+        <div className="speed-limit-heading">
+          <Gauge size={18} />
+          <span>Tempolimit am Einsatzort</span>
+        </div>
+        {speedLimits.status === 'ready' && (
+          <>
+            <p>{speedText}</p>
+            <div className="speed-chip-row">
+              {speeds.map((speed) => <span className="speed-chip" key={speed}>{speed}<small>km/h</small></span>)}
+            </div>
+            <small>{speedLimits.source || 'OpenStreetMap / Overpass'} · Beschilderung vor Ort hat Vorrang.</small>
+          </>
+        )}
+        {speedLimits.status === 'loading' && <p>Tempolimits werden für die Koordinaten geladen.</p>}
+        {speedLimits.status === 'empty' && <p>Für die unmittelbare Zielstraße wurde kein Tempolimit in OpenStreetMap gefunden.</p>}
+        {speedLimits.status === 'needs-coordinates' && <p>Für eine automatische Prüfung bitte Koordinaten eintragen oder aus der Leitstelle übernehmen.</p>}
+        {speedLimits.status === 'disabled' && <p>Externe Kartenabfragen sind deaktiviert. NANA übermittelt deshalb keine Einsatzkoordinaten.</p>}
+        {speedLimits.status === 'idle' && <p>Sobald ein Einsatzort mit Koordinaten gesetzt ist, erscheint hier die Geschwindigkeitseinschätzung.</p>}
+        {speedLimits.status === 'error' && <p>{speedLimits.message || 'Tempolimits konnten gerade nicht geladen werden.'}</p>}
+      </div>
+    );
+  }
 
   return (
     <main className="app-shell">
@@ -1803,6 +1870,7 @@ function ApproachView({ session, employee, onBack, onLogout }) {
                 <span>{[draftSource.street && `${draftSource.street} ${draftSource.houseNumber || ''}`.trim(), draftSource.town].filter(Boolean).join(', ') || draftSource.address || draftSource.coordinates}</span>
               </div>
             )}
+            {renderSpeedLimitInsight()}
             {notes && <p>{notes}</p>}
           </div>
         </div>
@@ -1818,9 +1886,6 @@ function ApproachView({ session, employee, onBack, onLogout }) {
           </a>
           <a className={linkClass} href={linksEnabled ? links.osm : undefined} target="_blank" rel="noreferrer">
             OpenStreetMap
-          </a>
-          <a className={linkClass} href={linksEnabled ? links.maxspeed : undefined} target="_blank" rel="noreferrer">
-            Tempolimit prüfen
           </a>
         </div>
         {!externalMapsEnabled && (

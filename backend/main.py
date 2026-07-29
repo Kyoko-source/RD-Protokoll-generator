@@ -8,7 +8,7 @@ import csv
 import io
 import urllib.error
 import urllib.request
-from urllib.parse import urlparse
+from urllib.parse import urlencode, urlparse
 from pathlib import Path
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
@@ -1693,6 +1693,67 @@ def json_attachment(filename, payload):
     )
 
 
+OVERPASS_API_URL = "https://overpass-api.de/api/interpreter"
+OVERPASS_TIMEOUT_SECONDS = 8
+
+
+def normalize_maxspeed_value(value):
+    text = clean_text(value, 80)
+    if not text:
+        return []
+    found = []
+    for part in re.split(r"[;,|/]", text):
+        token = part.strip().lower()
+        if not token:
+            continue
+        match = re.search(r"\d{1,3}", token)
+        if not match:
+            continue
+        speed = int(match.group(0))
+        if "mph" in token:
+            speed = round(speed * 1.60934)
+        if 5 <= speed <= 140:
+            found.append(speed)
+    return found
+
+
+def fetch_speed_limits_near(lat, lng):
+    overpass_query = (
+        "[out:json][timeout:8];"
+        f"way(around:45,{lat:.6f},{lng:.6f})[highway][maxspeed];"
+        "out tags center;"
+    )
+    payload = urlencode({"data": overpass_query}).encode("utf-8")
+    request = urllib.request.Request(
+        OVERPASS_API_URL,
+        data=payload,
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded; charset=utf-8",
+            "User-Agent": "NANA-RD-Protokoll/1.0",
+        },
+        method="POST",
+    )
+    with urllib.request.urlopen(request, timeout=OVERPASS_TIMEOUT_SECONDS) as response:
+        data = json.loads(response.read().decode("utf-8", "replace"))
+
+    speeds = set()
+    street_names = []
+    for element in data.get("elements", []):
+        tags = element.get("tags", {}) if isinstance(element, dict) else {}
+        for speed in normalize_maxspeed_value(tags.get("maxspeed")):
+            speeds.add(speed)
+        name = clean_text(tags.get("name"), 120)
+        if name and name not in street_names:
+            street_names.append(name)
+
+    return {
+        "speeds": sorted(speeds),
+        "street_name": street_names[0] if len(street_names) == 1 else "",
+        "street_names": street_names[:4],
+        "source": "OpenStreetMap / Overpass",
+    }
+
+
 ICD10_BFARM_BASE_URL = "https://klassifikationen.bfarm.de/icd-10-gm/kode-suche/htmlgm2026/"
 ICD10_STATIC_CATALOG_PATH = Path(__file__).resolve().parents[1] / "assets" / "icd10_gm_2026.json"
 ICD10_CATALOG_CACHE = {"loaded_at": None, "entries": [], "source": "Fallback", "error": ""}
@@ -2510,6 +2571,24 @@ def me(employee=Depends(current_employee)):
 @app.get("/api/privacy/settings")
 def privacy_settings(employee=Depends(current_employee)):
     return {"external_maps_enabled": bool(get_app_setting("external_maps_enabled", False))}
+
+
+@app.get("/api/approach/speed-limits")
+def approach_speed_limits(lat: float, lng: float, employee=Depends(current_employee)):
+    if not get_app_setting("external_maps_enabled", False):
+        return {"enabled": False, "speeds": [], "message": "Externe Kartendienste sind deaktiviert."}
+    if abs(lat) > 90 or abs(lng) > 180:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Koordinaten sind ungültig.")
+    try:
+        result = fetch_speed_limits_near(float(lat), float(lng))
+    except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, OSError, json.JSONDecodeError):
+        return {
+            "enabled": True,
+            "speeds": [],
+            "source": "OpenStreetMap / Overpass",
+            "message": "Tempolimits konnten gerade nicht geladen werden.",
+        }
+    return {"enabled": True, **result}
 
 
 @app.get("/api/dashboard")
