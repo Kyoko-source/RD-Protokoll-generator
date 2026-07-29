@@ -2968,6 +2968,17 @@ form button,
   grid-column: 1 / -1;
 }
 
+.dispatch-import-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.dispatch-import-form label:first-child,
+.dispatch-import-form .full-span {
+  grid-column: 1 / -1;
+}
+
 .interface-routing-panel {
   align-content: start;
 }
@@ -4825,6 +4836,7 @@ legend {
   .interface-grid,
   .export-actions,
   .import-result,
+  .dispatch-import-form,
   .test-dispatch-form,
   .inline-form,
   .admin-row,

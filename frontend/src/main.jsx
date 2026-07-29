@@ -1994,7 +1994,7 @@ function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, 
       const result = await api('/api/dispatch/pending/accept', { method: 'POST' }, session.token);
       setPendingDispatch(null);
       setStatusText(`Einsatz übernommen: ${result.updated_at}`);
-      setView('protocol');
+      setView('approach');
     } catch (err) {
       setError(err.message);
     }
@@ -2192,6 +2192,16 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
   const [dispatchTargets, setDispatchTargets] = useState([]);
   const [source, setSource] = useState('dispatch');
   const [payload, setPayload] = useState('');
+  const [dispatchImport, setDispatchImport] = useState({
+    targetEmployeeId: '',
+    einsatznummer: '',
+    strasse: '',
+    hausnummer: '',
+    ort: '',
+    stichwort: '',
+    kurzbeschreibung: '',
+    koordinaten: ''
+  });
   const [testDispatch, setTestDispatch] = useState({
     targetEmployeeId: '',
     einsatznummer: '',
@@ -2219,9 +2229,43 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
   }, [session.token]);
 
   const selectedDispatchTarget = dispatchTargets.find((item) => item.id === testDispatch.targetEmployeeId) || null;
+  const selectedImportTarget = dispatchTargets.find((item) => item.id === dispatchImport.targetEmployeeId) || null;
 
   function updateTestDispatch(key, value) {
     setTestDispatch((current) => ({ ...current, [key]: value }));
+  }
+
+  function updateDispatchImport(key, value) {
+    setDispatchImport((current) => ({ ...current, [key]: value }));
+  }
+
+  function buildDispatchImportPayload() {
+    const description = dispatchImport.kurzbeschreibung.trim();
+    return {
+      einsatznummer: dispatchImport.einsatznummer.trim(),
+      strasse: dispatchImport.strasse.trim(),
+      hausnummer: dispatchImport.hausnummer.trim(),
+      ort: dispatchImport.ort.trim(),
+      stichwort: dispatchImport.stichwort.trim(),
+      meldebild: description,
+      bemerkung: description,
+      koordinaten: dispatchImport.koordinaten.trim(),
+      fahrzeug: selectedImportTarget?.vehicle_scope || '',
+      leitstelle: 'Leitstelle'
+    };
+  }
+
+  function missingDispatchImportFields() {
+    return [
+      ['einsatznummer', 'Einsatznummer'],
+      ['strasse', 'Straße'],
+      ['hausnummer', 'Hausnummer'],
+      ['ort', 'Ort'],
+      ['stichwort', 'Stichwort'],
+      ['kurzbeschreibung', 'Kurzbeschreibung']
+    ]
+      .filter(([key]) => !dispatchImport[key].trim())
+      .map(([, label]) => label);
   }
 
   function buildTestDispatchPayload() {
@@ -2267,10 +2311,21 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
     setError('');
     setStatusText('');
     setImportResult(null);
+    const missing = source === 'dispatch' ? missingDispatchImportFields() : [];
+    if (missing.length) {
+      setError(`Bitte ausfüllen: ${missing.join(', ')}.`);
+      return;
+    }
     try {
       const result = await api('/api/admin/interfaces/import', {
         method: 'POST',
-        body: JSON.stringify({ source, payload })
+        body: JSON.stringify(source === 'dispatch'
+          ? {
+              source,
+              payload: JSON.stringify(buildDispatchImportPayload(), null, 2),
+              target_employee_id: dispatchImport.targetEmployeeId
+            }
+          : { source, payload })
       }, session.token);
       setImportResult(result);
       if (result.status === 'pending') {
@@ -2336,7 +2391,7 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
           <Megaphone size={17} /> Testeinsatz
         </button>
         <button type="button" className={interfaceMode === 'import' ? 'active' : ''} onClick={() => setInterfaceMode('import')}>
-          <Cable size={17} /> Rohimport
+          <Cable size={17} /> Einsatzdaten
         </button>
         <button type="button" className={interfaceMode === 'export' ? 'active' : ''} onClick={() => setInterfaceMode('export')}>
           <Download size={17} /> Export
@@ -2455,26 +2510,68 @@ function InterfacesView({ session, employee, connectivity, onBack, onOpenProtoco
       <section className="interface-grid">
         <article className="work-panel">
           <div className="section-head">
-            <h2>Rohimport</h2>
+            <h2>Einsatzdaten</h2>
             <span>Admin-only</span>
           </div>
           <div className="interface-import">
             <label>
               Quelle
               <select value={source} onChange={(event) => setSource(event.target.value)}>
-                <option value="dispatch">Leitstelle JSON/CSV/Text</option>
+                <option value="dispatch">Leitstelle Einsatzdaten</option>
                 <option value="corpuls">Corpuls/Monitor JSON</option>
               </select>
             </label>
-            <label>
-              Importdaten
-              <textarea
-                value={payload}
-                onChange={(event) => setPayload(event.target.value)}
-                placeholder={'einsatznummer: 12345\nstichwort: VU\nstrasse: Musterstrasse\nhausnummer: 1\nort: Borken\nkoordinaten: 51.8431, 6.8579'}
-                rows={12}
-              />
-            </label>
+            {source === 'dispatch' ? (
+              <div className="dispatch-import-form full-span">
+                <label>
+                  Zielprofil / iPad-Sitzung
+                  <select value={dispatchImport.targetEmployeeId} onChange={(event) => updateDispatchImport('targetEmployeeId', event.target.value)}>
+                    <option value="">Eigenes Profil ({employee?.name || 'angemeldet'})</option>
+                    {dispatchTargets.map((target) => (
+                      <option key={target.id} value={target.id}>{dispatchTargetLabel(target)}</option>
+                    ))}
+                  </select>
+                </label>
+                <label>
+                  Einsatznummer
+                  <input value={dispatchImport.einsatznummer} onChange={(event) => updateDispatchImport('einsatznummer', event.target.value)} placeholder="z.B. 12345" />
+                </label>
+                <label>
+                  Straße
+                  <input value={dispatchImport.strasse} onChange={(event) => updateDispatchImport('strasse', event.target.value)} placeholder="Musterstrasse" />
+                </label>
+                <label>
+                  Hausnummer
+                  <input value={dispatchImport.hausnummer} onChange={(event) => updateDispatchImport('hausnummer', event.target.value)} placeholder="1" />
+                </label>
+                <label>
+                  Ort
+                  <input value={dispatchImport.ort} onChange={(event) => updateDispatchImport('ort', event.target.value)} placeholder="Borken" />
+                </label>
+                <label>
+                  Stichwort
+                  <input value={dispatchImport.stichwort} onChange={(event) => updateDispatchImport('stichwort', event.target.value)} placeholder="z.B. VU, ACS, Atemnot" />
+                </label>
+                <label>
+                  Kurzbeschreibung
+                  <input value={dispatchImport.kurzbeschreibung} onChange={(event) => updateDispatchImport('kurzbeschreibung', event.target.value)} placeholder="z.B. Verkehrsunfall mit PKW" />
+                </label>
+                <label className="full-span">
+                  Koordinaten
+                  <input value={dispatchImport.koordinaten} onChange={(event) => updateDispatchImport('koordinaten', event.target.value)} placeholder="optional: 51.8431, 6.8579" />
+                </label>
+              </div>
+            ) : (
+              <label>
+                Importdaten
+                <textarea
+                  value={payload}
+                  onChange={(event) => setPayload(event.target.value)}
+                  placeholder="Corpuls/Monitor JSON"
+                  rows={12}
+                />
+              </label>
+            )}
             <button type="button" onClick={importPayload}>
               {source === 'dispatch' ? 'Als eingehenden Einsatz senden' : 'Import in Dokumentation übernehmen'}
             </button>

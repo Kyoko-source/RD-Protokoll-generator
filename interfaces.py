@@ -201,7 +201,8 @@ def parse_dispatch_import(raw_text):
     source = data.get("dispatch") if isinstance(data.get("dispatch"), dict) else data
     aliases = {
         "einsatznummer": ["einsatznummer", "caseNumber", "incidentNumber", "nummer"],
-        "stichwort": ["stichwort", "keyword", "alarmKeyword", "meldebild"],
+        "stichwort": ["stichwort", "keyword", "alarmKeyword"],
+        "meldebild": ["meldebild", "kurzbeschreibung", "shortDescription", "description"],
         "alarmzeit": ["alarmzeit", "alarmTime", "dispatchedAt"],
         "adresse": ["adresse", "address", "streetAddress", "einsatzort"],
         "strasse": ["strasse", "straße", "street", "streetName", "road"],
@@ -210,7 +211,7 @@ def parse_dispatch_import(raw_text):
         "koordinaten": ["koordinaten", "coordinates", "geo"],
         "fahrzeug": ["fahrzeug", "vehicle", "unit"],
         "leitstelle": ["leitstelle", "dispatchCenter", "controlCenter"],
-        "bemerkung": ["bemerkung", "note", "remarks"],
+        "bemerkung": ["bemerkung", "kurzbeschreibung", "note", "remarks", "description"],
     }
 
     imported = {}
