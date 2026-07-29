@@ -1349,9 +1349,19 @@ function employeeListLabel(employee) {
   return `${employee.name} · ${qualificationLabel(employee.qualification)} · ${stationLabel(employee.station)} · ${vehicleScopeLabel(employee.vehicle_scope)}`;
 }
 
-function StartPortal({ onOpenEinsatz, onOpenShift }) {
+function StartPortal({ session, onOpenEinsatz, onOpenShift }) {
+  const shiftCrew = session?.employee?.id ? loadLocalShiftCrew(session.employee.id) : null;
+  const partnerName = shiftCrew?.fahrer || 'kein Teampartner gesetzt';
+
   return (
     <main className="start-shell">
+      {session?.employee && (
+        <section className="start-session-summary" aria-label="Aktive Schicht">
+          <span>Angemeldet als <b>{session.employee.name}</b></span>
+          <span>Teampartner <b>{partnerName}</b></span>
+        </section>
+      )}
+
       <section className="start-hero">
         <div className="start-brand">
           <div className="start-logo-line">
@@ -4801,12 +4811,6 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       : { level: 'info', text: 'Arbeitsdiagnose noch offen.' };
   const protocolNavItems = [
     {
-      key: 'besatzung',
-      label: 'Besatzung',
-      icon: UserPlus,
-      complete: hasValue(crew.verantwortlicher) && hasValue(crew.fahrer)
-    },
-    {
       key: 'patient',
       label: 'Patient',
       icon: UserRound,
@@ -6428,10 +6432,6 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
         })}
       </nav>}
 
-      {protocolSection === 'besatzung' && <section className="work-panel crew-box">
-        {renderCrewSection()}
-      </section>}
-
       {protocolSection === 'patient' && <section className="work-panel patient-panel">
         <div className="section-head">
           <h2>Patient</h2>
@@ -7767,7 +7767,7 @@ function App() {
   }
 
   if (entryView === 'start') {
-    return <StartPortal onOpenEinsatz={() => setEntryView(session ? 'dashboard' : 'login')} onOpenShift={() => setEntryView('shift')} />;
+    return <StartPortal session={session} onOpenEinsatz={() => setEntryView(session ? 'dashboard' : 'login')} onOpenShift={() => setEntryView('shift')} />;
   }
 
   if (entryView === 'shift') {

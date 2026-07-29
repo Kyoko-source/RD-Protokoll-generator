@@ -61,6 +61,35 @@ button {
   z-index: 1;
 }
 
+.start-session-summary {
+  justify-self: end;
+  width: min(520px, 100%);
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-bottom: -8px;
+}
+
+.start-session-summary span {
+  min-height: 36px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 13px;
+  border-radius: 12px;
+  color: rgba(235, 244, 255, 0.78);
+  background: rgba(3, 7, 18, 0.54);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-size: 0.86rem;
+  font-weight: 820;
+}
+
+.start-session-summary b {
+  color: #f6fbff;
+  font-weight: 950;
+}
+
 .start-hero {
   display: flex;
   justify-content: space-between;
