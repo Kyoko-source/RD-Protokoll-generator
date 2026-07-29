@@ -3261,6 +3261,62 @@ form button,
   white-space: nowrap;
 }
 
+.admin-permission-panel {
+  grid-column: 1 / -1;
+  display: grid !important;
+  gap: 10px !important;
+  padding: 12px;
+  border-radius: 14px;
+  background: rgba(4, 12, 24, 0.24);
+  border: 1px solid rgba(99, 230, 190, 0.14);
+}
+
+.admin-permission-panel > div:first-child {
+  display: grid;
+  gap: 3px;
+}
+
+.admin-permission-panel strong {
+  color: #f7fbff;
+}
+
+.admin-permission-panel span {
+  color: rgba(235, 244, 255, 0.62);
+  font-weight: 760;
+}
+
+.admin-permission-grid {
+  display: grid !important;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px !important;
+}
+
+.admin-permission-toggle {
+  min-height: 42px;
+  padding: 8px 10px;
+  color: rgba(247, 251, 255, 0.9);
+  font-size: 0.86rem;
+  font-weight: 850;
+}
+
+.permission-notice {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px 14px;
+  border-radius: 14px;
+  color: rgba(235, 244, 255, 0.78);
+  background: rgba(99, 230, 190, 0.08);
+  border: 1px solid rgba(99, 230, 190, 0.18);
+  font-weight: 820;
+}
+
+.permission-notice svg {
+  color: #63e6be;
+  flex: 0 0 auto;
+}
+
 .employee-actions {
   display: grid !important;
   grid-template-columns: minmax(88px, 1fr) minmax(72px, 0.8fr) 42px;
@@ -4664,6 +4720,7 @@ legend {
   .employee-controls,
   .employee-actions,
   .employee-insight-grid,
+  .admin-permission-grid,
   .station-summary-grid,
   .privacy-summary-grid,
   .privacy-settings-panel,

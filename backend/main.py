@@ -180,6 +180,16 @@ EMPLOYEE_QUALIFICATIONS = {
 }
 EMPLOYEE_STATIONS = {"", "Gescher", "Südlohn", "Isselburg", "Schöppingen", "Bocholt"}
 EMPLOYEE_VEHICLE_SCOPES = {"", "KTW", "RTW", "KTW/RTW"}
+ADMIN_PERMISSIONS = {
+    "employees": "Mitarbeiter",
+    "privacy": "Datenschutz",
+    "logs": "Audit & Login",
+    "cases": "Fälle",
+    "content": "Patch Notes & Feedback",
+    "interfaces": "Schnittstellen",
+    "quality": "QS-Regeln",
+}
+ADMIN_PERMISSION_KEYS = set(ADMIN_PERMISSIONS)
 
 app = FastAPI(title="NANA API", version="0.1.0")
 allowed_hosts = configured_allowed_hosts()
@@ -2175,6 +2185,7 @@ def admin_employee(employee):
     public = public_employee(employee)
     public.update({
         "active": bool(employee.get("active", True)),
+        "admin_permissions": effective_admin_permissions(employee),
         "created_at": employee.get("created_at", ""),
         "password_changed_at": employee.get("password_changed_at", ""),
     })
@@ -2221,6 +2232,33 @@ def require_admin(employee=Depends(current_employee)):
     return employee
 
 
+def normalize_admin_permissions(permissions, role="admin"):
+    if role != "admin":
+        return []
+    if not permissions:
+        return []
+    return sorted({str(item) for item in permissions if str(item) in ADMIN_PERMISSION_KEYS})
+
+
+def effective_admin_permissions(employee):
+    if employee.get("role") != "admin":
+        return []
+    configured = employee.get("admin_permissions") or []
+    if not configured:
+        return sorted(ADMIN_PERMISSION_KEYS)
+    return normalize_admin_permissions(configured, "admin")
+
+
+def require_admin_permission(permission):
+    def dependency(employee=Depends(require_admin)):
+        if permission not in effective_admin_permissions(employee):
+            audit("api_admin_permission_denied", employee=employee, details={"permission": permission})
+            label = ADMIN_PERMISSIONS.get(permission, permission)
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"Admin-Berechtigung fehlt: {label}.")
+        return employee
+    return dependency
+
+
 def normalize_employee_role(role):
     return role if role in EMPLOYEE_ROLES else "employee"
 
@@ -2248,7 +2286,7 @@ def parse_bool_flag(value):
 
 def employee_csv_response(employees):
     output = io.StringIO()
-    fieldnames = ["id", "name", "role", "qualification", "station", "vehicle_scope", "on_shift", "active"]
+    fieldnames = ["id", "name", "role", "qualification", "station", "vehicle_scope", "on_shift", "admin_permissions", "active"]
     writer = csv.DictWriter(output, fieldnames=fieldnames, lineterminator="\n")
     writer.writeheader()
     for item in employees:
@@ -2260,6 +2298,7 @@ def employee_csv_response(employees):
             "station": item.get("station", ""),
             "vehicle_scope": item.get("vehicle_scope", ""),
             "on_shift": "1" if item.get("on_shift") else "0",
+            "admin_permissions": ";".join(item.get("admin_permissions") or []),
             "active": "1" if item.get("active", True) else "0",
         })
     return Response(
@@ -2579,7 +2618,7 @@ def create_feedback(payload: FeedbackRequest, employee=Depends(current_employee)
 
 
 @app.get("/api/admin/announcements")
-def admin_announcements(employee=Depends(require_admin)):
+def admin_announcements(employee=Depends(require_admin_permission("content"))):
     store = announcements_store()
     return {
         "patch_notes": [public_announcement_item(item) for item in store.get("patch_notes", [])],
@@ -2589,7 +2628,7 @@ def admin_announcements(employee=Depends(require_admin)):
 
 
 @app.get("/api/admin/release")
-def admin_release(employee=Depends(require_admin)):
+def admin_release(employee=Depends(require_admin_permission("content"))):
     draft = release_patch_note_draft()
     return {
         "sha": clean_text(NANA_RELEASE_SHA, 80),
@@ -2600,7 +2639,7 @@ def admin_release(employee=Depends(require_admin)):
 
 
 @app.put("/api/admin/announcements")
-def update_announcements(payload: AnnouncementsRequest, employee=Depends(require_admin)):
+def update_announcements(payload: AnnouncementsRequest, employee=Depends(require_admin_permission("content"))):
     store = announcements_store()
 
     def normalize_items(items):
@@ -2631,7 +2670,7 @@ def update_announcements(payload: AnnouncementsRequest, employee=Depends(require
 
 
 @app.put("/api/admin/feedback/{feedback_id}")
-def update_feedback(feedback_id: str, payload: FeedbackUpdateRequest, employee=Depends(require_admin)):
+def update_feedback(feedback_id: str, payload: FeedbackUpdateRequest, employee=Depends(require_admin_permission("content"))):
     store = announcements_store()
     target = None
     for item in store.get("feedback", []):
@@ -2666,7 +2705,7 @@ def hospitals(town: str = "Borken", category: str = "Allgemeine Notaufnahme", em
 
 
 @app.post("/api/admin/hospitals")
-def admin_save_hospital(payload: HospitalSaveRequest, employee=Depends(require_admin)):
+def admin_save_hospital(payload: HospitalSaveRequest, employee=Depends(require_admin_permission("content"))):
     hospital_id = payload.id or new_token()[:12]
     existing = get_app_setting("custom_hospitals", []) or []
     next_hospital = {
@@ -2916,22 +2955,27 @@ def print_audit(payload: PrintAuditRequest, employee=Depends(current_employee)):
 
 
 @app.get("/api/admin/audit")
-def audit_log(employee=Depends(require_admin)):
+def audit_log(employee=Depends(require_admin_permission("logs"))):
     return {"events": list_audit_events(limit=100)}
 
 
 @app.get("/api/admin/login-events")
-def admin_login_events(employee=Depends(require_admin)):
+def admin_login_events(employee=Depends(require_admin_permission("logs"))):
     return {"events": list_login_events(limit=100)}
 
 
 @app.get("/api/admin/quality-rules")
-def admin_quality_rules(employee=Depends(require_admin)):
+def admin_quality_rules(employee=Depends(require_admin_permission("quality"))):
     return {"rules": QUALITY_RULES, "ruleset_version": MEDICAL_RULESET_VERSION}
 
 
+@app.get("/api/admin/cases")
+def admin_cases(employee=Depends(require_admin_permission("cases"))):
+    return {"cases": list_finished_cases(employee_id=None, limit=100)}
+
+
 @app.post("/api/admin/interfaces/import")
-def admin_interface_import(payload: InterfaceImportRequest, employee=Depends(require_admin)):
+def admin_interface_import(payload: InterfaceImportRequest, employee=Depends(require_admin_permission("interfaces"))):
     source = payload.source.lower().strip()
     patient = load_employee_patient_draft(employee)
     if source == "dispatch":
@@ -2974,7 +3018,7 @@ def admin_interface_import(payload: InterfaceImportRequest, employee=Depends(req
 
 
 @app.get("/api/admin/interfaces/export/draft/{export_format}")
-def admin_export_draft(export_format: str, employee=Depends(require_admin)):
+def admin_export_draft(export_format: str, employee=Depends(require_admin_permission("interfaces"))):
     patient = load_employee_patient_draft(employee)
     protocol_text = generate_protocol_text(patient)
     metadata = {
@@ -3001,7 +3045,7 @@ def admin_export_draft(export_format: str, employee=Depends(require_admin)):
 
 
 @app.get("/api/admin/interfaces/export/cases/{case_id}/{export_format}")
-def admin_export_case(case_id: str, export_format: str, employee=Depends(require_admin)):
+def admin_export_case(case_id: str, export_format: str, employee=Depends(require_admin_permission("interfaces"))):
     item = get_finished_case(case_id)
     if not item or item.get("status") == "deleted":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Einsatz nicht gefunden.")
@@ -3034,7 +3078,7 @@ def admin_export_case(case_id: str, export_format: str, employee=Depends(require
 
 
 @app.get("/api/admin/privacy")
-def admin_privacy(employee=Depends(require_admin)):
+def admin_privacy(employee=Depends(require_admin_permission("privacy"))):
     today = local_now().date().isoformat()
     expired_cases = list_expired_finished_cases(today)
     retention_days = int(get_app_setting("retention_days", 3650) or 3650)
@@ -3054,7 +3098,7 @@ def admin_privacy(employee=Depends(require_admin)):
         "checklist": [
             {"label": "Verschlüsselung Patientendaten", "status": "ok" if encryption.get("enabled") else "warning", "detail": encryption.get("provider", "")},
             {"label": "Externer Datenschlüssel", "status": "ok" if encryption.get("key_source") == "environment" else "warning", "detail": encryption.get("production_hint", "")},
-            {"label": "Rollenbasierter Admin-Zugriff", "status": "ok", "detail": "Admin-Endpunkte sind rollenbeschränkt."},
+            {"label": "Rollenbasierter Admin-Zugriff", "status": "ok", "detail": "Admin-Endpunkte sind nach Berechtigungsbereichen getrennt."},
             {"label": "Host-Whitelist", "status": "ok" if allowed_hosts else "warning", "detail": ", ".join(allowed_hosts) if allowed_hosts else "NANA_ALLOWED_ORIGINS oder NANA_ALLOWED_HOSTS setzen."},
             {"label": "Bearer-Token", "status": "warning" if bearer_allowed and production_mode() else "ok", "detail": "aktiviert" if bearer_allowed else "in Produktion deaktiviert"},
             {"label": "Login-Schutz", "status": "ok", "detail": f"{AUTH_MAX_FAILURES} Fehlversuche, dann {AUTH_LOCK_MINUTES} Minuten Sperre."},
@@ -3069,7 +3113,7 @@ def admin_privacy(employee=Depends(require_admin)):
 
 
 @app.put("/api/admin/privacy")
-def update_privacy(payload: RetentionRequest, employee=Depends(require_admin)):
+def update_privacy(payload: RetentionRequest, employee=Depends(require_admin_permission("privacy"))):
     days = max(1, min(int(payload.retention_days or 3650), 36500))
     log_days = max(1, min(int(payload.security_log_retention_days or 180), 3650))
     set_app_setting("retention_days", days)
@@ -3089,7 +3133,7 @@ def update_privacy(payload: RetentionRequest, employee=Depends(require_admin)):
 
 
 @app.post("/api/admin/privacy/purge-expired")
-def purge_expired_cases(employee=Depends(require_admin)):
+def purge_expired_cases(employee=Depends(require_admin_permission("privacy"))):
     today = local_now().date().isoformat()
     timestamp = local_now().isoformat(timespec="seconds")
     expired = delete_expired_finished_cases(today, timestamp)
@@ -3103,7 +3147,7 @@ def purge_expired_cases(employee=Depends(require_admin)):
 
 
 @app.post("/api/admin/privacy/purge-security-events")
-def purge_security_events(employee=Depends(require_admin)):
+def purge_security_events(employee=Depends(require_admin_permission("privacy"))):
     days = max(1, min(int(get_app_setting("security_log_retention_days", 180) or 180), 3650))
     cutoff = (local_now() - timedelta(days=days)).isoformat(timespec="seconds")
     deleted = delete_security_events_before(cutoff)
@@ -3116,20 +3160,20 @@ def purge_security_events(employee=Depends(require_admin)):
 
 
 @app.get("/api/admin/employees")
-def admin_employees(employee=Depends(require_admin)):
+def admin_employees(employee=Depends(require_admin_permission("employees"))):
     store = load_employee_store()
     return {"employees": [admin_employee(item) for item in store.get("employees", [])]}
 
 
 @app.get("/api/admin/employees/export")
-def export_employees(employee=Depends(require_admin)):
+def export_employees(employee=Depends(require_admin_permission("employees"))):
     store = load_employee_store()
     audit("api_employees_exported", employee=employee, details={"count": len(store.get("employees", []))})
     return employee_csv_response([admin_employee(item) for item in store.get("employees", [])])
 
 
 @app.post("/api/admin/employees/import")
-def import_employees(payload: EmployeeImportRequest, employee=Depends(require_admin)):
+def import_employees(payload: EmployeeImportRequest, employee=Depends(require_admin_permission("employees"))):
     csv_text = (payload.csv_text or "").strip()
     if not csv_text:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="CSV fehlt.")
@@ -3158,6 +3202,10 @@ def import_employees(payload: EmployeeImportRequest, employee=Depends(require_ad
             "station": normalize_employee_station(row.get("station")),
             "vehicle_scope": normalize_employee_vehicle_scope(row.get("vehicle_scope")),
             "on_shift": parse_bool_flag(row.get("on_shift")),
+            "admin_permissions": normalize_admin_permissions(
+                [item.strip() for item in (row.get("admin_permissions") or "").replace(",", ";").split(";")],
+                normalize_employee_role((row.get("role") or "employee").strip()),
+            ),
             "active": True if active_raw is None or str(active_raw).strip() == "" else parse_bool_flag(active_raw),
         }
         if target:
@@ -3185,7 +3233,7 @@ def import_employees(payload: EmployeeImportRequest, employee=Depends(require_ad
 
 
 @app.post("/api/admin/employees")
-def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_admin)):
+def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_admin_permission("employees"))):
     name = payload.name.strip()
     role = normalize_employee_role(payload.role)
     qualification = normalize_employee_qualification(payload.qualification)
@@ -3203,6 +3251,7 @@ def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_adm
         "station": station,
         "vehicle_scope": vehicle_scope,
         "on_shift": bool(payload.on_shift),
+        "admin_permissions": normalize_admin_permissions(payload.admin_permissions, role),
         "active": True,
         "password_hash": "",
         "temp_password_hash": password_hash(temp_password),
@@ -3216,13 +3265,13 @@ def create_employee(payload: EmployeeCreateRequest, employee=Depends(require_adm
         employee=employee,
         entity_type="employee",
         entity_id=new_employee["id"],
-        details={"role": role, "qualification": qualification, "station": station, "vehicle_scope": vehicle_scope, "on_shift": bool(payload.on_shift)},
+        details={"role": role, "qualification": qualification, "station": station, "vehicle_scope": vehicle_scope, "on_shift": bool(payload.on_shift), "admin_permissions": normalize_admin_permissions(payload.admin_permissions, role)},
     )
     return {"employee": admin_employee(new_employee), "temporary_password": temp_password}
 
 
 @app.put("/api/admin/employees/{employee_id}")
-def update_employee(employee_id: str, payload: EmployeeUpdateRequest, employee=Depends(require_admin)):
+def update_employee(employee_id: str, payload: EmployeeUpdateRequest, employee=Depends(require_admin_permission("employees"))):
     target = get_employee(employee_id)
     if not target:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Mitarbeiter nicht gefunden.")
@@ -3240,6 +3289,9 @@ def update_employee(employee_id: str, payload: EmployeeUpdateRequest, employee=D
         changes["vehicle_scope"] = normalize_employee_vehicle_scope(payload.vehicle_scope)
     if payload.on_shift is not None:
         changes["on_shift"] = bool(payload.on_shift)
+    if payload.admin_permissions is not None:
+        next_role = changes.get("role", target.get("role", "employee"))
+        changes["admin_permissions"] = normalize_admin_permissions(payload.admin_permissions, next_role)
     if payload.active is not None:
         if target.get("id") == employee.get("id") and payload.active is False:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Eigenes Admin-Profil kann nicht deaktiviert werden.")
@@ -3270,7 +3322,7 @@ def update_employee(employee_id: str, payload: EmployeeUpdateRequest, employee=D
 
 
 @app.delete("/api/admin/employees/{employee_id}")
-def delete_employee(employee_id: str, employee=Depends(require_admin)):
+def delete_employee(employee_id: str, employee=Depends(require_admin_permission("employees"))):
     if employee_id == employee.get("id"):
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Eigenes Admin-Profil kann nicht gelöscht werden.")
 
@@ -3299,7 +3351,7 @@ def delete_employee(employee_id: str, employee=Depends(require_admin)):
 
 
 @app.post("/api/admin/cases/{case_id}/anonymize")
-def admin_anonymize_case(case_id: str, employee=Depends(require_admin)):
+def admin_anonymize_case(case_id: str, employee=Depends(require_admin_permission("cases"))):
     item = get_finished_case(case_id)
     if not item or item.get("status") == "deleted":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Einsatz nicht gefunden.")
@@ -3310,7 +3362,7 @@ def admin_anonymize_case(case_id: str, employee=Depends(require_admin)):
 
 
 @app.delete("/api/admin/cases/{case_id}")
-def admin_delete_case(case_id: str, employee=Depends(require_admin)):
+def admin_delete_case(case_id: str, employee=Depends(require_admin_permission("cases"))):
     item = get_finished_case(case_id)
     if not item:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Einsatz nicht gefunden.")

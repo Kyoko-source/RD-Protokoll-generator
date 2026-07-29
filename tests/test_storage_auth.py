@@ -63,6 +63,7 @@ class StorageAuthTests(unittest.TestCase):
             "station": "Gescher",
             "vehicle_scope": "KTW",
             "on_shift": True,
+            "admin_permissions": ["employees", "logs"],
             "active": True,
         })
 
@@ -70,16 +71,19 @@ class StorageAuthTests(unittest.TestCase):
         self.assertEqual(loaded["station"], "Gescher")
         self.assertEqual(loaded["vehicle_scope"], "KTW")
         self.assertTrue(loaded["on_shift"])
+        self.assertEqual(loaded["admin_permissions"], ["employees", "logs"])
 
         updated = storage.update_employee_record("employee-1", {
             "station": "Bocholt",
             "vehicle_scope": "KTW/RTW",
             "on_shift": False,
+            "admin_permissions": ["privacy"],
         })
 
         self.assertEqual(updated["station"], "Bocholt")
         self.assertEqual(updated["vehicle_scope"], "KTW/RTW")
         self.assertFalse(updated["on_shift"])
+        self.assertEqual(updated["admin_permissions"], ["privacy"])
         self.assertEqual(storage.load_employee_store()["employees"][0]["station"], "Bocholt")
 
     def test_finished_case_keeps_encrypted_payload_and_ruleset_version(self):

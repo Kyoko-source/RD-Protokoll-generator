@@ -84,6 +84,7 @@ class EmployeeCreateRequest(BaseModel):
     station: str = ""
     vehicle_scope: str = ""
     on_shift: bool = False
+    admin_permissions: list[str] = []
 
 
 class EmployeeUpdateRequest(BaseModel):
@@ -93,6 +94,7 @@ class EmployeeUpdateRequest(BaseModel):
     station: str | None = None
     vehicle_scope: str | None = None
     on_shift: bool | None = None
+    admin_permissions: list[str] | None = None
     active: bool | None = None
     reset_password: bool = False
 

@@ -78,6 +78,15 @@ const EMPLOYEE_VEHICLE_OPTIONS = [
   { value: 'RTW', label: 'RTW' },
   { value: 'KTW/RTW', label: 'KTW & RTW' }
 ];
+const ADMIN_PERMISSION_OPTIONS = [
+  { value: 'employees', label: 'Mitarbeiter' },
+  { value: 'privacy', label: 'Datenschutz' },
+  { value: 'logs', label: 'Audit & Login' },
+  { value: 'cases', label: 'Fälle' },
+  { value: 'content', label: 'Patch Notes' },
+  { value: 'interfaces', label: 'Schnittstellen' },
+  { value: 'quality', label: 'QS-Regeln' }
+];
 const FEEDBACK_STATUS_OPTIONS = ['offen', 'in Arbeit', 'beantwortet', 'erledigt', 'abgelehnt'];
 const FEEDBACK_STATUS_LABELS = {
   offen: 'Offen',
@@ -101,6 +110,10 @@ function stationLabel(station) {
 
 function vehicleScopeLabel(vehicleScope) {
   return EMPLOYEE_VEHICLE_OPTIONS.find((item) => item.value === vehicleScope)?.label || 'Keine Angabe';
+}
+
+function adminPermissionLabel(permission) {
+  return ADMIN_PERMISSION_OPTIONS.find((item) => item.value === permission)?.label || permission;
 }
 
 function employeeVehicleMatches(employeeVehicleScope, requestedVehicleScope) {
@@ -1224,7 +1237,6 @@ const tileIcons = {
   approach: MapPinned,
   hospital: Building2,
   icd10: Stethoscope,
-  devices: Wrench,
   interfaces: Cable,
   admin: ShieldCheck
 };
@@ -1949,10 +1961,6 @@ function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, 
     return <Icd10View session={session} employee={employee} onBack={() => setView('home')} onOpenProtocol={() => setView('protocol')} onLogout={logout} />;
   }
 
-  if (view === 'devices') {
-    return <DevicesView session={session} employee={employee} onBack={() => setView('home')} onLogout={logout} />;
-  }
-
   if (view === 'interfaces') {
     return (
       <InterfacesView
@@ -2060,7 +2068,6 @@ function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, 
                 if (tile.id === 'approach') setView('approach');
                 if (tile.id === 'hospital') setView('hospital');
                 if (tile.id === 'icd10') setView('icd10');
-                if (tile.id === 'devices') setView('devices');
                 if (tile.id === 'interfaces') setView('interfaces');
                 if (tile.id === 'admin') setView('admin');
               }}
@@ -2793,6 +2800,14 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [employeeVehicleFilter, setEmployeeVehicleFilter] = useState('all');
   const [employeeCsvText, setEmployeeCsvText] = useState('');
   const [auditFilter, setAuditFilter] = useState({ query: '', action: 'all' });
+  const [adminAccess, setAdminAccess] = useState({
+    employees: true,
+    privacy: true,
+    logs: true,
+    cases: true,
+    content: true,
+    quality: true
+  });
   const [retentionDays, setRetentionDays] = useState(3650);
   const [securityLogRetentionDays, setSecurityLogRetentionDays] = useState(180);
   const [externalMapsEnabled, setExternalMapsEnabled] = useState(false);
@@ -2854,28 +2869,54 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const privacyWarningCount = (privacy?.checklist || []).filter((item) => item.status === 'warning').length;
   const privacyOkCount = (privacy?.checklist || []).filter((item) => item.status === 'ok').length;
   const openFeedbackCount = feedbackCounts.offen || 0;
+  const missingAdminAreas = Object.entries(adminAccess)
+    .filter(([, allowed]) => !allowed)
+    .map(([key]) => adminPermissionLabel(key));
 
   async function loadAdminData() {
     setError('');
     try {
-      const [employeeData, auditData, loginData, privacyData, caseData, announcementAdminData, releaseData] = await Promise.all([
-        api('/api/admin/employees', {}, session.token),
-        api('/api/admin/audit', {}, session.token),
-        api('/api/admin/login-events', {}, session.token),
-        api('/api/admin/privacy', {}, session.token),
-        api('/api/cases', {}, session.token),
-        api('/api/admin/announcements', {}, session.token),
-        api('/api/admin/release', {}, session.token).catch(() => null)
+      const safeAdminLoad = async (key, request, fallback) => {
+        try {
+          return { key, ok: true, data: await request() };
+        } catch (err) {
+          return { key, ok: false, data: fallback };
+        }
+      };
+      const [employeeResult, auditResult, loginResult, privacyResult, caseResult, announcementResult, releaseResult, qualityResult] = await Promise.all([
+        safeAdminLoad('employees', () => api('/api/admin/employees', {}, session.token), { employees: [] }),
+        safeAdminLoad('logs', () => api('/api/admin/audit', {}, session.token), { events: [] }),
+        safeAdminLoad('logs', () => api('/api/admin/login-events', {}, session.token), { events: [] }),
+        safeAdminLoad('privacy', () => api('/api/admin/privacy', {}, session.token), null),
+        safeAdminLoad('cases', () => api('/api/admin/cases', {}, session.token), { cases: [] }),
+        safeAdminLoad('content', () => api('/api/admin/announcements', {}, session.token), { patch_notes: [], planned_updates: [], feedback: [] }),
+        safeAdminLoad('content', () => api('/api/admin/release', {}, session.token), null),
+        safeAdminLoad('quality', () => api('/api/admin/quality-rules', {}, session.token), { rules: [] })
       ]);
-      const qualityData = await api('/api/admin/quality-rules', {}, session.token).catch(() => ({ rules: [] }));
+      const employeeData = employeeResult.data;
+      const auditData = auditResult.data;
+      const loginData = loginResult.data;
+      const privacyData = privacyResult.data;
+      const caseData = caseResult.data;
+      const announcementAdminData = announcementResult.data;
+      const releaseData = releaseResult.data;
+      const qualityData = qualityResult.data;
+      setAdminAccess({
+        employees: employeeResult.ok,
+        privacy: privacyResult.ok,
+        logs: auditResult.ok || loginResult.ok,
+        cases: caseResult.ok,
+        content: announcementResult.ok || releaseResult.ok,
+        quality: qualityResult.ok
+      });
       setEmployees(employeeData.employees || []);
       setAuditEvents(auditData.events || []);
       setLoginEvents(loginData.events || []);
       setPrivacy(privacyData);
       setQualityRules(qualityData.rules || []);
-      setRetentionDays(privacyData.retention_days || 3650);
-      setSecurityLogRetentionDays(privacyData.security_log_retention_days || 180);
-      setExternalMapsEnabled(Boolean(privacyData.external_maps_enabled));
+      setRetentionDays(privacyData?.retention_days || 3650);
+      setSecurityLogRetentionDays(privacyData?.security_log_retention_days || 180);
+      setExternalMapsEnabled(Boolean(privacyData?.external_maps_enabled));
       setCases(caseData.cases || []);
       setAnnouncementData(announcementAdminData);
       setReleaseInfo(releaseData);
@@ -2883,6 +2924,16 @@ function AdminView({ session, employee, onBack, onLogout }) {
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  function toggleAdminPermission(item, permission) {
+    const currentPermissions = item.admin_permissions || [];
+    const fullAccess = item.role === 'admin' && currentPermissions.length === 0;
+    const basePermissions = fullAccess ? ADMIN_PERMISSION_OPTIONS.map((option) => option.value) : currentPermissions;
+    const nextPermissions = basePermissions.includes(permission)
+      ? basePermissions.filter((value) => value !== permission)
+      : [...basePermissions, permission];
+    updateEmployee(item, { admin_permissions: nextPermissions });
   }
 
   useEffect(() => {
@@ -3158,6 +3209,12 @@ function AdminView({ session, employee, onBack, onLogout }) {
 
       {error && <div className="error-box">{error}</div>}
       {statusText && <div className="success-box">{statusText}</div>}
+      {missingAdminAreas.length > 0 && (
+        <div className="permission-notice">
+          <ShieldCheck size={18} />
+          <span>Ausgeblendete Admin-Bereiche: {missingAdminAreas.join(' · ')}</span>
+        </div>
+      )}
       {temporaryPassword && (
         <div className="secret-box">
           <strong>Einmalpasswort nur jetzt anzeigen:</strong>
@@ -3189,6 +3246,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
       </section>
 
       <section className="admin-grid admin-primary-grid">
+        {adminAccess.employees && (
         <article className="work-panel admin-card employee-admin-card">
           <div className="section-head">
             <div>
@@ -3307,7 +3365,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
               <textarea
                 value={employeeCsvText}
                 onChange={(event) => setEmployeeCsvText(event.target.value)}
-                placeholder="name,role,qualification,station,vehicle_scope,on_shift,active"
+                placeholder="name,role,qualification,station,vehicle_scope,on_shift,admin_permissions,active"
               />
               <button type="button" onClick={importEmployeesCsv} disabled={!employeeCsvText.trim()}>
                 <Save size={16} /> CSV importieren
@@ -3363,6 +3421,30 @@ function AdminView({ session, employee, onBack, onLogout }) {
                     <Trash2 size={16} />
                   </button>
                 </div>
+                {item.role === 'admin' && (
+                  <div className="admin-permission-panel">
+                    <div>
+                      <strong>Admin-Berechtigungen</strong>
+                      <span>{(item.admin_permissions || []).length === 0 ? 'Vollzugriff' : (item.admin_permissions || []).map(adminPermissionLabel).join(' · ')}</span>
+                    </div>
+                    <div className="admin-permission-grid">
+                      {ADMIN_PERMISSION_OPTIONS.map((permission) => {
+                        const fullAccess = (item.admin_permissions || []).length === 0;
+                        const checked = fullAccess || (item.admin_permissions || []).includes(permission.value);
+                        return (
+                          <label className="checkbox-line admin-permission-toggle" key={`${item.id}-${permission.value}`}>
+                            <input
+                              type="checkbox"
+                              checked={checked}
+                              onChange={() => toggleAdminPermission(item, permission.value)}
+                            />
+                            {permission.label}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             ))}
             {!visibleEmployees.length && (
@@ -3402,7 +3484,9 @@ function AdminView({ session, employee, onBack, onLogout }) {
             </div>
           </div>
         </article>
+        )}
 
+        {adminAccess.privacy && (
         <article className="work-panel admin-card privacy-admin-card">
           <div className="section-head">
             <div>
@@ -3486,8 +3570,10 @@ function AdminView({ session, employee, onBack, onLogout }) {
           </div>
           <p className="muted">{privacy?.encryption?.production_hint}</p>
         </article>
+        )}
       </section>
 
+      {adminAccess.content && (
       <section className="admin-secondary-grid">
       <section className="work-panel admin-section-card updates-admin-card">
         <div className="section-head">
@@ -3597,8 +3683,12 @@ function AdminView({ session, employee, onBack, onLogout }) {
           ))}
         </div>
       </section>
+      </section>
+      )}
 
+      {(adminAccess.cases || adminAccess.logs) && (
       <div className="admin-stack">
+        {adminAccess.cases && (
         <section className="work-panel admin-section-card">
           <div className="section-head">
             <h2>Fall-Datenschutz</h2>
@@ -3622,7 +3712,9 @@ function AdminView({ session, employee, onBack, onLogout }) {
             ))}
           </div>
         </section>
+        )}
 
+        {adminAccess.logs && (
         <details className="work-panel admin-section-card collapsible-panel log-admin-card">
           <summary>
             <span>
@@ -3660,7 +3752,9 @@ function AdminView({ session, employee, onBack, onLogout }) {
             ))}
           </div>
         </details>
+        )}
 
+        {adminAccess.logs && (
         <details className="work-panel admin-section-card collapsible-panel log-admin-card">
           <summary>
             <span>
@@ -3690,7 +3784,9 @@ function AdminView({ session, employee, onBack, onLogout }) {
             ))}
           </div>
         </details>
+        )}
 
+        {adminAccess.logs && (
         <details className="work-panel admin-section-card collapsible-panel log-admin-card">
           <summary>
             <span>
@@ -3710,8 +3806,11 @@ function AdminView({ session, employee, onBack, onLogout }) {
             ))}
           </div>
         </details>
+        )}
       </div>
+      )}
 
+      {adminAccess.quality && (
       <div className="admin-stack">
         <section className="work-panel admin-section-card qs-admin-card">
           <div className="section-head">
@@ -3728,7 +3827,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
           </div>
         </section>
       </div>
-      </section>
+      )}
     </main>
   );
 }
@@ -7023,7 +7122,7 @@ function isStandaloneApp() {
 
 function getInitialDashboardView() {
   const view = new URLSearchParams(window.location.search).get('view');
-  return ['protocol', 'refusal', 'cancelled', 'approach', 'hospital', 'icd10', 'devices'].includes(view) ? view : 'home';
+  return ['protocol', 'refusal', 'cancelled', 'approach', 'hospital', 'icd10'].includes(view) ? view : 'home';
 }
 
 function isLocalDevHost() {
