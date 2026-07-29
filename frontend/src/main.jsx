@@ -1353,12 +1353,14 @@ function StartPortal({ onOpenEinsatz, onOpenShift }) {
   return (
     <main className="start-shell">
       <section className="start-hero">
-        <div className="start-copy">
+        <div className="start-brand">
           <div className="start-logo-line">
             <span className="start-logo">NANA</span>
             <Activity size={46} />
           </div>
           <span className="start-kicker">Notfall-Aufzeichnungs- und Nachbearbeitungs-Assistent</span>
+        </div>
+        <div className="start-copy">
           <h1>Willkommen zurück!</h1>
           <p>Schicht vorbereiten, Einsatz öffnen und danach ohne Umwege dokumentieren.</p>
         </div>
@@ -1450,7 +1452,7 @@ function ShiftLogin({ onBack, onShiftSaved }) {
         return;
       }
       persistShift(result);
-      onShiftSaved();
+      onShiftSaved(result);
     } catch (err) {
       setError(err.message);
     }
@@ -1465,7 +1467,7 @@ function ShiftLogin({ onBack, onShiftSaved }) {
         body: JSON.stringify({ token: pendingChange.token, new_password: newPassword, ...browserDeviceInfo() })
       });
       persistShift(result);
-      onShiftSaved();
+      onShiftSaved(result);
     } catch (err) {
       setError(err.message);
     }
