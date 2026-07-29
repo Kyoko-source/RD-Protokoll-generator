@@ -2519,6 +2519,25 @@ def reauth(payload: ReauthRequest, request: Request, response: Response):
     return {"status": "authenticated", "employee": public_employee(employee), "restored": True}
 
 
+@app.post("/api/auth/verify-employee-password")
+def verify_employee_password(payload: LoginRequest, request: Request, current=Depends(current_employee)):
+    assert_auth_not_locked(payload.employee_id, request)
+    employee = find_employee(payload.employee_id)
+    if not employee or employee.get("must_change_password"):
+        register_auth_failure(payload.employee_id, request)
+        audit("api_employee_password_check_failed", employee=current, details={"reason": "unknown_or_initial_password"})
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Passwort konnte nicht geprüft werden.")
+    if not verify_password(payload.password, employee.get("password_hash")):
+        failure = register_auth_failure(payload.employee_id, request)
+        audit("api_employee_password_check_failed", employee=current, details={"reason": "wrong_password", "target_employee_id": payload.employee_id})
+        if failure.get("locked_until"):
+            audit("api_employee_password_check_locked", employee=current, details={"target_employee_id": payload.employee_id, "locked_until": failure["locked_until"]})
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Passwort ist falsch.")
+    clear_auth_failures(payload.employee_id, request)
+    audit("api_employee_password_checked", employee=current, details={"target_employee_id": payload.employee_id})
+    return {"status": "verified", "employee": public_employee(employee)}
+
+
 @app.post("/api/auth/setup-first-admin")
 def setup_first_admin(payload: FirstAdminRequest, request: Request, response: Response):
     store = load_employee_store()

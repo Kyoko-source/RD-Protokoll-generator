@@ -1343,7 +1343,194 @@ const cancellationDetailSnippets = [
   'Lage wurde durch andere Einheit übernommen.'
 ];
 
-function Login({ onLogin }) {
+function employeeListLabel(employee) {
+  if (!employee) return 'Auswählen';
+  return `${employee.name} · ${qualificationLabel(employee.qualification)} · ${stationLabel(employee.station)} · ${vehicleScopeLabel(employee.vehicle_scope)}`;
+}
+
+function StartPortal({ onOpenEinsatz, onOpenShift }) {
+  return (
+    <main className="start-shell">
+      <section className="start-hero">
+        <div>
+          <span className="start-kicker">NANA</span>
+          <h1>Start</h1>
+          <p>Schicht vorbereiten, Einsatz öffnen und danach ohne Umwege dokumentieren.</p>
+        </div>
+        <div className="start-status">
+          <ShieldCheck size={18} />
+          <span>Geschützter Rettungsdienst-Arbeitsplatz</span>
+        </div>
+      </section>
+
+      <section className="start-grid" aria-label="Startbereiche">
+        <button type="button" className="start-card start-card-primary" onClick={onOpenEinsatz}>
+          <FileText size={34} />
+          <span>Einsatz</span>
+          <small>Zum bisherigen Einsatzmenü</small>
+        </button>
+        <button type="button" className="start-card" onClick={onOpenShift}>
+          <UserPlus size={34} />
+          <span>Schicht</span>
+          <small>TF, Teampartner und Mitfahrende setzen</small>
+        </button>
+      </section>
+    </main>
+  );
+}
+
+function ShiftLogin({ onBack, onLogin }) {
+  const [employees, setEmployees] = useState([]);
+  const [leaderId, setLeaderId] = useState('');
+  const [partnerId, setPartnerId] = useState('');
+  const [azubiId, setAzubiId] = useState('');
+  const [traineeId, setTraineeId] = useState('');
+  const [password, setPassword] = useState('');
+  const [pendingChange, setPendingChange] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    api('/api/auth/employees')
+      .then((data) => {
+        const nextEmployees = data.employees || [];
+        setEmployees(nextEmployees);
+        setLeaderId(nextEmployees[0]?.id || '');
+      })
+      .catch((err) => setError(err.message));
+  }, []);
+
+  const activeEmployees = employees.filter((item) => item.active !== false);
+  const leader = activeEmployees.find((item) => item.id === leaderId);
+  const partnerOptions = activeEmployees.filter((item) => item.id !== leaderId && !['azubi', 'bufdi', 'praktikant'].includes(item.role));
+  const azubiOptions = activeEmployees.filter((item) => item.role === 'azubi');
+  const traineeOptions = activeEmployees.filter((item) => ['praktikant', 'bufdi'].includes(item.role));
+
+  function employeeName(employeeId) {
+    return activeEmployees.find((item) => item.id === employeeId)?.name || '';
+  }
+
+  function persistShift(result) {
+    const employee = result.employee || leader || {};
+    const crew = {
+      verantwortlicher: employee.name || '',
+      verantwortlicher_id: employee.id || '',
+      fahrer: employeeName(partnerId),
+      fahrer_id: partnerId,
+      azubi: employeeName(azubiId),
+      azubi_id: azubiId,
+      praktikant: employeeName(traineeId),
+      praktikant_id: traineeId
+    };
+    saveLocalShiftCrew(employee.id, crew);
+  }
+
+  async function submitShift(event) {
+    event.preventDefault();
+    setError('');
+    if (!leaderId || !partnerId) {
+      setError('Bitte Transportführer/in und Teampartner auswählen.');
+      return;
+    }
+    try {
+      const result = await api('/api/auth/login', {
+        method: 'POST',
+        body: JSON.stringify({ employee_id: leaderId, password, ...browserDeviceInfo() })
+      });
+      if (result.status === 'password_change_required') {
+        setPendingChange(result);
+        return;
+      }
+      persistShift(result);
+      onLogin(result);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function submitPasswordChange(event) {
+    event.preventDefault();
+    setError('');
+    try {
+      const result = await api('/api/auth/set-password', {
+        method: 'POST',
+        body: JSON.stringify({ token: pendingChange.token, new_password: newPassword, ...browserDeviceInfo() })
+      });
+      persistShift(result);
+      onLogin(result);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  return (
+    <main className="login-shell shift-login-shell">
+      <section className="brand-panel">
+        <div className="brand-mark">
+          <span>NANA</span>
+        </div>
+        <p>Die Schichtbesatzung bleibt erhalten und wird in neue Einsätze übernommen.</p>
+        <button type="button" className="secondary-login-action" onClick={onBack}>Zur Startseite</button>
+      </section>
+
+      <section className="login-panel shift-panel">
+        <div className="panel-title">
+          <UserPlus size={22} />
+          <h1>{pendingChange ? 'Passwort setzen' : 'Schicht'}</h1>
+        </div>
+
+        {pendingChange ? (
+          <form onSubmit={submitPasswordChange}>
+            <label>
+              Neues Passwort
+              <input type="password" value={newPassword} minLength={12} onChange={(event) => setNewPassword(event.target.value)} autoFocus />
+            </label>
+            <button type="submit">Passwort speichern und Schicht starten</button>
+          </form>
+        ) : (
+          <form onSubmit={submitShift} className="shift-form">
+            <label>
+              Transportführer/in
+              <select value={leaderId} onChange={(event) => setLeaderId(event.target.value)}>
+                {activeEmployees.map((item) => <option key={`leader-${item.id}`} value={item.id}>{employeeListLabel(item)}</option>)}
+              </select>
+            </label>
+            <label>
+              Passwort TF
+              <input type="password" value={password} onChange={(event) => setPassword(event.target.value)} />
+            </label>
+            <label>
+              Teampartner
+              <select value={partnerId} onChange={(event) => setPartnerId(event.target.value)}>
+                <option value="">Auswählen</option>
+                {partnerOptions.map((item) => <option key={`partner-${item.id}`} value={item.id}>{employeeListLabel(item)}</option>)}
+              </select>
+            </label>
+            <label>
+              Azubi
+              <select value={azubiId} onChange={(event) => setAzubiId(event.target.value)}>
+                <option value="">Optional</option>
+                {azubiOptions.map((item) => <option key={`azubi-${item.id}`} value={item.id}>{employeeListLabel(item)}</option>)}
+              </select>
+            </label>
+            <label>
+              Praktikant/in / BuFDi
+              <select value={traineeId} onChange={(event) => setTraineeId(event.target.value)}>
+                <option value="">Optional</option>
+                {traineeOptions.map((item) => <option key={`trainee-${item.id}`} value={item.id}>{employeeListLabel(item)}</option>)}
+              </select>
+            </label>
+            <button type="submit" disabled={!leaderId}>Schicht starten</button>
+          </form>
+        )}
+
+        {error && <div className="error-box">{error}</div>}
+      </section>
+    </main>
+  );
+}
+
+function Login({ onLogin, onBack }) {
   const [employees, setEmployees] = useState([]);
   const [employeeId, setEmployeeId] = useState('');
   const [employeeQuery, setEmployeeQuery] = useState('');
@@ -1444,6 +1631,7 @@ function Login({ onLogin }) {
           <span>NANA</span>
         </div>
         <p>Notfall-Aufzeichnungs- und Nachbearbeitungs-Assistent</p>
+        {onBack && <button type="button" className="secondary-login-action" onClick={onBack}>Zur Startseite</button>}
       </section>
 
       <section className="login-panel">
@@ -1921,6 +2109,7 @@ function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, 
   const [error, setError] = useState('');
   const [statusText, setStatusText] = useState('');
   const [pendingDispatch, setPendingDispatch] = useState(null);
+  const [dispatchPickup, setDispatchPickup] = useState({ open: false, password: '', error: '', busy: false });
 
   useEffect(() => {
     setDashboard(null);
@@ -1952,6 +2141,7 @@ function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, 
 
   const employee = dashboard?.employee || session.employee;
   const tiles = dashboard?.tiles || [];
+  const shiftCrew = employee?.id ? loadLocalShiftCrew(employee.id) : {};
   const activeCases = useMemo(() => cases.filter((item) => item.status !== 'deleted'), [cases]);
 
   async function logout() {
@@ -1993,10 +2183,61 @@ function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, 
     try {
       const result = await api('/api/dispatch/pending/accept', { method: 'POST' }, session.token);
       setPendingDispatch(null);
+      setDispatchPickup({ open: false, password: '', error: '', busy: false });
       setStatusText(`Einsatz übernommen: ${result.updated_at}`);
       setView('approach');
     } catch (err) {
       setError(err.message);
+    }
+  }
+
+  function beginPendingDispatchAccept() {
+    if (shiftCrew?.verantwortlicher && shiftCrew?.fahrer && shiftCrew?.fahrer_id) {
+      setDispatchPickup({ open: true, password: '', error: '', busy: false });
+      return;
+    }
+    acceptPendingDispatch();
+  }
+
+  async function confirmDispatchCrewSwap(event) {
+    event.preventDefault();
+    setDispatchPickup((current) => ({ ...current, error: '', busy: true }));
+    try {
+      await api('/api/auth/verify-employee-password', {
+        method: 'POST',
+        body: JSON.stringify({ employee_id: shiftCrew.fahrer_id, password: dispatchPickup.password, ...browserDeviceInfo() })
+      }, session.token);
+      const accepted = await api('/api/dispatch/pending/accept', { method: 'POST' }, session.token);
+      const reauth = await api('/api/auth/reauth', {
+        method: 'POST',
+        body: JSON.stringify({ employee_id: shiftCrew.fahrer_id, password: dispatchPickup.password, restore_shift: true, ...browserDeviceInfo() })
+      }, session.token);
+      const nextCrew = {
+        verantwortlicher: shiftCrew.fahrer,
+        verantwortlicher_id: shiftCrew.fahrer_id,
+        fahrer: shiftCrew.verantwortlicher,
+        fahrer_id: shiftCrew.verantwortlicher_id || employee?.id || '',
+        azubi: shiftCrew.azubi || '',
+        azubi_id: shiftCrew.azubi_id || '',
+        praktikant: shiftCrew.praktikant || '',
+        praktikant_id: shiftCrew.praktikant_id || ''
+      };
+      const nextPatient = {
+        ...(accepted.patient || {}),
+        besatzung: nextCrew
+      };
+      await api('/api/draft', {
+        method: 'PUT',
+        body: JSON.stringify({ patient: nextPatient })
+      });
+      saveLocalShiftCrew(reauth.employee?.id, nextCrew);
+      onSessionReplace?.(reauth);
+      setPendingDispatch(null);
+      setDispatchPickup({ open: false, password: '', error: '', busy: false });
+      setStatusText(`${shiftCrew.fahrer} ist jetzt Transportführer/in. Einsatz übernommen: ${accepted.updated_at}`);
+      setView('approach');
+    } catch (err) {
+      setDispatchPickup((current) => ({ ...current, error: err.message, busy: false }));
     }
   }
 
@@ -2119,13 +2360,48 @@ function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, 
             </div>
           </div>
           <div className="dispatch-alert-actions">
-            <button type="button" className="primary" onClick={acceptPendingDispatch}>
+            <button type="button" className="primary" onClick={beginPendingDispatchAccept}>
               <CheckCircle2 size={18} /> Einsatz übernehmen
             </button>
             <button type="button" onClick={dismissPendingDispatch}>
               Ausblenden
             </button>
           </div>
+        </section>
+      )}
+
+      {dispatchPickup.open && (
+        <section className="modal-backdrop" role="dialog" aria-modal="true" aria-labelledby="dispatch-pickup-title">
+          <form className="dispatch-pickup-panel" onSubmit={confirmDispatchCrewSwap}>
+            <div className="panel-title">
+              <UserPlus size={22} />
+              <h2 id="dispatch-pickup-title">Gleicher TF?</h2>
+            </div>
+            <div className="dispatch-pickup-summary">
+              <span><b>Aktueller TF</b>{shiftCrew.verantwortlicher}</span>
+              <span><b>Teampartner</b>{shiftCrew.fahrer}</span>
+            </div>
+            <div className="dispatch-pickup-actions">
+              <button type="button" className="primary" onClick={() => acceptPendingDispatch()}>Gleicher TF</button>
+              <button type="button" onClick={() => setDispatchPickup((current) => ({ ...current, mode: 'swap' }))}>Tauschen</button>
+            </div>
+            {dispatchPickup.mode === 'swap' && (
+              <label>
+                Passwort Teampartner
+                <input
+                  type="password"
+                  value={dispatchPickup.password}
+                  onChange={(event) => setDispatchPickup((current) => ({ ...current, password: event.target.value }))}
+                  autoFocus
+                />
+              </label>
+            )}
+            {dispatchPickup.error && <div className="error-box">{dispatchPickup.error}</div>}
+            <div className="dispatch-pickup-footer">
+              <button type="button" onClick={() => setDispatchPickup({ open: false, password: '', error: '', busy: false })}>Abbrechen</button>
+              {dispatchPickup.mode === 'swap' && <button type="submit" disabled={dispatchPickup.busy || !dispatchPickup.password}>Tausch bestätigen</button>}
+            </div>
+          </form>
         </section>
       )}
 
@@ -7299,6 +7575,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
 }
 
 function App() {
+  const [entryView, setEntryView] = useState('start');
   const [session, setSession] = useState(() => {
     const legacy = localStorage.getItem('nana_session');
     if (legacy) {
@@ -7361,6 +7638,7 @@ function App() {
     setLockedSession(null);
     setPendingSession(null);
     setSession(null);
+    setEntryView('start');
   }
 
   function completeLoginTransition() {
@@ -7468,6 +7746,14 @@ function App() {
     return <ReauthLock lockedSession={lockedSession} onRestore={handleRestoreSession} onSwitchUser={handleLogout} />;
   }
 
+  if (!session && entryView === 'start') {
+    return <StartPortal onOpenEinsatz={() => setEntryView('login')} onOpenShift={() => setEntryView('shift')} />;
+  }
+
+  if (!session && entryView === 'shift') {
+    return <ShiftLogin onBack={() => setEntryView('start')} onLogin={handleLogin} />;
+  }
+
   return session
     ? (
       <Dashboard
@@ -7480,7 +7766,7 @@ function App() {
         onInstallApp={handleInstallApp}
       />
     )
-    : <Login onLogin={handleLogin} />;
+    : <Login onBack={() => setEntryView('start')} onLogin={handleLogin} />;
 }
 
 function isStandaloneApp() {

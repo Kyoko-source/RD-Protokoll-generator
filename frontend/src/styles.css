@@ -29,6 +29,95 @@ button {
   border: 0;
 }
 
+.start-shell {
+  min-height: 100vh;
+  display: grid;
+  align-content: center;
+  gap: 28px;
+  padding: 42px clamp(18px, 5vw, 72px);
+}
+
+.start-hero {
+  display: flex;
+  justify-content: space-between;
+  gap: 22px;
+  align-items: end;
+  padding-bottom: 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+}
+
+.start-kicker {
+  color: rgba(103, 232, 249, 0.9);
+  font-weight: 950;
+  letter-spacing: 0.08em;
+}
+
+.start-hero h1 {
+  margin: 6px 0 8px;
+  font-size: clamp(4rem, 12vw, 8rem);
+  line-height: 0.92;
+  color: #f6fbff;
+  text-shadow: 0 0 24px rgba(56, 189, 248, 0.28);
+}
+
+.start-hero p {
+  max-width: 760px;
+  margin: 0;
+  color: rgba(235, 244, 255, 0.74);
+  font-size: clamp(1rem, 2vw, 1.25rem);
+  font-weight: 760;
+}
+
+.start-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 42px;
+  padding: 0 14px;
+  border-radius: 12px;
+  color: rgba(235, 244, 255, 0.82);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 850;
+  white-space: nowrap;
+}
+
+.start-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 18px;
+}
+
+.start-card {
+  min-height: 230px;
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 12px;
+  padding: 28px;
+  border-radius: 22px;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(21, 128, 117, 0.94), rgba(14, 165, 233, 0.9));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 28px 58px rgba(0, 0, 0, 0.26);
+  cursor: pointer;
+}
+
+.start-card-primary {
+  background: linear-gradient(135deg, rgba(37, 99, 235, 0.96), rgba(14, 203, 182, 0.9));
+}
+
+.start-card span {
+  font-size: clamp(1.7rem, 3vw, 2.4rem);
+  font-weight: 1000;
+}
+
+.start-card small {
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 1rem;
+  font-weight: 850;
+}
+
 .login-shell {
   min-height: 100vh;
   display: grid;
@@ -75,6 +164,17 @@ button {
 .login-panel {
   border-radius: 22px;
   padding: 28px;
+}
+
+.shift-form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.shift-form label:first-child,
+.shift-form button {
+  grid-column: 1 / -1;
 }
 
 .reauth-panel {
@@ -1564,6 +1664,68 @@ form button,
 }
 
 .dispatch-alert-actions .primary {
+  color: #032f2c;
+  background: linear-gradient(135deg, #5eead4 0%, #67e8f9 100%);
+  border-color: transparent;
+}
+
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: grid;
+  place-items: center;
+  padding: 18px;
+  background: rgba(3, 7, 18, 0.72);
+  backdrop-filter: blur(12px);
+}
+
+.dispatch-pickup-panel {
+  width: min(560px, 100%);
+  display: grid;
+  gap: 16px;
+  padding: 22px;
+  border-radius: 18px;
+  border: 1px solid rgba(94, 234, 212, 0.28);
+  background: rgba(10, 21, 38, 0.96);
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.45);
+}
+
+.dispatch-pickup-summary,
+.dispatch-pickup-actions,
+.dispatch-pickup-footer {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.dispatch-pickup-summary span {
+  display: grid;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  color: rgba(239, 248, 255, 0.88);
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.dispatch-pickup-summary b {
+  color: #99f6e4;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+}
+
+.dispatch-pickup-panel button {
+  min-height: 42px;
+  border-radius: 11px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.09);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.dispatch-pickup-panel button.primary,
+.dispatch-pickup-panel button[type="submit"] {
   color: #032f2c;
   background: linear-gradient(135deg, #5eead4 0%, #67e8f9 100%);
   border-color: transparent;
@@ -4794,6 +4956,8 @@ legend {
   }
 
   .login-shell,
+  .start-hero,
+  .start-grid,
   .system-status,
   .offline-draft-box,
   .status-band,
@@ -4838,6 +5002,10 @@ legend {
   .import-result,
   .dispatch-import-form,
   .test-dispatch-form,
+  .shift-form,
+  .dispatch-pickup-summary,
+  .dispatch-pickup-actions,
+  .dispatch-pickup-footer,
   .inline-form,
   .admin-row,
   .employee-controls,
