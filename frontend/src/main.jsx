@@ -2163,18 +2163,6 @@ function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, 
   const tiles = dashboard?.tiles || [];
   const shiftCrew = employee?.id ? loadLocalShiftCrew(employee.id) : {};
   const activeCases = useMemo(() => cases.filter((item) => item.status !== 'deleted'), [cases]);
-  const recentCases = activeCases.slice(0, 5);
-  const primaryTiles = tiles.filter((tile) => ['protocol', 'approach', 'hospital'].includes(tile.id));
-  const supportTiles = tiles.filter((tile) => !['protocol', 'approach', 'hospital'].includes(tile.id));
-  const currentVehicle = pendingDispatch?.summary?.vehicle || employee?.vehicle_scope || shiftCrew?.fahrzeug || 'nicht gesetzt';
-  const currentStation = employee?.station || 'keine Wache';
-  const crewLine = [
-    shiftCrew?.verantwortlicher || employee?.name,
-    shiftCrew?.fahrer,
-    shiftCrew?.azubi,
-    shiftCrew?.praktikant
-  ].filter(hasValue).join(' / ') || 'Schichtteam nicht gesetzt';
-  const syncLabel = connectivity?.online ? 'Online' : 'Offline';
 
   async function logout() {
     await api('/api/auth/logout', { method: 'POST' }, session.token).catch(() => {});
@@ -2351,59 +2339,15 @@ function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, 
       {error && <div className="error-box">{error}</div>}
       {statusText && <div className="success-box">{statusText}</div>}
 
-      <section className="dashboard-home">
-        <div className="mission-board">
-          <div className="mission-map" aria-hidden="true">
-            <div className="map-road road-one" />
-            <div className="map-road road-two" />
-            <div className="map-road road-three" />
-            <div className="map-zone zone-one" />
-            <div className="map-zone zone-two" />
-            <div className="map-pin primary-pin"><Activity size={18} /></div>
-            <div className="map-pin secondary-pin"><Building2 size={16} /></div>
-          </div>
-          <div className="mission-overlay">
-            <span className="mission-kicker">{pendingDispatch ? 'Leitstellenauftrag bereit' : 'Einsatzcockpit'}</span>
-            <h1>{pendingDispatch?.summary?.title || 'Bereit für den nächsten Einsatz'}</h1>
-            <div className="mission-meta-grid">
-              <span><b>Wache</b>{currentStation}</span>
-              <span><b>Fahrzeug</b>{currentVehicle}</span>
-              <span><b>Team</b>{crewLine}</span>
-              <span><b>Status</b>{syncLabel} · {activeCases.length} Fälle</span>
-            </div>
-            <div className="mission-actions">
-              <button type="button" className="primary" onClick={() => setView('protocol')}>
-                <FileText size={19} /> Protokoll starten
-              </button>
-              <button type="button" onClick={() => setView('approach')}>
-                <MapPinned size={19} /> Anfahrt öffnen
-              </button>
-            </div>
-          </div>
+      <section className="status-band">
+        <div>
+          <ShieldCheck size={20} />
+          <span>{employee?.role === 'admin' ? 'Admin-Profil' : `${roleLabel(employee?.role)}-Profil`}</span>
         </div>
-
-        <aside className="shift-rail" aria-label="Schichtstatus">
-          <div className="shift-card">
-            <span><ShieldCheck size={18} /> Profil</span>
-            <strong>{employee?.role === 'admin' ? 'Admin' : roleLabel(employee?.role)}</strong>
-            <small>{employee?.name || 'Benutzer'} · {qualificationLabel(employee?.qualification)}</small>
-          </div>
-          <div className="shift-card">
-            <span><UserRound size={18} /> Besatzung</span>
-            <strong>{shiftCrew?.fahrer ? 'Team gesetzt' : 'Team offen'}</strong>
-            <small>{crewLine}</small>
-          </div>
-          <div className="shift-card">
-            <span><Lock size={18} /> Datenschutz</span>
-            <strong>Patientendaten geschützt</strong>
-            <small>Lokale Browserdaten enthalten keine Patientendaten.</small>
-          </div>
-          <div className="shift-card">
-            <span><Activity size={18} /> Verbindung</span>
-            <strong>{syncLabel}</strong>
-            <small>{connectivity?.syncing ? 'Synchronisierung läuft' : 'Bereit'}</small>
-          </div>
-        </aside>
+        <div>
+          <Activity size={20} />
+          <span>{activeCases.length} archivierte Einsätze sichtbar</span>
+        </div>
       </section>
 
       {pendingDispatch && (
@@ -2481,90 +2425,59 @@ function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, 
         </section>
       )}
 
-      <section className="home-workspace">
-        <div className="action-panel">
-          <div className="section-head">
-            <div>
-              <h2>Schnellstart</h2>
-              <p>Die wichtigsten Aktionen für den Einsatz zuerst.</p>
-            </div>
-          </div>
-          <div className="tile-grid primary-tile-grid">
-            {primaryTiles.map((tile) => {
-              const Icon = tileIcons[tile.id] || FileText;
-              return (
-                <button
-                  className={`tile tile-${tile.id}`}
-                  key={tile.id}
-                  onClick={() => {
-                    if (tile.id === 'protocol') setView('protocol');
-                    if (tile.id === 'approach') setView('approach');
-                    if (tile.id === 'hospital') setView('hospital');
-                  }}
-                >
-                  <Icon size={30} />
-                  <span>{tile.label}</span>
-                  <small>{tile.subtitle}</small>
-                </button>
-              );
-            })}
-          </div>
-          <div className="support-actions" aria-label="Weitere Aktionen">
-            {supportTiles.map((tile) => {
-              const Icon = tileIcons[tile.id] || FileText;
-              return (
-                <button
-                  type="button"
-                  className="support-action"
-                  key={tile.id}
-                  onClick={() => {
-                    if (tile.id === 'refusal') setView('refusal');
-                    if (tile.id === 'cancelled') setView('cancelled');
-                    if (tile.id === 'icd10') setView('icd10');
-                    if (tile.id === 'interfaces') setView('interfaces');
-                    if (tile.id === 'admin') setView('admin');
-                  }}
-                >
-                  <Icon size={18} />
-                  <span>{tile.label}</span>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-
-        <section className="work-panel archive-panel">
-          <div className="section-head">
-            <div>
-              <h2>Letzte Einsätze</h2>
-              <p>Direkt exportieren oder drucken.</p>
-            </div>
-            <span>{activeCases.length} Fälle</span>
-          </div>
-          <div className="case-list">
-            {recentCases.length === 0 ? (
-              <p className="muted">Noch keine abgeschlossenen Einsätze sichtbar.</p>
-            ) : (
-              recentCases.map((item) => (
-                <article className="case-row archive-row" key={item.id}>
-                  <div>
-                    <strong>{item.summary}</strong>
-                    <span>{item.completed_at}</span>
-                  </div>
-                  <span className={`status-pill status-${item.status}`}>{item.status}</span>
-                  <button type="button" onClick={() => downloadCasePdf(item.id)}>
-                    <Download size={16} /> PDF
-                  </button>
-                  <button type="button" onClick={() => printCasePdf(item.id)}>
-                    <Printer size={16} /> Drucken
-                  </button>
-                </article>
-              ))
-            )}
-          </div>
-        </section>
+      <section className="tile-grid">
+        {tiles.map((tile) => {
+          const Icon = tileIcons[tile.id] || FileText;
+          return (
+            <button
+              className={`tile tile-${tile.id}`}
+              key={tile.id}
+              onClick={() => {
+                if (tile.id === 'protocol') setView('protocol');
+                if (tile.id === 'refusal') setView('refusal');
+                if (tile.id === 'cancelled') setView('cancelled');
+                if (tile.id === 'approach') setView('approach');
+                if (tile.id === 'hospital') setView('hospital');
+                if (tile.id === 'icd10') setView('icd10');
+                if (tile.id === 'interfaces') setView('interfaces');
+                if (tile.id === 'admin') setView('admin');
+              }}
+            >
+              <Icon size={32} />
+              <span>{tile.label}</span>
+              <small>{tile.subtitle}</small>
+            </button>
+          );
+        })}
       </section>
 
+      <section className="work-panel">
+        <div className="section-head">
+          <h2>Archiv</h2>
+          <span>{activeCases.length} Fälle</span>
+        </div>
+        <div className="case-list">
+          {activeCases.length === 0 ? (
+            <p className="muted">Noch keine abgeschlossenen Einsätze sichtbar.</p>
+          ) : (
+            activeCases.slice(0, 6).map((item) => (
+              <article className="case-row archive-row" key={item.id}>
+                <div>
+                  <strong>{item.summary}</strong>
+                  <span>{item.completed_at}</span>
+                </div>
+                <span className={`status-pill status-${item.status}`}>{item.status}</span>
+                <button type="button" onClick={() => downloadCasePdf(item.id)}>
+                  <Download size={16} /> PDF
+                </button>
+                <button type="button" onClick={() => printCasePdf(item.id)}>
+                  <Printer size={16} /> Drucken
+                </button>
+              </article>
+            ))
+          )}
+        </div>
+      </section>
     </main>
   );
 }
