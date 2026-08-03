@@ -4773,6 +4773,16 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
   const pediatricGcsTotal = pediatricGcsComplete ? pediatricGcsValues.reduce((sum, value) => sum + value, 0) : null;
   const xabcde = patient.xabcde || {};
   const crew = patient.besatzung || {};
+  const documentedCrew = [
+    ['TF', crew.verantwortlicher || employee?.name || 'offen'],
+    ['Fahrer/in', crew.fahrer || 'offen'],
+    ['Azubi', crew.azubi],
+    ['Praktikum', crew.praktikant]
+  ].filter(([, value], index) => index < 2 || hasValue(value));
+  const shiftMeta = [
+    employee?.station ? `Wache ${stationLabel(employee.station)}` : '',
+    employee?.vehicle_scope ? vehicleScopeLabel(employee.vehicle_scope) : ''
+  ].filter(hasValue).join(' · ') || 'Schichtdaten';
   const samplers = patient.samplers || {};
   const opqrst = patient.opqrst || {};
   const psyche = patient.psyche || {};
@@ -6384,6 +6394,24 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
           </button>
         </div>
       </header>
+
+      <section className="active-shift-strip" aria-label="Aktive Schicht">
+        <div className="active-shift-title">
+          <UserRound size={19} />
+          <div>
+            <strong>Aktive Schicht</strong>
+            <span>{shiftMeta}</span>
+          </div>
+        </div>
+        <div className="active-shift-crew">
+          {documentedCrew.map(([label, value]) => (
+            <span key={label}>
+              <b>{label}</b>
+              {value}
+            </span>
+          ))}
+        </div>
+      </section>
 
       {error && <div className="error-box">{error}</div>}
       {statusText && <div className="success-box">{statusText}</div>}

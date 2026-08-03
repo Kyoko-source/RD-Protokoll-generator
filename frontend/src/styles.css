@@ -1384,6 +1384,83 @@ form button,
   z-index: 30;
 }
 
+.active-shift-strip {
+  display: grid;
+  grid-template-columns: minmax(220px, 0.28fr) minmax(0, 1fr);
+  gap: 12px;
+  align-items: stretch;
+  margin: -10px 0 18px;
+  padding: 10px;
+  border-radius: 16px;
+  border: 1px solid rgba(94, 234, 212, 0.20);
+  background:
+    linear-gradient(90deg, rgba(8, 47, 73, 0.40), rgba(6, 78, 59, 0.22)),
+    rgba(255, 255, 255, 0.045);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, 0.18);
+}
+
+.active-shift-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: #ecfeff;
+  background: rgba(3, 8, 18, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.active-shift-title svg {
+  color: #5eead4;
+}
+
+.active-shift-title div {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.active-shift-title strong {
+  font-weight: 950;
+}
+
+.active-shift-title span {
+  color: rgba(235, 244, 255, 0.62);
+  font-size: 0.84rem;
+  font-weight: 780;
+  overflow-wrap: anywhere;
+}
+
+.active-shift-crew {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.active-shift-crew span {
+  min-width: 0;
+  min-height: 58px;
+  display: grid;
+  align-content: center;
+  gap: 3px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: rgba(3, 8, 18, 0.36);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: rgba(248, 251, 255, 0.92);
+  font-weight: 850;
+  overflow-wrap: anywhere;
+}
+
+.active-shift-crew b {
+  color: #67e8f9;
+  font-size: 0.72rem;
+  font-weight: 950;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
 .user-name-button {
   min-height: 44px;
   display: inline-flex;
@@ -5106,6 +5183,8 @@ legend {
   .start-footer,
   .system-status,
   .offline-draft-box,
+  .active-shift-strip,
+  .active-shift-crew,
   .status-band,
   .dispatch-alert,
   .dispatch-alert-grid,
