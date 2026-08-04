@@ -111,6 +111,102 @@ class ApiSmokeTests(unittest.TestCase):
 
         self.assertEqual(response.status_code, 413)
 
+    def test_joint_chat_invite_decline_and_ciphertext_message_flow(self):
+        setup = self.client.post("/api/auth/setup-first-admin", json={
+            "name": "Admin",
+            "password": "Sehr-sicheres-passwort-2026!",
+            "device_id": "sender-device",
+        })
+        self.assertEqual(setup.status_code, 200)
+        sender_csrf = self.client.cookies.get("nana_csrf")
+
+        storage.create_employee_record({
+            "id": "target-employee",
+            "name": "Gescher KTW 3",
+            "role": "employee",
+            "qualification": "Rettungssanitäter",
+            "station": "Gescher",
+            "vehicle_scope": "KTW",
+            "on_shift": True,
+            "active": True,
+            "password_hash": main.password_hash("Sehr-sicheres-passwort-2026!"),
+            "must_change_password": False,
+        })
+        target_client = TestClient(main.app)
+        self.addCleanup(target_client.close)
+        target_login = target_client.post("/api/auth/login", json={
+            "employee_id": "target-employee",
+            "password": "Sehr-sicheres-passwort-2026!",
+            "device_id": "target-device",
+        })
+        self.assertEqual(target_login.status_code, 200)
+        target_csrf = target_client.cookies.get("nana_csrf")
+
+        sender_device = self.client.put("/api/joint-cases/chat/device", headers={"X-NANA-CSRF": sender_csrf}, json={
+            "device_id": "sender-device",
+            "device_name": "Sender Tablet",
+            "public_key": '{"kty":"EC","crv":"P-256","x":"sender","y":"sender"}',
+        })
+        self.assertEqual(sender_device.status_code, 200)
+        target_device = target_client.put("/api/joint-cases/chat/device", headers={"X-NANA-CSRF": target_csrf}, json={
+            "device_id": "target-device",
+            "device_name": "Target Tablet",
+            "public_key": '{"kty":"EC","crv":"P-256","x":"target","y":"target"}',
+        })
+        self.assertEqual(target_device.status_code, 200)
+
+        invite = self.client.post("/api/joint-cases/chat/invites", headers={"X-NANA-CSRF": sender_csrf}, json={
+            "target_device_id": "target-device",
+            "sender_device_id": "sender-device",
+            "sender_public_key": '{"kty":"EC","crv":"P-256","x":"sender","y":"sender"}',
+            "encrypted_room_key": "cipher-room-key",
+            "room_key_iv": "cipher-iv",
+            "joint_case_id": "NANA-ABCD-1234",
+        })
+        self.assertEqual(invite.status_code, 200)
+        invite_payload = invite.json()["invite"]
+        self.assertEqual(invite_payload["status"], "pending")
+
+        declined = target_client.post("/api/joint-cases/chat/invites/decision", headers={"X-NANA-CSRF": target_csrf}, json={
+            "invite_id": invite_payload["id"],
+            "status": "declined",
+        })
+        self.assertEqual(declined.status_code, 200)
+        self.assertEqual(declined.json()["invite"]["status"], "declined")
+
+        state = self.client.get("/api/joint-cases/chat/state?device_id=sender-device")
+        self.assertEqual(state.status_code, 200)
+        self.assertTrue(any(item["status"] == "declined" for item in state.json()["invites"]))
+
+        accepted_invite = self.client.post("/api/joint-cases/chat/invites", headers={"X-NANA-CSRF": sender_csrf}, json={
+            "target_device_id": "target-device",
+            "sender_device_id": "sender-device",
+            "sender_public_key": '{"kty":"EC","crv":"P-256","x":"sender","y":"sender"}',
+            "encrypted_room_key": "cipher-room-key-2",
+            "room_key_iv": "cipher-iv-2",
+            "joint_case_id": "NANA-ABCD-1234",
+        })
+        self.assertEqual(accepted_invite.status_code, 200)
+        accepted_payload = accepted_invite.json()["invite"]
+        accepted = target_client.post("/api/joint-cases/chat/invites/decision", headers={"X-NANA-CSRF": target_csrf}, json={
+            "invite_id": accepted_payload["id"],
+            "status": "accepted",
+        })
+        self.assertEqual(accepted.status_code, 200)
+        thread_id = accepted.json()["thread"]["id"]
+
+        sent = self.client.post("/api/joint-cases/chat/messages", headers={"X-NANA-CSRF": sender_csrf}, json={
+            "thread_id": thread_id,
+            "sender_device_id": "sender-device",
+            "ciphertext": "encrypted-only",
+            "iv": "message-iv",
+        })
+        self.assertEqual(sent.status_code, 200)
+        messages = target_client.get(f"/api/joint-cases/chat/threads/{thread_id}/messages")
+        self.assertEqual(messages.status_code, 200)
+        self.assertEqual(messages.json()["messages"][0]["ciphertext"], "encrypted-only")
+        self.assertNotIn("text", messages.json()["messages"][0])
+
 
 if __name__ == "__main__":
     unittest.main()

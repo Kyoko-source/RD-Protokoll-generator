@@ -23,6 +23,10 @@ from fpdf import FPDF
 from backend.schemas import (
     AnnouncementItem,
     AnnouncementsRequest,
+    ChatDeviceRegisterRequest,
+    ChatInviteDecisionRequest,
+    ChatInviteRequest,
+    ChatMessageRequest,
     DraftRequest,
     EmployeeCreateRequest,
     EmployeeImportRequest,
@@ -476,6 +480,108 @@ def public_joint_case_item(item):
         "completed_at": item.get("completed_at", ""),
         "summary": item.get("summary", ""),
     }
+
+
+def chat_state():
+    state = get_app_setting("e2ee_chat_state", {}) or {}
+    if not isinstance(state, dict):
+        state = {}
+    return {
+        "devices": state.get("devices", {}) if isinstance(state.get("devices"), dict) else {},
+        "invites": state.get("invites", {}) if isinstance(state.get("invites"), dict) else {},
+        "threads": state.get("threads", {}) if isinstance(state.get("threads"), dict) else {},
+        "messages": state.get("messages", {}) if isinstance(state.get("messages"), dict) else {},
+    }
+
+
+def save_chat_state(state):
+    set_app_setting("e2ee_chat_state", state)
+
+
+def station_label(station):
+    return clean_text(station, 120) or "Keine Wache"
+
+
+def vehicle_scope_label(vehicle_scope):
+    return clean_text(vehicle_scope, 40) or "Kein Fahrzeug"
+
+
+def chat_vehicle_label(employee):
+    parts = [
+        station_label(employee.get("station")),
+        vehicle_scope_label(employee.get("vehicle_scope")),
+        employee.get("name", ""),
+    ]
+    return compact_join(parts, " · ")
+
+
+def public_chat_device(device):
+    return {
+        "device_id": device.get("device_id", ""),
+        "employee_id": device.get("employee_id", ""),
+        "employee_name": device.get("employee_name", ""),
+        "device_name": device.get("device_name", ""),
+        "station": device.get("station", ""),
+        "vehicle_scope": device.get("vehicle_scope", ""),
+        "vehicle_label": device.get("vehicle_label", ""),
+        "public_key": device.get("public_key", ""),
+        "last_seen": device.get("last_seen", ""),
+    }
+
+
+def public_chat_invite(invite, employee):
+    employee_id = employee.get("id", "")
+    if invite.get("target_employee_id") != employee_id and invite.get("sender_employee_id") != employee_id:
+        return None
+    return {
+        "id": invite.get("id", ""),
+        "thread_id": invite.get("thread_id", ""),
+        "status": invite.get("status", ""),
+        "sender_device_id": invite.get("sender_device_id", ""),
+        "target_device_id": invite.get("target_device_id", ""),
+        "sender_employee_name": invite.get("sender_employee_name", ""),
+        "target_employee_name": invite.get("target_employee_name", ""),
+        "sender_vehicle_label": invite.get("sender_vehicle_label", ""),
+        "target_vehicle_label": invite.get("target_vehicle_label", ""),
+        "sender_public_key": invite.get("sender_public_key", ""),
+        "encrypted_room_key": invite.get("encrypted_room_key", "") if invite.get("target_employee_id") == employee_id else "",
+        "room_key_iv": invite.get("room_key_iv", "") if invite.get("target_employee_id") == employee_id else "",
+        "joint_case_id": invite.get("joint_case_id", ""),
+        "created_at": invite.get("created_at", ""),
+        "decided_at": invite.get("decided_at", ""),
+    }
+
+
+def public_chat_thread(thread, employee):
+    if employee.get("id") not in thread.get("participant_employee_ids", []):
+        return None
+    return {
+        "id": thread.get("id", ""),
+        "status": thread.get("status", ""),
+        "participant_device_ids": thread.get("participant_device_ids", []),
+        "participant_labels": thread.get("participant_labels", []),
+        "joint_case_id": thread.get("joint_case_id", ""),
+        "created_at": thread.get("created_at", ""),
+    }
+
+
+def public_chat_message(message):
+    return {
+        "id": message.get("id", ""),
+        "thread_id": message.get("thread_id", ""),
+        "sender_device_id": message.get("sender_device_id", ""),
+        "sender_employee_name": message.get("sender_employee_name", ""),
+        "ciphertext": message.get("ciphertext", ""),
+        "iv": message.get("iv", ""),
+        "created_at": message.get("created_at", ""),
+    }
+
+
+def chat_device_recent(device, minutes=20):
+    seen = parse_stored_datetime(device.get("last_seen"))
+    if not seen:
+        return False
+    return seen >= local_now() - timedelta(minutes=minutes)
 
 
 def normalize_dispatch_coordinates(value):
@@ -3244,6 +3350,155 @@ def joint_case_detail(joint_case_id: str, employee=Depends(current_employee)):
         details={"cases": len(cases)},
     )
     return {"joint_case_id": normalized, "cases": cases, "count": len(cases)}
+
+
+@app.put("/api/joint-cases/chat/device")
+def register_chat_device(payload: ChatDeviceRegisterRequest, employee=Depends(current_employee)):
+    device_id = clean_text(payload.device_id, 120)
+    public_key = clean_text(payload.public_key, 4000)
+    if not valid(device_id) or not valid(public_key):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Geräteschlüssel fehlt.")
+    state = chat_state()
+    state["devices"][device_id] = {
+        "device_id": device_id,
+        "employee_id": employee.get("id", ""),
+        "employee_name": employee.get("name", ""),
+        "device_name": clean_text(payload.device_name, 180),
+        "station": employee.get("station", ""),
+        "vehicle_scope": employee.get("vehicle_scope", ""),
+        "vehicle_label": chat_vehicle_label(employee),
+        "public_key": public_key,
+        "last_seen": local_now().isoformat(timespec="seconds"),
+    }
+    save_chat_state(state)
+    return {"status": "registered", "device": public_chat_device(state["devices"][device_id])}
+
+
+@app.get("/api/joint-cases/chat/state")
+def joint_case_chat_state(device_id: str = "", employee=Depends(current_employee)):
+    state = chat_state()
+    if valid(device_id) and device_id in state["devices"]:
+        state["devices"][device_id]["last_seen"] = local_now().isoformat(timespec="seconds")
+        save_chat_state(state)
+    employee_id = employee.get("id", "")
+    devices = [
+        public_chat_device(device)
+        for device in state["devices"].values()
+        if device.get("employee_id") != employee_id
+        and chat_device_recent(device)
+    ]
+    invites = [
+        public
+        for public in (public_chat_invite(invite, employee) for invite in state["invites"].values())
+        if public
+    ]
+    threads = [
+        public
+        for public in (public_chat_thread(thread, employee) for thread in state["threads"].values())
+        if public
+    ]
+    return {"devices": devices, "invites": invites, "threads": threads}
+
+
+@app.post("/api/joint-cases/chat/invites")
+def create_chat_invite(payload: ChatInviteRequest, employee=Depends(current_employee)):
+    state = chat_state()
+    target = state["devices"].get(clean_text(payload.target_device_id, 120))
+    sender = state["devices"].get(clean_text(payload.sender_device_id, 120))
+    if not target or not sender:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Zielgerät ist nicht online.")
+    if sender.get("employee_id") != employee.get("id"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Falsches Absendergerät.")
+    invite_id = secrets.token_hex(10)
+    thread_id = secrets.token_hex(10)
+    now = local_now().isoformat(timespec="seconds")
+    state["threads"][thread_id] = {
+        "id": thread_id,
+        "status": "pending",
+        "participant_employee_ids": [sender.get("employee_id", ""), target.get("employee_id", "")],
+        "participant_device_ids": [sender.get("device_id", ""), target.get("device_id", "")],
+        "participant_labels": [sender.get("vehicle_label", ""), target.get("vehicle_label", "")],
+        "joint_case_id": normalize_joint_case_id(payload.joint_case_id),
+        "created_at": now,
+    }
+    state["messages"][thread_id] = []
+    state["invites"][invite_id] = {
+        "id": invite_id,
+        "thread_id": thread_id,
+        "status": "pending",
+        "sender_device_id": sender.get("device_id", ""),
+        "target_device_id": target.get("device_id", ""),
+        "sender_employee_id": sender.get("employee_id", ""),
+        "target_employee_id": target.get("employee_id", ""),
+        "sender_employee_name": sender.get("employee_name", ""),
+        "target_employee_name": target.get("employee_name", ""),
+        "sender_vehicle_label": sender.get("vehicle_label", ""),
+        "target_vehicle_label": target.get("vehicle_label", ""),
+        "sender_public_key": clean_text(payload.sender_public_key, 4000),
+        "encrypted_room_key": clean_text(payload.encrypted_room_key, 8000),
+        "room_key_iv": clean_text(payload.room_key_iv, 400),
+        "joint_case_id": normalize_joint_case_id(payload.joint_case_id),
+        "created_at": now,
+        "decided_at": "",
+    }
+    save_chat_state(state)
+    audit("api_joint_chat_invite_created", employee=employee, entity_type="joint_chat", entity_id=thread_id)
+    return {"invite": public_chat_invite(state["invites"][invite_id], employee), "thread": public_chat_thread(state["threads"][thread_id], employee)}
+
+
+@app.post("/api/joint-cases/chat/invites/decision")
+def decide_chat_invite(payload: ChatInviteDecisionRequest, employee=Depends(current_employee)):
+    state = chat_state()
+    invite = state["invites"].get(clean_text(payload.invite_id, 120))
+    if not invite:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Anfrage nicht gefunden.")
+    if invite.get("target_employee_id") != employee.get("id"):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Nicht Empfänger dieser Anfrage.")
+    status_value = "accepted" if payload.status == "accepted" else "declined"
+    invite["status"] = status_value
+    invite["decided_at"] = local_now().isoformat(timespec="seconds")
+    thread = state["threads"].get(invite.get("thread_id"), {})
+    thread["status"] = status_value
+    if status_value == "declined":
+        state["messages"].pop(invite.get("thread_id"), None)
+    save_chat_state(state)
+    audit(f"api_joint_chat_invite_{status_value}", employee=employee, entity_type="joint_chat", entity_id=invite.get("thread_id", ""))
+    return {"invite": public_chat_invite(invite, employee), "thread": public_chat_thread(thread, employee) if thread else None}
+
+
+@app.get("/api/joint-cases/chat/threads/{thread_id}/messages")
+def joint_chat_messages(thread_id: str, employee=Depends(current_employee)):
+    state = chat_state()
+    thread = state["threads"].get(clean_text(thread_id, 120))
+    if not thread or employee.get("id") not in thread.get("participant_employee_ids", []):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Chat nicht gefunden.")
+    return {"messages": [public_chat_message(message) for message in state["messages"].get(thread.get("id"), [])]}
+
+
+@app.post("/api/joint-cases/chat/messages")
+def send_joint_chat_message(payload: ChatMessageRequest, employee=Depends(current_employee)):
+    state = chat_state()
+    thread = state["threads"].get(clean_text(payload.thread_id, 120))
+    if not thread or thread.get("status") != "accepted":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Chat ist nicht aktiv.")
+    if employee.get("id") not in thread.get("participant_employee_ids", []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Nicht Teilnehmer dieses Chats.")
+    if clean_text(payload.sender_device_id, 120) not in thread.get("participant_device_ids", []):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Falsches Absendergerät.")
+    message = {
+        "id": secrets.token_hex(10),
+        "thread_id": thread.get("id", ""),
+        "sender_device_id": clean_text(payload.sender_device_id, 120),
+        "sender_employee_name": employee.get("name", ""),
+        "ciphertext": clean_text(payload.ciphertext, 12000),
+        "iv": clean_text(payload.iv, 400),
+        "created_at": local_now().isoformat(timespec="seconds"),
+    }
+    state["messages"].setdefault(thread.get("id"), []).append(message)
+    state["messages"][thread.get("id")] = state["messages"][thread.get("id")][-200:]
+    save_chat_state(state)
+    audit("api_joint_chat_message_sent", employee=employee, entity_type="joint_chat", entity_id=thread.get("id", ""))
+    return {"message": public_chat_message(message)}
 
 
 @app.post("/api/protocol/pdf")

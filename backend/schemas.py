@@ -38,6 +38,33 @@ class ProtocolRequest(BaseModel):
     force_finish: bool = False
 
 
+class ChatDeviceRegisterRequest(BaseModel):
+    device_id: str
+    device_name: str = ""
+    public_key: str
+
+
+class ChatInviteRequest(BaseModel):
+    target_device_id: str
+    sender_device_id: str
+    sender_public_key: str
+    encrypted_room_key: str
+    room_key_iv: str
+    joint_case_id: str = ""
+
+
+class ChatInviteDecisionRequest(BaseModel):
+    invite_id: str
+    status: str = "accepted"
+
+
+class ChatMessageRequest(BaseModel):
+    thread_id: str
+    sender_device_id: str
+    ciphertext: str
+    iv: str
+
+
 class MedicationCalcRequest(BaseModel):
     sop: str = "Anaphylaxie (SOPKB0105)"
     age: float = 30

@@ -2462,6 +2462,134 @@ form button,
   grid-template-columns: minmax(120px, 0.5fr) minmax(0, 1fr) minmax(120px, 0.4fr) !important;
 }
 
+.joint-chat-panel {
+  display: grid;
+  gap: 14px;
+  padding-top: 4px;
+}
+
+.privacy-note {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  padding: 12px;
+  border-radius: 10px;
+  color: rgba(235, 244, 255, 0.78);
+  background: rgba(18, 198, 178, 0.08);
+  border: 1px solid rgba(18, 198, 178, 0.18);
+}
+
+.privacy-note svg {
+  color: #58e6b7;
+}
+
+.joint-chat-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.joint-case-card h4 {
+  margin: 0;
+  color: #f6fbff;
+  font-size: 1rem;
+}
+
+.joint-chat-invite {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(130, 174, 220, 0.16);
+}
+
+.joint-chat-invite div {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.joint-chat-box {
+  display: grid;
+  gap: 12px;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(3, 10, 21, 0.46);
+  border: 1px solid rgba(130, 174, 220, 0.16);
+}
+
+.joint-chat-thread-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.joint-chat-thread-list button {
+  min-height: 34px;
+  padding: 0 11px;
+  border-radius: 999px;
+  color: rgba(235, 244, 255, 0.82);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.joint-chat-thread-list button.active {
+  color: #062018;
+  background: #72f0c4;
+}
+
+.joint-chat-thread-list span {
+  color: rgba(235, 244, 255, 0.62);
+  font-weight: 780;
+}
+
+.joint-chat-messages {
+  min-height: 160px;
+  max-height: 320px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.joint-chat-message {
+  max-width: min(78%, 620px);
+  display: grid;
+  gap: 4px;
+  align-self: flex-start;
+  padding: 10px 12px;
+  border-radius: 12px 12px 12px 4px;
+  color: #ecf8ff;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.joint-chat-message.own {
+  align-self: flex-end;
+  border-radius: 12px 12px 4px 12px;
+  background: rgba(33, 151, 139, 0.28);
+  border-color: rgba(91, 242, 187, 0.2);
+}
+
+.joint-chat-message small {
+  color: rgba(235, 244, 255, 0.58);
+  font-weight: 760;
+}
+
+.joint-chat-message span {
+  overflow-wrap: anywhere;
+}
+
+.joint-chat-compose {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
 .psyche-legal-note {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
@@ -5675,6 +5803,8 @@ legend {
   .support-grid,
   .candidate-grid,
   .joint-case-grid,
+  .joint-chat-grid,
+  .joint-chat-compose,
   .joint-linked-summary,
   .joint-case-result,
   .admin-grid,

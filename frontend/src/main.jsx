@@ -401,6 +401,103 @@ function formatJointCaseCode(value) {
   return `NANA-${[raw.slice(0, 4), raw.slice(4, 8), raw.slice(8, 12)].filter(Boolean).join('-')}`;
 }
 
+function bytesToBase64(bytes) {
+  return btoa(String.fromCharCode(...new Uint8Array(bytes)));
+}
+
+function base64ToBytes(value) {
+  return Uint8Array.from(atob(value || ''), (char) => char.charCodeAt(0));
+}
+
+function chatKeyStorageKey(deviceId) {
+  return `nana_e2ee_chat_key_${deviceId || 'unknown'}`;
+}
+
+function chatRoomStorageKey(deviceId) {
+  return `nana_e2ee_chat_rooms_${deviceId || 'unknown'}`;
+}
+
+async function loadOrCreateChatIdentity(deviceId) {
+  const stored = localStorage.getItem(chatKeyStorageKey(deviceId));
+  if (stored) {
+    const parsed = JSON.parse(stored);
+    return {
+      publicKey: await crypto.subtle.importKey('jwk', parsed.publicKey, { name: 'ECDH', namedCurve: 'P-256' }, true, []),
+      privateKey: await crypto.subtle.importKey('jwk', parsed.privateKey, { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey']),
+      publicJwk: parsed.publicKey
+    };
+  }
+  const keyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey']);
+  const publicJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
+  const privateJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
+  localStorage.setItem(chatKeyStorageKey(deviceId), JSON.stringify({ publicKey: publicJwk, privateKey: privateJwk }));
+  return { publicKey: keyPair.publicKey, privateKey: keyPair.privateKey, publicJwk };
+}
+
+async function deriveChatWrapKey(privateKey, otherPublicJwk) {
+  const otherPublicKey = await crypto.subtle.importKey('jwk', otherPublicJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []);
+  return crypto.subtle.deriveKey({ name: 'ECDH', public: otherPublicKey }, privateKey, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+
+async function createRoomKeyBundle(identity, targetPublicKey) {
+  const roomKey = await crypto.subtle.generateKey({ name: 'AES-GCM', length: 256 }, true, ['encrypt', 'decrypt']);
+  const rawRoomKey = new Uint8Array(await crypto.subtle.exportKey('raw', roomKey));
+  const wrapKey = await deriveChatWrapKey(identity.privateKey, targetPublicKey);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, wrapKey, rawRoomKey);
+  return { roomKey, roomKeyRaw: bytesToBase64(rawRoomKey), encryptedRoomKey: bytesToBase64(encrypted), roomKeyIv: bytesToBase64(iv) };
+}
+
+function loadStoredRoomKeys(deviceId) {
+  try {
+    return JSON.parse(localStorage.getItem(chatRoomStorageKey(deviceId)) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveStoredRoomKey(deviceId, threadId, roomKeyRaw) {
+  const rooms = loadStoredRoomKeys(deviceId);
+  rooms[threadId] = roomKeyRaw;
+  localStorage.setItem(chatRoomStorageKey(deviceId), JSON.stringify(rooms));
+}
+
+async function importRoomKey(rawKey) {
+  return crypto.subtle.importKey('raw', base64ToBytes(rawKey), { name: 'AES-GCM' }, true, ['encrypt', 'decrypt']);
+}
+
+async function decryptInviteRoomKey(identity, invite) {
+  const wrapKey = await deriveChatWrapKey(identity.privateKey, JSON.parse(invite.sender_public_key));
+  const rawRoomKey = await crypto.subtle.decrypt(
+    { name: 'AES-GCM', iv: base64ToBytes(invite.room_key_iv) },
+    wrapKey,
+    base64ToBytes(invite.encrypted_room_key)
+  );
+  return bytesToBase64(rawRoomKey);
+}
+
+async function encryptChatText(roomKeyRaw, text) {
+  const roomKey = await importRoomKey(roomKeyRaw);
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, roomKey, new TextEncoder().encode(text));
+  return { ciphertext: bytesToBase64(ciphertext), iv: bytesToBase64(iv) };
+}
+
+async function decryptChatText(roomKeyRaw, message) {
+  const roomKey = await importRoomKey(roomKeyRaw);
+  const plain = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: base64ToBytes(message.iv) }, roomKey, base64ToBytes(message.ciphertext));
+  return new TextDecoder().decode(plain);
+}
+
+function chatMessagePolicyViolation(text) {
+  const value = String(text || '').toLowerCase();
+  const blockedTerms = ['patient', 'name', 'geburtsdatum', 'adresse', 'telefon', 'krankenkasse', 'versichert', 'diagnose', 'befund', 'schmerz', 'medikament', 'allergie'];
+  if (blockedTerms.some((term) => value.includes(term))) return true;
+  if (/\b\d{1,2}\.\d{1,2}\.\d{2,4}\b/.test(value)) return true;
+  if (/\b[a-zäöüß]+,\s*[a-zäöüß]+\b/i.test(text)) return true;
+  return false;
+}
+
 function effectiveVitalStatus(vital, statusKey) {
   return vital?.[statusKey] === CUSTOM_STATUS ? vital?.[`${statusKey}_custom`] : vital?.[statusKey];
 }
@@ -4864,6 +4961,14 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
   const [jointQrDataUrl, setJointQrDataUrl] = useState('');
   const [jointScanActive, setJointScanActive] = useState(false);
   const jointScannerElementId = useRef(`nana-joint-scanner-${Math.random().toString(36).slice(2)}`);
+  const [chatIdentity, setChatIdentity] = useState(null);
+  const [chatDevices, setChatDevices] = useState([]);
+  const [chatInvites, setChatInvites] = useState([]);
+  const [chatThreads, setChatThreads] = useState([]);
+  const [selectedChatDeviceId, setSelectedChatDeviceId] = useState('');
+  const [activeChatThreadId, setActiveChatThreadId] = useState('');
+  const [chatMessages, setChatMessages] = useState([]);
+  const [chatText, setChatText] = useState('');
   const [refusal, setRefusal] = useState(() => {
     const now = new Date();
     return {
@@ -4938,6 +5043,8 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
   const gemeinsamerEinsatz = patient.gemeinsamer_einsatz || {};
   const amls = patient.amls || {};
   const uebergabe = patient.uebergabe || {};
+  const currentChatDeviceId = browserDeviceId();
+  const currentChatDeviceName = browserDeviceInfo().device_name;
   const amlsCandidates = Array.isArray(amls.custom_candidates) ? amls.custom_candidates : [];
   const amlsExcluded = Array.isArray(amls.excluded) ? amls.excluded : [];
   const amlsExcludedNames = new Set(amlsExcluded.map((item) => (
@@ -5124,6 +5231,51 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
   }, [protocolSection]);
 
   useEffect(() => {
+    let cancelled = false;
+    loadOrCreateChatIdentity(currentChatDeviceId)
+      .then(async (identity) => {
+        if (cancelled) return;
+        setChatIdentity(identity);
+        await api('/api/joint-cases/chat/device', {
+          method: 'PUT',
+          body: JSON.stringify({
+            device_id: currentChatDeviceId,
+            device_name: currentChatDeviceName,
+            public_key: JSON.stringify(identity.publicJwk)
+          })
+        }, session.token);
+      })
+      .catch((err) => setError(`Chat-Schlüssel konnte nicht vorbereitet werden: ${err.message}`));
+    return () => {
+      cancelled = true;
+    };
+  }, [currentChatDeviceId, currentChatDeviceName, session.token]);
+
+  useEffect(() => {
+    if (!chatIdentity) return undefined;
+    let cancelled = false;
+    async function refreshChatState() {
+      try {
+        const result = await api(`/api/joint-cases/chat/state?device_id=${encodeURIComponent(currentChatDeviceId)}`, {}, session.token);
+        if (cancelled) return;
+        setChatDevices(result.devices || []);
+        setChatInvites(result.invites || []);
+        setChatThreads(result.threads || []);
+        const accepted = (result.threads || []).find((thread) => thread.status === 'accepted');
+        if (!activeChatThreadId && accepted) setActiveChatThreadId(accepted.id);
+      } catch {
+        // Chat polling must not interrupt documentation.
+      }
+    }
+    refreshChatState();
+    const interval = window.setInterval(refreshChatState, 6000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [chatIdentity, currentChatDeviceId, session.token, activeChatThreadId]);
+
+  useEffect(() => {
     const code = formatJointCaseCode(gemeinsamerEinsatz.id);
     if (!code) {
       setJointQrDataUrl('');
@@ -5189,6 +5341,37 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       }
     };
   }, [jointScanActive, protocolSection]);
+
+  useEffect(() => {
+    if (!activeChatThreadId) {
+      setChatMessages([]);
+      return undefined;
+    }
+    let cancelled = false;
+    async function refreshMessages() {
+      const roomKeyRaw = loadStoredRoomKeys(currentChatDeviceId)[activeChatThreadId];
+      if (!roomKeyRaw) return;
+      try {
+        const result = await api(`/api/joint-cases/chat/threads/${activeChatThreadId}/messages`, {}, session.token);
+        const decrypted = await Promise.all((result.messages || []).map(async (message) => {
+          try {
+            return { ...message, text: await decryptChatText(roomKeyRaw, message), decryptable: true };
+          } catch {
+            return { ...message, text: 'Nachricht kann auf diesem Gerät nicht entschlüsselt werden.', decryptable: false };
+          }
+        }));
+        if (!cancelled) setChatMessages(decrypted);
+      } catch {
+        // Message polling stays silent while the user documents.
+      }
+    }
+    refreshMessages();
+    const interval = window.setInterval(refreshMessages, 5000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(interval);
+    };
+  }, [activeChatThreadId, currentChatDeviceId, session.token]);
 
   useEffect(() => {
     if (isChild && samplersSection === 'S2') {
@@ -6543,6 +6726,87 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
     }
   }
 
+  async function sendChatInvite() {
+    const target = chatDevices.find((device) => device.device_id === selectedChatDeviceId);
+    if (!target || !chatIdentity) {
+      setError('Bitte ein verfügbares Fahrzeug auswählen.');
+      return;
+    }
+    setError('');
+    try {
+      const bundle = await createRoomKeyBundle(chatIdentity, JSON.parse(target.public_key));
+      const result = await api('/api/joint-cases/chat/invites', {
+        method: 'POST',
+        body: JSON.stringify({
+          target_device_id: target.device_id,
+          sender_device_id: currentChatDeviceId,
+          sender_public_key: JSON.stringify(chatIdentity.publicJwk),
+          encrypted_room_key: bundle.encryptedRoomKey,
+          room_key_iv: bundle.roomKeyIv,
+          joint_case_id: gemeinsamerEinsatz.id || ''
+        })
+      }, session.token);
+      if (result.thread?.id) {
+        saveStoredRoomKey(currentChatDeviceId, result.thread.id, bundle.roomKeyRaw);
+      }
+      markActionFeedback('joint-chat-invite', `Chat-Anfrage an ${target.vehicle_label || target.employee_name} gesendet.`);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function decideChatInvite(invite, statusValue) {
+    setError('');
+    try {
+      if (statusValue === 'accepted') {
+        const roomKeyRaw = await decryptInviteRoomKey(chatIdentity, invite);
+        saveStoredRoomKey(currentChatDeviceId, invite.thread_id, roomKeyRaw);
+      }
+      const result = await api('/api/joint-cases/chat/invites/decision', {
+        method: 'POST',
+        body: JSON.stringify({ invite_id: invite.id, status: statusValue })
+      }, session.token);
+      if (statusValue === 'accepted' && result.thread?.id) setActiveChatThreadId(result.thread.id);
+      markActionFeedback('joint-chat-decision', statusValue === 'accepted' ? 'Chat-Anfrage angenommen.' : 'Chat-Anfrage abgelehnt. Das andere Fahrzeug wird informiert.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function sendChatMessage() {
+    const text = chatText.trim();
+    if (!text || !activeChatThreadId) return;
+    if (chatMessagePolicyViolation(text)) {
+      setError('Diese Nachricht wirkt wie Patientendaten oder medizinische Falldaten. Bitte nur organisatorische Informationen schreiben.');
+      return;
+    }
+    const roomKeyRaw = loadStoredRoomKeys(currentChatDeviceId)[activeChatThreadId];
+    if (!roomKeyRaw) {
+      setError('Chat-Schlüssel ist auf diesem Gerät nicht verfügbar.');
+      return;
+    }
+    setError('');
+    try {
+      const encrypted = await encryptChatText(roomKeyRaw, text);
+      await api('/api/joint-cases/chat/messages', {
+        method: 'POST',
+        body: JSON.stringify({
+          thread_id: activeChatThreadId,
+          sender_device_id: currentChatDeviceId,
+          ciphertext: encrypted.ciphertext,
+          iv: encrypted.iv
+        })
+      }, session.token);
+      setChatText('');
+      setChatMessages((current) => [
+        ...current,
+        { id: `local-${Date.now()}`, sender_device_id: currentChatDeviceId, sender_employee_name: employee?.name || '', text, decryptable: true, created_at: new Date().toLocaleString('de-DE') }
+      ]);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   function updateRefusal(key, value) {
     setRefusal((current) => ({ ...current, [key]: value }));
   }
@@ -7775,6 +8039,99 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
             ))}
           </div>
         )}
+
+        <section className="joint-chat-panel">
+          <div className="section-head compact-head">
+            <h3>E2EE-Fahrzeugchat</h3>
+            <span>nur Organisation, keine Patientendaten</span>
+          </div>
+          <div className="privacy-note">
+            <ShieldCheck size={18} />
+            <span>Nachrichten werden vor dem Senden im Browser verschlüsselt. Der Server speichert nur Ciphertext. Bitte keine Namen, Diagnosen, Adressen, Vitalwerte oder sonstige Patientendaten schreiben.</span>
+          </div>
+
+          <div className="joint-chat-grid">
+            <article className="joint-case-card">
+              <h4>Fahrzeug auswählen</h4>
+              <label>
+                Verfügbares Gerät
+                <select value={selectedChatDeviceId} onChange={(event) => setSelectedChatDeviceId(event.target.value)}>
+                  <option value="">Bitte auswählen</option>
+                  {chatDevices.map((device) => (
+                    <option key={device.device_id} value={device.device_id}>
+                      {device.vehicle_label || device.employee_name} · {device.device_name || 'Tablet'}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <button type="button" className="primary" onClick={sendChatInvite} disabled={!selectedChatDeviceId || !chatIdentity}>
+                Chat-Anfrage senden
+              </button>
+              {chatDevices.length === 0 && <p className="muted">Noch kein anderes aktives Tablet mit Chat-Schlüssel sichtbar.</p>}
+            </article>
+
+            <article className="joint-case-card">
+              <h4>Anfragen</h4>
+              {chatInvites.filter((invite) => invite.status === 'pending' && invite.target_device_id === currentChatDeviceId).map((invite) => (
+                <div className="joint-chat-invite" key={invite.id}>
+                  <span>{invite.sender_vehicle_label || invite.sender_employee_name} möchte schreiben.</span>
+                  <div>
+                    <button type="button" className="primary" onClick={() => decideChatInvite(invite, 'accepted')}>Annehmen</button>
+                    <button type="button" onClick={() => decideChatInvite(invite, 'declined')}>Ablehnen</button>
+                  </div>
+                </div>
+              ))}
+              {chatInvites.filter((invite) => invite.status === 'declined' && invite.sender_device_id === currentChatDeviceId).map((invite) => (
+                <p className="muted" key={invite.id}>{invite.target_vehicle_label || invite.target_employee_name} hat die Chat-Anfrage abgelehnt.</p>
+              ))}
+              {chatInvites.filter((invite) => invite.status === 'pending' && invite.target_device_id === currentChatDeviceId).length === 0
+                && chatInvites.filter((invite) => invite.status === 'declined' && invite.sender_device_id === currentChatDeviceId).length === 0
+                && <p className="muted">Keine offenen Anfragen.</p>}
+            </article>
+          </div>
+
+          <div className="joint-chat-box">
+            <div className="joint-chat-thread-list">
+              {chatThreads.filter((thread) => thread.status === 'accepted').map((thread) => (
+                <button
+                  type="button"
+                  className={activeChatThreadId === thread.id ? 'active' : ''}
+                  onClick={() => setActiveChatThreadId(thread.id)}
+                  key={thread.id}
+                >
+                  {(thread.participant_labels || []).join(' ↔ ')}
+                </button>
+              ))}
+              {chatThreads.filter((thread) => thread.status === 'accepted').length === 0 && <span>Kein aktiver Chat.</span>}
+            </div>
+            <div className="joint-chat-messages">
+              {chatMessages.map((message) => (
+                <div className={`joint-chat-message ${message.sender_device_id === currentChatDeviceId ? 'own' : ''}`} key={message.id}>
+                  <small>{message.sender_employee_name || 'Team'} · {message.created_at}</small>
+                  <span>{message.text}</span>
+                </div>
+              ))}
+              {activeChatThreadId && chatMessages.length === 0 && <p className="muted">Noch keine Nachrichten.</p>}
+            </div>
+            <div className="joint-chat-compose">
+              <input
+                value={chatText}
+                onChange={(event) => setChatText(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === 'Enter') {
+                    event.preventDefault();
+                    sendChatMessage();
+                  }
+                }}
+                placeholder="z.B. Treffpunkt, Funkgruppe, Bereitstellung"
+                disabled={!activeChatThreadId}
+              />
+              <button type="button" className="primary" onClick={sendChatMessage} disabled={!activeChatThreadId || !chatText.trim()}>
+                Senden
+              </button>
+            </div>
+          </div>
+        </section>
       </section>}
 
       {protocolSection === 'abschluss' && <section className="work-panel">
