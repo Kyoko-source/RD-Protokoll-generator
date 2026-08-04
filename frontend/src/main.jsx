@@ -917,6 +917,43 @@ function sinnhaftRows(patient) {
   ];
 }
 
+function handoverShortSummary(patient) {
+  const vital = patient.vitalwerte || {};
+  const x = patient.xabcde || {};
+  const s = patient.samplers || {};
+  const o = patient.opqrst || {};
+  const amls = patient.amls || {};
+  const measures = patient.massnahmen || {};
+  const reanimation = patient.reanimation || {};
+  const handover = patient.uebergabe || {};
+  const identity = patientIdentity(vital);
+  const symptom = symptomSummary(vital, s, o);
+  const priority = compactJoin([
+    hasValue(formatBloodPressure(vital)) ? `RR ${formatBloodPressure(vital)}` : '',
+    hasValue(vital.puls) ? `Puls ${formatObservation(vital.puls, effectiveVitalStatus(vital, 'puls_status'), '/min')}` : '',
+    hasValue(vital.spo2) ? `SpO2 ${formatObservation(vital.spo2, effectiveVitalStatus(vital, 'spo2_status'), '%')}` : '',
+    hasValue(vital.af) ? `AF ${formatObservation(vital.af, effectiveVitalStatus(vital, 'af_status'), '/min')}` : '',
+    hasValue(vital.gcs) ? `GCS ${formatObservation(vital.gcs, effectiveVitalStatus(vital, 'gcs_status'), '/15')}` : '',
+    hasValue(x.avpu) ? `AVPU ${x.avpu}` : ''
+  ]);
+  const actions = [...actionLines(measures), ...reanimationLines(reanimation)].slice(0, 6).join('; ');
+  const history = compactJoin([
+    hasValue(formatSelectedAllergies(s)) ? `Allergien: ${formatSelectedAllergies(s)}` : '',
+    hasValue(formatSelectedMedication(s)) ? `Medikation: ${formatSelectedMedication(s)}` : '',
+    hasValue(s.vorgeschichte) ? `Vorgeschichte: ${s.vorgeschichte}` : ''
+  ], '; ');
+
+  return [
+    `Identifikation: ${identity}.`,
+    hasValue(symptom) ? `Notfallereignis: ${symptom}.` : '',
+    hasValue(priority) ? `Priorität/Erstbefund: ${priority}.` : '',
+    hasValue(actions) ? `Handlung: ${actions}.` : '',
+    hasValue(history) ? `Anamnese: ${history}.` : '',
+    hasValue(amls.arbeitsdiagnose) ? `Fazit/Verdacht: ${amls.arbeitsdiagnose}.` : '',
+    hasValue(handover.ziel) ? `Übergabeziel: ${handover.ziel}.` : ''
+  ].filter(hasValue).join(' ');
+}
+
 function generateLocalProtocolText(patient) {
   const crew = patient.besatzung || {};
   const vital = patient.vitalwerte || {};
@@ -5308,6 +5345,12 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
   const amlsMatchingCount = amlsVisibleCandidates.filter((item) => !amlsExcludedNames.has(item.name) && !(item.conflicts || []).length).length;
   const amlsCheckCount = amlsVisibleCandidates.filter((item) => !amlsExcludedNames.has(item.name) && (item.conflicts || []).length).length;
   const sinnhaftPreviewRows = sinnhaftRows(patient);
+  const timelinePreviewLines = chronologyLines(patient);
+  const autoHandoverSummary = handoverShortSummary(patient);
+  const acceptedChatThreads = chatThreads.filter((thread) => thread.status === 'accepted');
+  const pendingIncomingChatInvites = chatInvites.filter((invite) => invite.status === 'pending' && invite.target_device_id === currentChatDeviceId);
+  const pendingOutgoingChatInvites = chatInvites.filter((invite) => invite.status === 'pending' && invite.sender_device_id === currentChatDeviceId);
+  const declinedOutgoingChatInvites = chatInvites.filter((invite) => invite.status === 'declined' && invite.sender_device_id === currentChatDeviceId);
   const refusalText = buildPatientRefusalText(patient, refusal);
   const xabcdeCompletedCount = xabcdeSections.filter((section) => xabcdeSectionComplete(section.key)).length;
   const xabcdeOpenSections = xabcdeSections.filter((section) => !xabcdeSectionComplete(section.key)).map((section) => section.key);
@@ -5380,6 +5423,12 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       complete: Boolean(visitedOptionalSections.massnahmen)
         || (massnahmen.timeline || []).length > 0
         || (massnahmen.medikation || []).length > 0
+    },
+    {
+      key: 'timeline',
+      label: 'Timeline',
+      icon: ClipboardList,
+      complete: timelinePreviewLines.length > 3
     },
     {
       key: 'reanimation',
@@ -6716,6 +6765,13 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
         }
       };
     });
+  }
+
+  function adoptHandoverSummary() {
+    const summary = handoverShortSummary(patient);
+    if (!summary) return;
+    updateUebergabe('text', summary);
+    markActionFeedback('handover-summary', 'Übergabe-Kurzfassung wurde übernommen.');
   }
 
   function addMeasure() {
@@ -8223,6 +8279,51 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
         </div>
       </section>}
 
+      {protocolSection === 'timeline' && <section className="work-panel timeline-panel">
+        <div className="section-head">
+          <h2>Einsatz-Timeline</h2>
+          <span>automatisch aus Befund, Maßnahmen, Reanimation und Übergabe</span>
+        </div>
+
+        <div className="timeline-overview">
+          <article>
+            <strong>{timelinePreviewLines.length}</strong>
+            <span>Ereignisse im Verlauf</span>
+          </article>
+          <article>
+            <strong>{(massnahmen.timeline || []).length}</strong>
+            <span>Maßnahmen</span>
+          </article>
+          <article>
+            <strong>{(massnahmen.medikation || []).length}</strong>
+            <span>Medikationen</span>
+          </article>
+          <article>
+            <strong>{hasValue(uebergabe.ziel) ? 'Ziel' : 'offen'}</strong>
+            <span>{uebergabe.ziel || 'Übergabeziel fehlt'}</span>
+          </article>
+        </div>
+
+        <div className="timeline-feed">
+          {timelinePreviewLines.map((line, index) => {
+            const match = String(line).match(/^(\d{1,2}[:.]\d{2})\s*-\s*(.+)$/);
+            return (
+              <div className="timeline-feed-row" key={`${line}-${index}`}>
+                <time>{match ? match[1] : 'laufend'}</time>
+                <span>{match ? match[2] : line}</span>
+              </div>
+            );
+          })}
+          {timelinePreviewLines.length === 0 && <p className="muted">Noch keine Timeline-Ereignisse vorhanden.</p>}
+        </div>
+
+        <div className="protocol-toolbar compact-toolbar">
+          <button type="button" onClick={addMeasure}>Maßnahme ergänzen</button>
+          <button type="button" onClick={() => selectProtocolSection('massnahmen')}>Maßnahmen öffnen</button>
+          <button type="button" onClick={() => selectProtocolSection('abschluss')}>Übergabe öffnen</button>
+        </div>
+      </section>}
+
       {protocolSection === 'reanimation' && <section className="work-panel">
         <div className="section-head">
           <h2>Reanimation</h2>
@@ -8351,6 +8452,25 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
         <div className="section-head">
           <h2>Gemeinsamer Einsatz</h2>
           <span>mehrere Fahrzeuge, ein Einsatzverbund</span>
+        </div>
+
+        <div className="joint-status-strip">
+          <article className={hasValue(gemeinsamerEinsatz.id) ? 'ready' : ''}>
+            <strong>{hasValue(gemeinsamerEinsatz.id) ? 'Verbunden' : 'Nicht gekoppelt'}</strong>
+            <span>{hasValue(gemeinsamerEinsatz.id) ? formatJointCaseCode(gemeinsamerEinsatz.id) : 'Code erzeugen oder übernehmen'}</span>
+          </article>
+          <article className={acceptedChatThreads.length ? 'ready' : ''}>
+            <strong>{acceptedChatThreads.length}</strong>
+            <span>aktive Chats</span>
+          </article>
+          <article className={pendingIncomingChatInvites.length ? 'attention' : ''}>
+            <strong>{pendingIncomingChatInvites.length}</strong>
+            <span>offene Anfragen</span>
+          </article>
+          <article className={chatKeyProtected && !chatKeyLocked ? 'ready' : chatKeyLocked ? 'attention' : ''}>
+            <strong>{chatKeyLocked ? 'gesperrt' : chatKeyProtected ? 'PIN aktiv' : 'bereit'}</strong>
+            <span>E2EE-Schlüssel</span>
+          </article>
         </div>
 
         <div className="joint-case-grid">
@@ -8483,7 +8603,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
 
             <article className="joint-case-card">
               <h4>Anfragen</h4>
-              {chatInvites.filter((invite) => invite.status === 'pending' && invite.target_device_id === currentChatDeviceId).map((invite) => (
+              {pendingIncomingChatInvites.map((invite) => (
                 <div className="joint-chat-invite" key={invite.id}>
                   <span>{invite.sender_vehicle_label || invite.sender_employee_name} möchte schreiben.</span>
                   <div>
@@ -8492,18 +8612,22 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
                   </div>
                 </div>
               ))}
-              {chatInvites.filter((invite) => invite.status === 'declined' && invite.sender_device_id === currentChatDeviceId).map((invite) => (
+              {declinedOutgoingChatInvites.map((invite) => (
                 <p className="muted" key={invite.id}>{invite.target_vehicle_label || invite.target_employee_name} hat die Chat-Anfrage abgelehnt.</p>
               ))}
-              {chatInvites.filter((invite) => invite.status === 'pending' && invite.target_device_id === currentChatDeviceId).length === 0
-                && chatInvites.filter((invite) => invite.status === 'declined' && invite.sender_device_id === currentChatDeviceId).length === 0
+              {pendingOutgoingChatInvites.map((invite) => (
+                <p className="muted" key={invite.id}>Anfrage an {invite.target_vehicle_label || invite.target_employee_name} wartet auf Entscheidung.</p>
+              ))}
+              {pendingIncomingChatInvites.length === 0
+                && declinedOutgoingChatInvites.length === 0
+                && pendingOutgoingChatInvites.length === 0
                 && <p className="muted">Keine offenen Anfragen.</p>}
             </article>
           </div>
 
           <div className="joint-chat-box">
             <div className="joint-chat-thread-list">
-              {chatThreads.filter((thread) => thread.status === 'accepted').map((thread) => (
+              {acceptedChatThreads.map((thread) => (
                 <button
                   type="button"
                   className={activeChatThreadId === thread.id ? 'active' : ''}
@@ -8513,7 +8637,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
                   {(thread.participant_labels || []).join(' ↔ ')}
                 </button>
               ))}
-              {chatThreads.filter((thread) => thread.status === 'accepted').length === 0 && <span>Kein aktiver Chat.</span>}
+              {acceptedChatThreads.length === 0 && <span>Kein aktiver Chat.</span>}
             </div>
             <div className="joint-chat-messages">
               {chatMessages.map((message) => (
@@ -8608,6 +8732,20 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
             </div>
           </fieldset>
           <aside className="handover-preview">
+            <div className="handover-auto-card">
+              <div>
+                <h3>Übergabe-Kurzfassung</h3>
+                <p>{autoHandoverSummary || 'Noch nicht genug dokumentiert für eine sinnvolle Kurzfassung.'}</p>
+              </div>
+              <button
+                type="button"
+                className={actionFeedback?.key === 'handover-summary' ? 'action-confirmed' : ''}
+                onClick={adoptHandoverSummary}
+                disabled={!autoHandoverSummary}
+              >
+                Übernehmen
+              </button>
+            </div>
             <h3>SINNHAFT-Vorschlag</h3>
             {sinnhaftPreviewRows.map(([label, value]) => (
               <p key={label}>
