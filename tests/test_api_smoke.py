@@ -74,6 +74,17 @@ class ApiSmokeTests(unittest.TestCase):
         })
         self.assertEqual(blocked_finish.status_code, 403)
 
+        warning_finish = self.client.post("/api/cases/finish", headers={"X-NANA-CSRF": csrf}, json={
+            "patient": {
+                "patient": {"patientengruppe": "Erwachsener", "alter_wert": "45"},
+                "vitalwerte": {"bewusstsein": "wach"},
+                "einsatz": {"einsatznummer": "TEST-1"},
+            },
+            "force_finish": False,
+        })
+        self.assertEqual(warning_finish.status_code, 409)
+        self.assertIn("quality", warning_finish.json()["detail"])
+
         finish = self.client.post("/api/cases/finish", headers={"X-NANA-CSRF": csrf}, json={
             "patient": {
                 "patient": {"patientengruppe": "Erwachsener", "alter_wert": "45"},

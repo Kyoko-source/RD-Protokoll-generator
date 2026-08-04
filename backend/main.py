@@ -1030,10 +1030,16 @@ QUALITY_RULES = [
     {"id": "vital_core", "label": "Puls, SpO2, RR und GCS geprüft", "severity": "warning", "section": "Vitalwerte"},
     {"id": "short_report", "label": "Kurzbericht oder Leitsymptome vorhanden", "severity": "warning", "section": "Anamnese"},
     {"id": "xabcde", "label": "xABCDE Kernfelder dokumentiert", "severity": "warning", "section": "Erstbeurteilung"},
+    {"id": "bodycheck_detail", "label": "Auffälliger Bodycheck lokalisiert", "severity": "warning", "section": "xABCDE"},
+    {"id": "befast_time", "label": "BE-FAST Zeitfenster dokumentiert", "severity": "warning", "section": "xABCDE"},
     {"id": "diagnosis", "label": "Arbeitsdiagnose/Verdacht eingetragen", "severity": "warning", "section": "Übergabe"},
     {"id": "target", "label": "Zielklinik ausgewählt", "severity": "warning", "section": "Transport"},
     {"id": "handover", "label": "Übergabeziel oder Übergabetext vorhanden", "severity": "warning", "section": "Übergabe"},
     {"id": "measures", "label": "Maßnahmen/Medikation geprüft", "severity": "info", "section": "Maßnahmen"},
+    {"id": "medication_detail", "label": "Medikation vollständig dokumentiert", "severity": "warning", "section": "Maßnahmen"},
+    {"id": "pain_reassessment", "label": "Starker Schmerz mit Verlauf/Maßnahme verknüpft", "severity": "warning", "section": "OPQRST"},
+    {"id": "abnormal_vitals_context", "label": "Kritische Befunde nachvollziehbar adressiert", "severity": "warning", "section": "Plausibilität"},
+    {"id": "reanimation_core", "label": "Reanimation Kernangaben vollständig", "severity": "critical", "section": "Reanimation"},
 ]
 
 
@@ -1343,7 +1349,7 @@ def calculate_medication(payload):
     }
 
 
-def quality_item(rule_id, status_value, message, severity="warning"):
+def quality_item(rule_id, status_value, message, severity=None):
     rule = next((item for item in QUALITY_RULES if item["id"] == rule_id), {})
     return {
         "id": rule_id,
@@ -1353,6 +1359,20 @@ def quality_item(rule_id, status_value, message, severity="warning"):
         "status": status_value,
         "message": message,
     }
+
+
+def text_contains_any(value, terms):
+    text = str(value or "").lower()
+    return any(term in text for term in terms)
+
+
+def list_entries_with_content(entries, keys):
+    if not isinstance(entries, list):
+        return []
+    return [
+        item for item in entries
+        if isinstance(item, dict) and any(valid(item.get(key)) for key in keys)
+    ]
 
 
 def assess_protocol_quality(patient):
@@ -1365,6 +1385,10 @@ def assess_protocol_quality(patient):
     transport = patient.get("transport", {}) or {}
     handover = patient.get("uebergabe", {}) or {}
     measures = patient.get("massnahmen", {}) or {}
+    opqrst = patient.get("opqrst", {}) or {}
+    reanimation = patient.get("reanimation", {}) or {}
+    if not isinstance(reanimation, dict):
+        reanimation = {}
 
     items = []
     age_documented = valid(patient_data.get("alter_wert")) if is_child else valid(vital.get("alter"))
@@ -1414,6 +1438,34 @@ def assess_protocol_quality(patient):
         "xABCDE Kernfelder sind dokumentiert." if not missing_x else "Fehlende xABCDE-Felder: " + ", ".join(missing_x),
     ))
 
+    trauma_findings = list_entries_with_content(
+        xabcde.get("trauma_befunde"),
+        ("region", "side", "verletzungsarten", "blutung", "notiz"),
+    )
+    bodycheck_abnormal = str(xabcde.get("bodycheck") or "").strip().lower() == "auffällig"
+    bodycheck_detailed = bool(trauma_findings) or valid(xabcde.get("bodycheck_text"))
+    items.append(quality_item(
+        "bodycheck_detail",
+        "ok" if not bodycheck_abnormal or bodycheck_detailed else "warning",
+        "Auffälliger Bodycheck ist lokalisiert." if bodycheck_abnormal and bodycheck_detailed
+        else "Bodycheck unauffällig oder nicht auffällig markiert." if not bodycheck_abnormal
+        else "Bodycheck ist auffällig, aber Lokalisation/Befund fehlt.",
+    ))
+
+    befast_keys = ("befast_balance", "befast_eyes", "befast_face", "befast_arms", "befast_speech")
+    befast_normal = {"", "keine angabe", "unauffällig", "symmetrisch", "kein absinken"}
+    befast_positive = [
+        xabcde.get(key) for key in befast_keys
+        if valid(xabcde.get(key)) and str(xabcde.get(key)).strip().lower() not in befast_normal
+    ]
+    items.append(quality_item(
+        "befast_time",
+        "ok" if not befast_positive or valid(xabcde.get("befast_time")) else "warning",
+        "BE-FAST Zeitfenster ist dokumentiert." if befast_positive and valid(xabcde.get("befast_time"))
+        else "Keine BE-FAST-Auffälligkeit dokumentiert." if not befast_positive
+        else "BE-FAST auffällig, aber Last-Seen-Well/Symptombeginn fehlt.",
+    ))
+
     diagnosis_ok = (
         valid(amls.get("arbeitsdiagnose"))
         or valid(amls.get("leitsymptom"))
@@ -1451,13 +1503,64 @@ def assess_protocol_quality(patient):
         "Übergabe ist vorbereitet." if handover_ok else "Übergabeziel oder Übergabetext fehlt.",
     ))
 
-    has_measures = bool(measures.get("timeline")) or bool(measures.get("medikation"))
+    documented_measures = list_entries_with_content(measures.get("timeline"), ("zeit", "massnahme"))
+    documented_medication = list_entries_with_content(measures.get("medikation"), ("zeit", "medikament", "dosis", "weg"))
+    has_measures = bool(documented_measures) or bool(documented_medication)
     items.append(quality_item(
         "measures",
         "ok" if has_measures else "info",
         "Maßnahmen/Medikation dokumentiert." if has_measures else "Keine Maßnahmen oder Medikation dokumentiert.",
-        "info",
     ))
+
+    incomplete_medication = [
+        item for item in measures.get("medikation", []) if isinstance(item, dict)
+        and any(valid(item.get(key)) for key in ("zeit", "medikament", "dosis", "weg"))
+        and not all(valid(item.get(key)) for key in ("medikament", "dosis", "weg"))
+    ]
+    items.append(quality_item(
+        "medication_detail",
+        "ok" if not incomplete_medication else "warning",
+        "Medikation ist mit Medikament, Dosis und Applikationsweg dokumentiert." if documented_medication and not incomplete_medication
+        else "Keine Medikation dokumentiert." if not documented_medication and not incomplete_medication
+        else f"{len(incomplete_medication)} Medikationseintrag/Einträge ohne Medikament, Dosis oder Applikationsweg.",
+    ))
+
+    nrs = as_number(opqrst.get("nrs") or opqrst.get("severity"))
+    action_context = " ".join(
+        [str(item.get("massnahme") or "") for item in documented_measures]
+        + [str(item.get("medikament") or "") for item in documented_medication]
+        + [str(handover.get("text") or ""), str(handover.get("sinnhaft_handlung") or "")]
+    )
+    pain_addressed = text_contains_any(action_context, ["schmerz", "analges", "paracetamol", "fentanyl", "esketamin", "ketamin", "morphin", "piritramid"])
+    items.append(quality_item(
+        "pain_reassessment",
+        "ok" if nrs is None or nrs < 7 or pain_addressed else "warning",
+        "Starker Schmerz ist in Maßnahme/Übergabe nachvollziehbar adressiert." if nrs is not None and nrs >= 7 and pain_addressed
+        else "Kein starker Schmerz dokumentiert." if nrs is None or nrs < 7
+        else "NRS ab 7 dokumentiert, aber Analgesie/Schmerzverlauf ist noch nicht nachvollziehbar.",
+    ))
+
+    if reanimation.get("active"):
+        missing_reanimation = [
+            label for label, key in (
+                ("CPR-Beginn", "cpr_start"),
+                ("Initialrhythmus", "initial_rhythm"),
+                ("Ausgang", "outcome"),
+            )
+            if not valid(reanimation.get(key))
+        ]
+        if str(reanimation.get("rosc") or "").strip().lower() in {"ja", "rosc"} and not valid(reanimation.get("rosc_time")):
+            missing_reanimation.append("ROSC-Zeit")
+        reanimation_status = "ok" if not missing_reanimation else "critical"
+        reanimation_message = (
+            "Reanimation ist mit Kernangaben dokumentiert."
+            if not missing_reanimation
+            else "Reanimation aktiv, fehlende Kernangaben: " + ", ".join(missing_reanimation)
+        )
+    else:
+        reanimation_status = "ok"
+        reanimation_message = "Keine Reanimation aktiviert."
+    items.append(quality_item("reanimation_core", reanimation_status, reanimation_message))
 
     criticals = []
     spo2 = as_number(vital.get("spo2"))
@@ -1476,6 +1579,15 @@ def assess_protocol_quality(patient):
             criticals.append("Puls außerhalb 45-130/min")
         if af is not None and (af < 8 or af > 30):
             criticals.append("Atemfrequenz außerhalb 8-30/min")
+
+    critical_context = has_measures or reanimation.get("active") or handover_ok
+    items.append(quality_item(
+        "abnormal_vitals_context",
+        "ok" if not criticals or critical_context else "warning",
+        "Kritische Befunde sind durch Maßnahme, Reanimation oder Übergabe kontextualisiert." if criticals and critical_context
+        else "Keine kritischen Erwachsenen-Grenzwerttreffer." if not criticals
+        else "Kritische Vitalwerte vorhanden, aber Maßnahme/Verlauf/Übergabe dazu fehlt.",
+    ))
 
     for index, message in enumerate(criticals, start=1):
         items.append({
@@ -3530,6 +3642,14 @@ def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
     patient = sanitize_pilot_patient(payload.patient)
     protocol_text = generate_protocol_text(patient)
     quality = assess_protocol_quality(patient)
+    if (quality["warning_count"] or quality["critical_count"]) and not payload.force_finish:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "QS-Warnungen prüfen und Abschluss bewusst bestätigen.",
+                "quality": quality,
+            },
+        )
     completed_at = local_now().isoformat(timespec="seconds")
     retention_days = int(get_app_setting("retention_days", 3650) or 3650)
     retention_until = (local_now() + timedelta(days=max(1, retention_days))).date().isoformat()

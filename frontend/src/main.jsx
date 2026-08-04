@@ -5319,6 +5319,12 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
   }, [patient, draftReady, localDraftDecisionPending, employee?.id]);
 
   useEffect(() => {
+    if (!draftReady) return;
+    setQualityResult(null);
+    setForceFinish(false);
+  }, [patient, draftReady]);
+
+  useEffect(() => {
     if (protocolSection === 'amls' && amlsSuggestions.length === 0) {
       loadAmlsSuggestions();
     }
@@ -7051,7 +7057,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
     setError('');
     setStatusText('');
     try {
-      const quality = qualityResult || await checkQuality();
+      const quality = await checkQuality();
       if (quality && (quality.warning_count > 0 || quality.critical_count > 0) && !forceFinish) {
         setProtocolSection('protokoll');
         setStatusText('Bitte Warnungen prüfen. Danach kann der Einsatz bewusst mit Warnungen beendet werden.');

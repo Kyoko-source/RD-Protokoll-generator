@@ -79,6 +79,44 @@ class BackendPrivacyTests(unittest.TestCase):
         self.assertIn("Gemeinsame Einsatz-ID: NANA-ABCD-1234", protocol)
         self.assertIn("Rolle: Einsatz wurde übernommen", protocol)
 
+    def test_quality_flags_context_sensitive_gaps(self):
+        quality = main.assess_protocol_quality({
+            "patient": {"patientengruppe": "Erwachsener"},
+            "vitalwerte": {"alter": "45", "puls": "145", "spo2": "88", "rr_sys": "210", "rr_dia": "110", "af": "34", "gcs": "15"},
+            "xabcde": {
+                "atemweg": "frei",
+                "atmung": "Dyspnoe",
+                "haut": "blass",
+                "avpu": "Alert",
+                "bodycheck": "Auffällig",
+                "befast_face": "Fazialisparese links",
+            },
+            "opqrst": {"schmerz_vorhanden": "Ja", "nrs": "8"},
+            "amls": {"arbeitsdiagnose": "Schmerz-/Stressreaktion"},
+            "uebergabe": {},
+            "massnahmen": {"timeline": [], "medikation": []},
+            "reanimation": {"active": False},
+        })
+
+        by_id = {item["id"]: item for item in quality["items"]}
+        self.assertEqual(by_id["bodycheck_detail"]["status"], "warning")
+        self.assertEqual(by_id["befast_time"]["status"], "warning")
+        self.assertEqual(by_id["pain_reassessment"]["status"], "warning")
+        self.assertEqual(by_id["abnormal_vitals_context"]["status"], "warning")
+
+        reanimation_quality = main.assess_protocol_quality({
+            "patient": {"patientengruppe": "Erwachsener"},
+            "vitalwerte": {"alter": "45", "puls": "80", "spo2": "98", "rr_sys": "120", "rr_dia": "80", "af": "16", "gcs": "15"},
+            "xabcde": {"atemweg": "frei", "atmung": "unauffällig", "haut": "rosig", "avpu": "Alert"},
+            "opqrst": {"schmerz_vorhanden": "Nein"},
+            "amls": {"arbeitsdiagnose": "Reanimation"},
+            "uebergabe": {"ziel": "Klinik", "text": "Übergabe erfolgt"},
+            "reanimation": {"active": True, "rosc": "Ja"},
+        })
+        by_id = {item["id"]: item for item in reanimation_quality["items"]}
+        self.assertEqual(by_id["reanimation_core"]["status"], "critical")
+        self.assertGreaterEqual(quality["critical_count"], 1)
+
 
 if __name__ == "__main__":
     unittest.main()
