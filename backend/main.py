@@ -1585,10 +1585,12 @@ def assess_protocol_quality(patient):
         "Arbeitsdiagnose/Verdacht vorhanden." if diagnosis_ok else "Arbeitsdiagnose oder Verdacht fehlt.",
     ))
 
+    target_ok = valid(transport.get("hospital_name")) or valid(handover.get("ziel"))
     items.append(quality_item(
         "target",
-        "ok" if valid(transport.get("hospital_name")) else "warning",
-        "Zielklinik ist ausgewählt." if valid(transport.get("hospital_name")) else "Zielklinik fehlt.",
+        "ok" if target_ok else "info",
+        "Transport-/Übergabeziel ist dokumentiert." if target_ok else "Kein separates Transportziel dokumentiert.",
+        "info",
     ))
 
     handover_ok = valid(handover.get("ziel")) or valid(handover.get("text")) or any(

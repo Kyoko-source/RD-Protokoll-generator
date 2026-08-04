@@ -152,6 +152,19 @@ class BackendPrivacyTests(unittest.TestCase):
         self.assertEqual(by_id["reanimation_core"]["status"], "critical")
         self.assertGreaterEqual(quality["critical_count"], 1)
 
+    def test_quality_accepts_handover_target_as_transport_context(self):
+        quality = main.assess_protocol_quality({
+            "patient": {"patientengruppe": "Erwachsener"},
+            "vitalwerte": {"alter": "45", "puls": "80", "spo2": "98", "rr_sys": "120", "rr_dia": "80", "gcs": "15"},
+            "xabcde": {"atemweg": "frei", "atmung": "unauffällig", "haut": "rosig", "avpu": "Alert"},
+            "samplers": {"symptome": "Kontrolle"},
+            "amls": {"arbeitsdiagnose": "Unklarer Einsatz"},
+            "uebergabe": {"ziel": "ZNA", "text": "Übergabe erfolgt"},
+        })
+
+        by_id = {item["id"]: item for item in quality["items"]}
+        self.assertEqual(by_id["target"]["status"], "ok")
+
 
 if __name__ == "__main__":
     unittest.main()

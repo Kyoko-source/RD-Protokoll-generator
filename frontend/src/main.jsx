@@ -104,6 +104,36 @@ const READINESS_STATUS_LABELS = {
   critical: 'Kritisch',
   info: 'Info'
 };
+const QUALITY_TARGETS = {
+  vital_age: { section: 'patient' },
+  vital_gender: { section: 'patient' },
+  vital_core: { section: 'vitalwerte' },
+  short_report: { section: 'vitalwerte' },
+  xabcde: { section: 'xabcde' },
+  bodycheck_detail: { section: 'xabcde', xabcdeSection: 'E' },
+  befast_time: { section: 'xabcde', xabcdeSection: 'D' },
+  diagnosis: { section: 'amls' },
+  target: { section: 'abschluss' },
+  handover: { section: 'abschluss' },
+  measures: { section: 'massnahmen' },
+  medication_detail: { section: 'massnahmen' },
+  pain_reassessment: { section: 'opqrst', opqrstSection: 'S' },
+  abnormal_vitals_context: { section: 'massnahmen' },
+  reanimation_core: { section: 'reanimation' }
+};
+const QUALITY_SECTION_TARGETS = {
+  Vitalwerte: { section: 'vitalwerte' },
+  Anamnese: { section: 'samplers', samplersSection: 'S1' },
+  Erstbeurteilung: { section: 'xabcde' },
+  xABCDE: { section: 'xabcde' },
+  OPQRST: { section: 'opqrst' },
+  Maßnahmen: { section: 'massnahmen' },
+  Reanimation: { section: 'reanimation' },
+  Übergabe: { section: 'abschluss' },
+  Transport: { section: 'abschluss' },
+  Plausibilität: { section: 'vitalwerte' }
+};
+const QUALITY_STATUS_RANK = { ok: 0, info: 1, warning: 2, critical: 3 };
 
 function roleLabel(role) {
   return EMPLOYEE_ROLE_OPTIONS.find((item) => item.value === role)?.label || 'Mitarbeiter';
@@ -5280,7 +5310,17 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
     : amlsRemainingCandidates.length === 1
       ? { level: 'warning', text: `Ein Kandidat verbleibt: ${amlsRemainingCandidates[0].name}` }
       : { level: 'info', text: 'Arbeitsdiagnose noch offen.' };
-  const protocolNavItems = [
+  const qualityIssues = (qualityResult?.items || []).filter((item) => item.status !== 'ok');
+  const qualityStatusBySection = qualityIssues.reduce((acc, item) => {
+    const target = QUALITY_TARGETS[item.id] || QUALITY_SECTION_TARGETS[item.section] || { section: 'protokoll' };
+    const statusValue = item.status || item.severity || 'warning';
+    const current = acc[target.section];
+    if (!current || (QUALITY_STATUS_RANK[statusValue] || 0) > (QUALITY_STATUS_RANK[current] || 0)) {
+      acc[target.section] = statusValue;
+    }
+    return acc;
+  }, {});
+  const protocolNavItemsBase = [
     {
       key: 'patient',
       label: 'Patient',
@@ -5310,8 +5350,8 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       key: 'opqrst',
       label: 'OPQRST',
       icon: Activity,
-      complete: hasValue(opqrst.schmerz_vorhanden)
-        && opqrstSections.every((section) => opqrstSectionComplete(section.key))
+      complete: opqrst.schmerz_vorhanden !== 'Ja'
+        || opqrstSections.every((section) => opqrstSectionComplete(section.key))
     },
     { key: 'amls', label: 'Diagnosehilfe', icon: Search, complete: hasValue(amls.arbeitsdiagnose) },
     {
@@ -5355,6 +5395,20 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       pinnedBottom: true
     }
   ];
+  const protocolNavItems = protocolNavItemsBase.map((item) => {
+    const qualityStatus = qualityStatusBySection[item.key] || '';
+    return {
+      ...item,
+      qualityStatus,
+      navState: qualityStatus === 'critical'
+        ? 'critical'
+        : qualityStatus === 'warning'
+          ? 'warning'
+          : qualityStatus === 'info'
+            ? 'info'
+            : item.complete ? 'complete' : 'open'
+    };
+  });
   const requiredWorkflowKeys = ['patient', 'vitalwerte', 'xabcde', 'samplers', 'amls', 'abschluss', 'protokoll'];
   const requiredWorkflowItems = protocolNavItems.filter((item) => requiredWorkflowKeys.includes(item.key));
   const requiredWorkflowComplete = requiredWorkflowItems.filter((item) => item.complete).length;
@@ -7165,6 +7219,14 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
     }
   }
 
+  function openQualityTarget(item) {
+    const target = QUALITY_TARGETS[item.id] || QUALITY_SECTION_TARGETS[item.section] || { section: 'protokoll' };
+    if (target.xabcdeSection) setXabcdeSection(target.xabcdeSection);
+    if (target.samplersSection) setSamplersSection(target.samplersSection);
+    if (target.opqrstSection) setOpqrstSection(target.opqrstSection);
+    selectProtocolSection(target.section || 'protokoll');
+  }
+
   async function finishCase() {
     setError('');
     setStatusText('');
@@ -7172,7 +7234,9 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       const quality = await checkQuality();
       if (quality && (quality.warning_count > 0 || quality.critical_count > 0) && !forceFinish) {
         setProtocolSection('protokoll');
-        setStatusText('Bitte Warnungen prüfen. Danach kann der Einsatz bewusst mit Warnungen beendet werden.');
+        const warningPart = quality.warning_count ? `${quality.warning_count} Warnung${quality.warning_count === 1 ? '' : 'en'}` : '';
+        const criticalPart = quality.critical_count ? `${quality.critical_count} kritisch` : '';
+        setStatusText(`QS offen: ${[criticalPart, warningPart].filter(Boolean).join(', ')}. Hinweise anklicken oder danach bewusst mit Warnungen beenden.`);
         setForceFinish(true);
         return;
       }
@@ -7326,19 +7390,28 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
         {protocolNavItems.map((item) => {
           const Icon = item.icon;
           const isActive = protocolSection === item.key;
+          const statusLabel = item.navState === 'critical'
+            ? 'Kritisch offen'
+            : item.navState === 'warning'
+              ? 'Prüfen'
+              : item.navState === 'info'
+                ? 'Hinweis'
+                : item.complete ? 'Vollständig' : 'Offen';
           return (
             <button
               type="button"
-              className={`protocol-nav-item${isActive ? ' active' : ''}${item.complete ? ' complete' : ''}${item.pinnedBottom ? ' pinned-bottom' : ''}`}
+              className={`protocol-nav-item nav-${item.navState}${isActive ? ' active' : ''}${item.complete ? ' complete' : ''}${item.pinnedBottom ? ' pinned-bottom' : ''}`}
               onClick={() => selectProtocolSection(item.key)}
-              title={protocolNavCollapsed ? `${item.label}${item.complete ? ' – vollständig' : ''}` : undefined}
+              title={protocolNavCollapsed ? `${item.label} - ${statusLabel}` : undefined}
               aria-current={isActive ? 'page' : undefined}
               key={item.key}
             >
               <Icon className="protocol-nav-icon" size={19} />
               <span className="protocol-nav-label">{item.label}</span>
-              <span className="protocol-nav-status" aria-label={item.complete ? 'Vollständig' : 'Offen'}>
-                {item.complete ? <CheckCircle2 size={17} /> : <span />}
+              <span className="protocol-nav-status" aria-label={statusLabel}>
+                {item.navState === 'critical' || item.navState === 'warning'
+                  ? <AlertTriangle size={16} />
+                  : item.complete ? <CheckCircle2 size={17} /> : <span />}
               </span>
             </button>
           );
@@ -8663,13 +8736,19 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
             </div>
             <div className="quality-list">
               {(qualityResult.items || []).filter((item) => item.status !== 'ok').map((item) => (
-                <div className={`quality-item quality-item-${item.status}`} key={item.id}>
+                <button
+                  type="button"
+                  className={`quality-item quality-item-${item.status}`}
+                  key={item.id}
+                  onClick={() => openQualityTarget(item)}
+                >
                   <AlertTriangle size={16} />
                   <div>
                     <strong>{item.label}</strong>
                     <span>{item.message}</span>
+                    <small>{item.section || 'Dokumentation'} öffnen</small>
                   </div>
-                </div>
+                </button>
               ))}
               {(qualityResult.items || []).filter((item) => item.status !== 'ok').length === 0 && (
                 <div className="quality-item quality-item-ok">
