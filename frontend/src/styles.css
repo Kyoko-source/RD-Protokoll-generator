@@ -2238,7 +2238,6 @@ form button,
   min-height: 42px;
   padding: 0 12px;
   text-align: left;
-  white-space: nowrap;
   border-radius: 10px;
   color: rgba(239, 248, 255, 0.76);
   background: transparent;
@@ -2263,12 +2262,19 @@ form button,
   display: grid;
   grid-template-columns: 22px minmax(0, 1fr) 18px;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .protocol-nav-icon {
   color: rgba(174, 198, 225, 0.68);
   transition: color 160ms ease, filter 160ms ease;
+}
+
+.protocol-nav-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.15;
 }
 
 .protocol-nav-status {
@@ -2300,8 +2306,17 @@ form button,
 
 .protocol-tabs .protocol-nav-item.pinned-bottom {
   margin-top: auto;
+  min-height: 54px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
   background: rgba(255, 255, 255, 0.04);
+}
+
+.protocol-tabs .protocol-nav-item.pinned-bottom .protocol-nav-label {
+  white-space: normal;
+  overflow: visible;
+  text-overflow: clip;
+  font-size: 0.9rem;
+  line-height: 1.08;
 }
 
 .protocol-nav-collapsed .protocol-tabs .protocol-nav-toggle {
