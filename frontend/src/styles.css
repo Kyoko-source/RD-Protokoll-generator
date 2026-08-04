@@ -1501,6 +1501,107 @@ form button,
   text-transform: uppercase;
 }
 
+.workflow-cockpit {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(220px, 0.6fr) auto;
+  gap: 14px;
+  align-items: center;
+  margin: 0 0 16px;
+  padding: 13px;
+  border-radius: 16px;
+  background: rgba(4, 12, 24, 0.34);
+  border: 1px solid rgba(116, 185, 255, 0.18);
+}
+
+.workflow-ok {
+  border-color: rgba(78, 211, 171, 0.34);
+}
+
+.workflow-warning {
+  border-color: rgba(255, 205, 86, 0.36);
+}
+
+.workflow-critical {
+  border-color: rgba(228, 61, 93, 0.42);
+}
+
+.workflow-cockpit-main {
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+  min-width: 0;
+}
+
+.workflow-cockpit-main svg {
+  color: #22d3ee;
+}
+
+.workflow-cockpit-main div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.workflow-cockpit-main strong {
+  color: #f6fbff;
+  font-weight: 950;
+}
+
+.workflow-cockpit-main span,
+.workflow-progress small {
+  color: rgba(235, 244, 255, 0.64);
+  font-weight: 780;
+  overflow-wrap: anywhere;
+}
+
+.workflow-progress {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+
+.workflow-progress > span {
+  height: 9px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.workflow-progress b {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #0ea5e9, #22d3ee, #14b873);
+}
+
+.workflow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.workflow-actions button {
+  min-height: 38px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 0 13px;
+  border-radius: 999px;
+  color: rgba(245, 249, 255, 0.9);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+  font-weight: 900;
+  cursor: pointer;
+}
+
+.workflow-actions button.primary {
+  color: #fff;
+  background: linear-gradient(90deg, #075ec7, #09bfd3);
+}
+
 .user-name-button {
   min-height: 44px;
   display: inline-flex;
@@ -5425,6 +5526,7 @@ legend {
   .offline-draft-box,
   .active-shift-strip,
   .active-shift-crew,
+  .workflow-cockpit,
   .status-band,
   .dispatch-alert,
   .dispatch-alert-grid,

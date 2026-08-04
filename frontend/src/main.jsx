@@ -4992,6 +4992,19 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
     },
     { key: 'protokoll', label: 'Dokumentation', icon: FileText, complete: hasValue(generatedProtocol) }
   ];
+  const requiredWorkflowKeys = ['patient', 'vitalwerte', 'xabcde', 'samplers', 'amls', 'abschluss', 'protokoll'];
+  const requiredWorkflowItems = protocolNavItems.filter((item) => requiredWorkflowKeys.includes(item.key));
+  const requiredWorkflowComplete = requiredWorkflowItems.filter((item) => item.complete).length;
+  const requiredWorkflowTotal = requiredWorkflowItems.length;
+  const workflowProgress = Math.round((requiredWorkflowComplete / Math.max(1, requiredWorkflowTotal)) * 100);
+  const nextWorkflowItem = requiredWorkflowItems.find((item) => !item.complete);
+  const qualityOpenCount = qualityResult ? (qualityResult.warning_count || 0) + (qualityResult.critical_count || 0) : null;
+  const cockpitLevel = qualityResult?.critical_count ? 'critical' : qualityResult?.warning_count ? 'warning' : workflowProgress >= 100 ? 'ok' : 'info';
+  const cockpitHint = nextWorkflowItem
+    ? `Weiter mit ${nextWorkflowItem.label}.`
+    : qualityOpenCount
+      ? `${qualityOpenCount} QS-Hinweis${qualityOpenCount === 1 ? '' : 'e'} prüfen.`
+      : 'Bereit für Abschluss und Export.';
 
   const selectableCrewEmployees = useMemo(() => crewEmployees.filter((item) => item.active !== false), [crewEmployees]);
   const sortedCrewEmployees = useMemo(() => {
@@ -6521,6 +6534,36 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
           ))}
         </div>
       </section>
+
+      {!standaloneRefusal && (
+        <section className={`workflow-cockpit workflow-${cockpitLevel}`} aria-label="Einsatz-Cockpit">
+          <div className="workflow-cockpit-main">
+            <Gauge size={22} />
+            <div>
+              <strong>Einsatz-Cockpit</strong>
+              <span>{cockpitHint}</span>
+            </div>
+          </div>
+          <div className="workflow-progress" aria-label={`${workflowProgress} Prozent vollständig`}>
+            <span><b style={{ width: `${workflowProgress}%` }} /></span>
+            <small>{requiredWorkflowComplete}/{requiredWorkflowTotal} Kernschritte</small>
+          </div>
+          <div className="workflow-actions">
+            {nextWorkflowItem ? (
+              <button type="button" onClick={() => setProtocolSection(nextWorkflowItem.key)}>
+                {nextWorkflowItem.label} öffnen <ArrowRight size={16} />
+              </button>
+            ) : (
+              <button type="button" onClick={checkQuality}>
+                QS prüfen <CheckCircle2 size={16} />
+              </button>
+            )}
+            <button type="button" className="primary" onClick={generateProtocol}>
+              Protokoll erstellen <FileText size={16} />
+            </button>
+          </div>
+        </section>
+      )}
 
       {error && <div className="error-box">{error}</div>}
       {statusText && <div className="success-box">{statusText}</div>}
