@@ -1359,15 +1359,25 @@ function employeeListLabel(employee) {
   return `${employee.name} · ${qualificationLabel(employee.qualification)} · ${stationLabel(employee.station)} · ${vehicleScopeLabel(employee.vehicle_scope)}`;
 }
 
-function StartPortal({ session, onOpenEinsatz, onOpenShift }) {
-  const shiftCrew = session?.employee?.id ? loadLocalShiftCrew(session.employee.id) : null;
+function StartPortal({ session, connectivity, onOpenEinsatz, onOpenShift }) {
+  const employee = session?.employee || null;
+  const shiftCrew = employee?.id ? loadLocalShiftCrew(employee.id) : null;
   const partnerName = shiftCrew?.fahrer || 'kein Teampartner gesetzt';
+  const leaderName = shiftCrew?.verantwortlicher || employee?.name || 'nicht angemeldet';
+  const shiftMeta = [
+    employee?.station ? stationLabel(employee.station) : '',
+    employee?.vehicle_scope ? vehicleScopeLabel(employee.vehicle_scope) : ''
+  ].filter(hasValue).join(' · ') || 'Schicht offen';
+  const connectionLabel = !connectivity?.online ? 'Offline verfügbar' : connectivity?.backendOnline ? 'Backend verbunden' : 'Lokal bereit';
+  const connectionDetail = connectivity?.lastSync ? `Letzte Sicherung ${connectivity.lastSync}` : 'Sicherung startet mit dem ersten Entwurf';
+  const accessLabel = employee?.role === 'admin' ? 'Admin-Profil' : employee ? roleLabel(employee.role) : 'Schichtprofil';
+  const accessDetail = employee?.role === 'admin' ? 'Produktions-Ampel im Adminbereich bereit' : 'Einsatz- und Schichtmodus getrennt';
 
   return (
     <main className="start-shell">
-      {session?.employee && (
+      {employee && (
         <section className="start-session-summary" aria-label="Aktive Schicht">
-          <span>Angemeldet als <b>{session.employee.name}</b></span>
+          <span>Angemeldet als <b>{employee.name}</b></span>
           <span>Teampartner <b>{partnerName}</b></span>
         </section>
       )}
@@ -1399,6 +1409,30 @@ function StartPortal({ session, onOpenEinsatz, onOpenShift }) {
           <small>Team, Fahrzeug und Mitfahrende verwalten und Schicht starten.</small>
           <span className="start-card-action">Zur Schichtverwaltung <ArrowRight size={18} /></span>
         </button>
+      </section>
+
+      <section className="start-ops-panel" aria-label="Einsatzstatus">
+        <div className="start-ops-item">
+          <Activity size={19} />
+          <span>
+            <strong>{connectionLabel}</strong>
+            <small>{connectionDetail}</small>
+          </span>
+        </div>
+        <div className="start-ops-item">
+          <UserRound size={19} />
+          <span>
+            <strong>{leaderName}</strong>
+            <small>{shiftMeta} · Partner: {partnerName}</small>
+          </span>
+        </div>
+        <div className="start-ops-item">
+          <ShieldCheck size={19} />
+          <span>
+            <strong>{accessLabel}</strong>
+            <small>{accessDetail}</small>
+          </span>
+        </div>
       </section>
 
       <section className="start-footer">
@@ -7885,7 +7919,7 @@ function App() {
   }
 
   if (entryView === 'start') {
-    return <StartPortal session={session} onOpenEinsatz={() => setEntryView(session ? 'dashboard' : 'login')} onOpenShift={() => setEntryView('shift')} />;
+    return <StartPortal session={session} connectivity={connectivity} onOpenEinsatz={() => setEntryView(session ? 'dashboard' : 'login')} onOpenShift={() => setEntryView('shift')} />;
   }
 
   if (entryView === 'shift') {

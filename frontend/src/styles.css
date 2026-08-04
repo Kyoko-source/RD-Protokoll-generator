@@ -238,6 +238,51 @@ button {
   background: linear-gradient(90deg, #047857, #14b873);
 }
 
+.start-ops-panel {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  max-width: 1120px;
+}
+
+.start-ops-item {
+  min-height: 82px;
+  display: grid;
+  grid-template-columns: 38px minmax(0, 1fr);
+  gap: 11px;
+  align-items: center;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: rgba(3, 7, 18, 0.54);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.18);
+}
+
+.start-ops-item svg {
+  color: #22d3ee;
+  filter: drop-shadow(0 0 10px rgba(34, 211, 238, 0.58));
+}
+
+.start-ops-item span {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.start-ops-item strong {
+  color: #f6fbff;
+  font-weight: 950;
+  overflow-wrap: anywhere;
+}
+
+.start-ops-item small {
+  color: rgba(235, 244, 255, 0.62);
+  font-size: 0.84rem;
+  font-weight: 780;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+}
+
 .start-footer {
   width: min(560px, 100%);
   display: grid;
@@ -5251,6 +5296,82 @@ legend {
 }
 
 @media (max-width: 880px) {
+  .start-shell {
+    min-height: 100dvh;
+    align-content: start;
+    gap: 18px;
+    padding: 28px 20px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    background-position: center;
+  }
+
+  .start-shell::before {
+    inset: 12px;
+    border-radius: 20px;
+  }
+
+  .start-hero {
+    display: grid;
+    min-height: auto;
+    gap: 18px;
+    padding-top: 18px;
+  }
+
+  .start-logo-line {
+    gap: 12px;
+    align-items: center;
+  }
+
+  .start-logo {
+    font-size: clamp(3rem, 18vw, 4.2rem);
+    letter-spacing: 0.05em;
+  }
+
+  .start-logo-line svg {
+    width: 34px;
+    height: 34px;
+    margin-bottom: 0;
+  }
+
+  .start-copy {
+    justify-items: start;
+    max-width: 100%;
+    text-align: left;
+  }
+
+  .start-hero h1 {
+    margin: 0;
+    font-size: clamp(2rem, 11vw, 2.8rem);
+  }
+
+  .start-hero p,
+  .start-kicker {
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  .start-grid,
+  .start-ops-panel,
+  .start-footer {
+    width: 100%;
+    max-width: none;
+  }
+
+  .start-card {
+    min-height: 220px;
+    padding: 22px 18px;
+  }
+
+  .start-card strong {
+    font-size: clamp(2rem, 12vw, 2.7rem);
+  }
+
+  .start-card-action {
+    min-width: 0;
+    width: min(300px, 100%);
+  }
+
   .protocol-shell,
   .protocol-shell.protocol-nav-collapsed {
     padding-left: clamp(16px, 4vw, 56px);
@@ -5292,6 +5413,7 @@ legend {
   .login-shell,
   .start-hero,
   .start-grid,
+  .start-ops-panel,
   .start-footer,
   .system-status,
   .offline-draft-box,
