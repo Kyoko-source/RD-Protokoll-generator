@@ -2484,6 +2484,49 @@ form button,
   color: #58e6b7;
 }
 
+.chat-key-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(260px, 0.8fr);
+  gap: 12px;
+  align-items: center;
+  padding: 14px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.11);
+}
+
+.chat-key-box.protected {
+  background: rgba(18, 198, 178, 0.08);
+  border-color: rgba(18, 198, 178, 0.2);
+}
+
+.chat-key-box > div:first-child {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.chat-key-box strong {
+  color: #f6fbff;
+}
+
+.chat-key-box span,
+.chat-key-box small {
+  color: rgba(235, 244, 255, 0.68);
+  font-weight: 760;
+}
+
+.chat-pin-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+}
+
+.chat-key-box.protected .chat-pin-grid {
+  grid-template-columns: minmax(0, 1fr) auto;
+}
+
 .joint-chat-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -5805,6 +5848,9 @@ legend {
   .joint-case-grid,
   .joint-chat-grid,
   .joint-chat-compose,
+  .chat-key-box,
+  .chat-pin-grid,
+  .chat-key-box.protected .chat-pin-grid,
   .joint-linked-summary,
   .joint-case-result,
   .admin-grid,

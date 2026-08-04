@@ -417,21 +417,76 @@ function chatRoomStorageKey(deviceId) {
   return `nana_e2ee_chat_rooms_${deviceId || 'unknown'}`;
 }
 
-async function loadOrCreateChatIdentity(deviceId) {
-  const stored = localStorage.getItem(chatKeyStorageKey(deviceId));
-  if (stored) {
-    const parsed = JSON.parse(stored);
-    return {
-      publicKey: await crypto.subtle.importKey('jwk', parsed.publicKey, { name: 'ECDH', namedCurve: 'P-256' }, true, []),
-      privateKey: await crypto.subtle.importKey('jwk', parsed.privateKey, { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey']),
-      publicJwk: parsed.publicKey
-    };
-  }
+async function derivePinStorageKey(pin, saltBytes) {
+  const material = await crypto.subtle.importKey('raw', new TextEncoder().encode(pin), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey(
+    { name: 'PBKDF2', salt: saltBytes, iterations: 210000, hash: 'SHA-256' },
+    material,
+    { name: 'AES-GCM', length: 256 },
+    false,
+    ['encrypt', 'decrypt']
+  );
+}
+
+async function encryptJsonWithPin(value, pin) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await derivePinStorageKey(pin, salt);
+  const ciphertext = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, new TextEncoder().encode(JSON.stringify(value)));
+  return { salt: bytesToBase64(salt), iv: bytesToBase64(iv), ciphertext: bytesToBase64(ciphertext) };
+}
+
+async function decryptJsonWithPin(wrapped, pin) {
+  const key = await derivePinStorageKey(pin, base64ToBytes(wrapped.salt));
+  const plaintext = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: base64ToBytes(wrapped.iv) }, key, base64ToBytes(wrapped.ciphertext));
+  return JSON.parse(new TextDecoder().decode(plaintext));
+}
+
+async function importChatIdentity(publicJwk, privateJwk) {
+  return {
+    publicKey: await crypto.subtle.importKey('jwk', publicJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, []),
+    privateKey: await crypto.subtle.importKey('jwk', privateJwk, { name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey']),
+    publicJwk
+  };
+}
+
+async function generateStoredChatIdentity(deviceId) {
   const keyPair = await crypto.subtle.generateKey({ name: 'ECDH', namedCurve: 'P-256' }, true, ['deriveKey']);
   const publicJwk = await crypto.subtle.exportKey('jwk', keyPair.publicKey);
   const privateJwk = await crypto.subtle.exportKey('jwk', keyPair.privateKey);
-  localStorage.setItem(chatKeyStorageKey(deviceId), JSON.stringify({ publicKey: publicJwk, privateKey: privateJwk }));
+  localStorage.setItem(chatKeyStorageKey(deviceId), JSON.stringify({ version: 1, protected: false, publicKey: publicJwk, privateKey: privateJwk }));
   return { publicKey: keyPair.publicKey, privateKey: keyPair.privateKey, publicJwk };
+}
+
+function readStoredChatKey(deviceId) {
+  const stored = localStorage.getItem(chatKeyStorageKey(deviceId));
+  if (!stored) return null;
+  return JSON.parse(stored);
+}
+
+async function loadOrCreateChatIdentity(deviceId) {
+  const parsed = readStoredChatKey(deviceId);
+  if (!parsed) return generateStoredChatIdentity(deviceId);
+  if (parsed.protected) return null;
+  return importChatIdentity(parsed.publicKey, parsed.privateKey);
+}
+
+async function unlockProtectedChatIdentity(deviceId, pin) {
+  const parsed = readStoredChatKey(deviceId);
+  if (!parsed?.protected) return loadOrCreateChatIdentity(deviceId);
+  const privateJwk = await decryptJsonWithPin(parsed.privateKeyWrapped, pin);
+  return importChatIdentity(parsed.publicKey, privateJwk);
+}
+
+async function protectStoredChatIdentity(deviceId, identity, pin) {
+  const privateJwk = await crypto.subtle.exportKey('jwk', identity.privateKey);
+  const wrapped = await encryptJsonWithPin(privateJwk, pin);
+  localStorage.setItem(chatKeyStorageKey(deviceId), JSON.stringify({
+    version: 2,
+    protected: true,
+    publicKey: identity.publicJwk,
+    privateKeyWrapped: wrapped
+  }));
 }
 
 async function deriveChatWrapKey(privateKey, otherPublicJwk) {
@@ -456,10 +511,43 @@ function loadStoredRoomKeys(deviceId) {
   }
 }
 
-function saveStoredRoomKey(deviceId, threadId, roomKeyRaw) {
+async function loadStoredRoomKey(deviceId, threadId, pin = '') {
+  const entry = loadStoredRoomKeys(deviceId)[threadId];
+  if (!entry) return '';
+  if (typeof entry === 'string') return entry;
+  if (entry.protected) {
+    if (!pin) return '';
+    return decryptJsonWithPin(entry.keyWrapped, pin);
+  }
+  return entry.key || '';
+}
+
+async function saveStoredRoomKey(deviceId, threadId, roomKeyRaw, pin = '') {
   const rooms = loadStoredRoomKeys(deviceId);
-  rooms[threadId] = roomKeyRaw;
+  rooms[threadId] = pin
+    ? { version: 2, protected: true, keyWrapped: await encryptJsonWithPin(roomKeyRaw, pin) }
+    : roomKeyRaw;
   localStorage.setItem(chatRoomStorageKey(deviceId), JSON.stringify(rooms));
+}
+
+async function protectStoredRoomKeys(deviceId, pin) {
+  const rooms = loadStoredRoomKeys(deviceId);
+  const protectedRooms = {};
+  await Promise.all(Object.entries(rooms).map(async ([threadId, entry]) => {
+    if (!entry) return;
+    if (typeof entry === 'string') {
+      protectedRooms[threadId] = { version: 2, protected: true, keyWrapped: await encryptJsonWithPin(entry, pin) };
+      return;
+    }
+    if (entry.protected) {
+      protectedRooms[threadId] = entry;
+      return;
+    }
+    if (entry.key) {
+      protectedRooms[threadId] = { version: 2, protected: true, keyWrapped: await encryptJsonWithPin(entry.key, pin) };
+    }
+  }));
+  localStorage.setItem(chatRoomStorageKey(deviceId), JSON.stringify(protectedRooms));
 }
 
 async function importRoomKey(rawKey) {
@@ -4969,6 +5057,12 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
   const [activeChatThreadId, setActiveChatThreadId] = useState('');
   const [chatMessages, setChatMessages] = useState([]);
   const [chatText, setChatText] = useState('');
+  const [chatKeyProtected, setChatKeyProtected] = useState(false);
+  const [chatKeyLocked, setChatKeyLocked] = useState(false);
+  const [chatPin, setChatPin] = useState('');
+  const [chatPinConfirm, setChatPinConfirm] = useState('');
+  const [chatPinError, setChatPinError] = useState('');
+  const [chatPinSession, setChatPinSession] = useState('');
   const [refusal, setRefusal] = useState(() => {
     const now = new Date();
     return {
@@ -5232,18 +5326,22 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
 
   useEffect(() => {
     let cancelled = false;
+    const storedKey = readStoredChatKey(currentChatDeviceId);
+    const isProtected = Boolean(storedKey?.protected);
+    setChatKeyProtected(isProtected);
+    setChatKeyLocked(isProtected);
+    setChatPinSession('');
+    if (isProtected) {
+      setChatIdentity(null);
+      return () => {
+        cancelled = true;
+      };
+    }
     loadOrCreateChatIdentity(currentChatDeviceId)
       .then(async (identity) => {
-        if (cancelled) return;
+        if (cancelled || !identity) return;
         setChatIdentity(identity);
-        await api('/api/joint-cases/chat/device', {
-          method: 'PUT',
-          body: JSON.stringify({
-            device_id: currentChatDeviceId,
-            device_name: currentChatDeviceName,
-            public_key: JSON.stringify(identity.publicJwk)
-          })
-        }, session.token);
+        await registerChatIdentity(identity);
       })
       .catch((err) => setError(`Chat-Schlüssel konnte nicht vorbereitet werden: ${err.message}`));
     return () => {
@@ -5349,7 +5447,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
     }
     let cancelled = false;
     async function refreshMessages() {
-      const roomKeyRaw = loadStoredRoomKeys(currentChatDeviceId)[activeChatThreadId];
+      const roomKeyRaw = await loadStoredRoomKey(currentChatDeviceId, activeChatThreadId, chatKeyProtected ? chatPinSession : '');
       if (!roomKeyRaw) return;
       try {
         const result = await api(`/api/joint-cases/chat/threads/${activeChatThreadId}/messages`, {}, session.token);
@@ -5371,7 +5469,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       cancelled = true;
       window.clearInterval(interval);
     };
-  }, [activeChatThreadId, currentChatDeviceId, session.token]);
+  }, [activeChatThreadId, chatKeyProtected, chatPinSession, currentChatDeviceId, session.token]);
 
   useEffect(() => {
     if (isChild && samplersSection === 'S2') {
@@ -6726,6 +6824,60 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
     }
   }
 
+  async function registerChatIdentity(identity) {
+    await api('/api/joint-cases/chat/device', {
+      method: 'PUT',
+      body: JSON.stringify({
+        device_id: currentChatDeviceId,
+        device_name: currentChatDeviceName,
+        public_key: JSON.stringify(identity.publicJwk)
+      })
+    }, session.token);
+  }
+
+  async function unlockChatKey() {
+    setChatPinError('');
+    try {
+      const identity = await unlockProtectedChatIdentity(currentChatDeviceId, chatPin);
+      setChatIdentity(identity);
+      await registerChatIdentity(identity);
+      setChatKeyLocked(false);
+      setChatPinSession(chatPin);
+      setChatPin('');
+      markActionFeedback('joint-chat-unlock', 'Chat-Schlüssel entsperrt.');
+    } catch {
+      setChatPinError('PIN falsch oder Schlüssel beschädigt.');
+    }
+  }
+
+  async function enableChatPinProtection() {
+    setChatPinError('');
+    if (!chatIdentity) {
+      setChatPinError('Chat-Schlüssel ist noch nicht bereit.');
+      return;
+    }
+    if (chatPin.length < 6) {
+      setChatPinError('Bitte mindestens 6 Ziffern oder Zeichen verwenden.');
+      return;
+    }
+    if (chatPin !== chatPinConfirm) {
+      setChatPinError('PIN und Wiederholung stimmen nicht überein.');
+      return;
+    }
+    try {
+      await protectStoredChatIdentity(currentChatDeviceId, chatIdentity, chatPin);
+      await protectStoredRoomKeys(currentChatDeviceId, chatPin);
+      setChatKeyProtected(true);
+      setChatKeyLocked(false);
+      setChatPinSession(chatPin);
+      setChatPin('');
+      setChatPinConfirm('');
+      markActionFeedback('joint-chat-pin', 'Chat-Schlüssel ist jetzt mit Geräte-PIN geschützt.');
+    } catch (err) {
+      setChatPinError(err.message || 'PIN-Schutz konnte nicht aktiviert werden.');
+    }
+  }
+
   async function sendChatInvite() {
     const target = chatDevices.find((device) => device.device_id === selectedChatDeviceId);
     if (!target || !chatIdentity) {
@@ -6747,7 +6899,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
         })
       }, session.token);
       if (result.thread?.id) {
-        saveStoredRoomKey(currentChatDeviceId, result.thread.id, bundle.roomKeyRaw);
+        await saveStoredRoomKey(currentChatDeviceId, result.thread.id, bundle.roomKeyRaw, chatKeyProtected ? chatPinSession : '');
       }
       markActionFeedback('joint-chat-invite', `Chat-Anfrage an ${target.vehicle_label || target.employee_name} gesendet.`);
     } catch (err) {
@@ -6760,7 +6912,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
     try {
       if (statusValue === 'accepted') {
         const roomKeyRaw = await decryptInviteRoomKey(chatIdentity, invite);
-        saveStoredRoomKey(currentChatDeviceId, invite.thread_id, roomKeyRaw);
+        await saveStoredRoomKey(currentChatDeviceId, invite.thread_id, roomKeyRaw, chatKeyProtected ? chatPinSession : '');
       }
       const result = await api('/api/joint-cases/chat/invites/decision', {
         method: 'POST',
@@ -6780,13 +6932,13 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       setError('Diese Nachricht wirkt wie Patientendaten oder medizinische Falldaten. Bitte nur organisatorische Informationen schreiben.');
       return;
     }
-    const roomKeyRaw = loadStoredRoomKeys(currentChatDeviceId)[activeChatThreadId];
-    if (!roomKeyRaw) {
-      setError('Chat-Schlüssel ist auf diesem Gerät nicht verfügbar.');
-      return;
-    }
     setError('');
     try {
+      const roomKeyRaw = await loadStoredRoomKey(currentChatDeviceId, activeChatThreadId, chatKeyProtected ? chatPinSession : '');
+      if (!roomKeyRaw) {
+        setError('Chat-Schlüssel ist auf diesem Gerät nicht verfügbar oder noch gesperrt.');
+        return;
+      }
       const encrypted = await encryptChatText(roomKeyRaw, text);
       await api('/api/joint-cases/chat/messages', {
         method: 'POST',
@@ -8050,6 +8202,37 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
             <span>Nachrichten werden vor dem Senden im Browser verschlüsselt. Der Server speichert nur Ciphertext. Bitte keine Namen, Diagnosen, Adressen, Vitalwerte oder sonstige Patientendaten schreiben.</span>
           </div>
 
+          <div className={`chat-key-box ${chatKeyProtected ? 'protected' : ''}`}>
+            <div>
+              <strong>{chatKeyProtected ? 'Chat-Schlüssel geschützt' : 'Chat-Schlüssel noch ohne Geräte-PIN'}</strong>
+              <span>{chatKeyLocked ? 'Bitte PIN eingeben, um Chat-Anfragen und Nachrichten zu entschlüsseln.' : 'Chat-Identität und Gesprächsschlüssel sind auf diesem Tablet verfügbar.'}</span>
+            </div>
+            <div className="chat-pin-grid">
+              <input
+                type="password"
+                value={chatPin}
+                onChange={(event) => setChatPin(event.target.value)}
+                placeholder={chatKeyProtected ? 'Geräte-PIN' : 'Neue Geräte-PIN'}
+                autoComplete="off"
+              />
+              {!chatKeyProtected && (
+                <input
+                  type="password"
+                  value={chatPinConfirm}
+                  onChange={(event) => setChatPinConfirm(event.target.value)}
+                  placeholder="PIN wiederholen"
+                  autoComplete="off"
+                />
+              )}
+              {chatKeyProtected ? (
+                <button type="button" className="primary" onClick={unlockChatKey} disabled={!chatPin || !chatKeyLocked}>Entsperren</button>
+              ) : (
+                <button type="button" className="primary" onClick={enableChatPinProtection} disabled={!chatPin || !chatPinConfirm}>PIN-Schutz aktivieren</button>
+              )}
+            </div>
+            {chatPinError && <small>{chatPinError}</small>}
+          </div>
+
           <div className="joint-chat-grid">
             <article className="joint-case-card">
               <h4>Fahrzeug auswählen</h4>
@@ -8064,7 +8247,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
                   ))}
                 </select>
               </label>
-              <button type="button" className="primary" onClick={sendChatInvite} disabled={!selectedChatDeviceId || !chatIdentity}>
+              <button type="button" className="primary" onClick={sendChatInvite} disabled={!selectedChatDeviceId || !chatIdentity || chatKeyLocked}>
                 Chat-Anfrage senden
               </button>
               {chatDevices.length === 0 && <p className="muted">Noch kein anderes aktives Tablet mit Chat-Schlüssel sichtbar.</p>}
@@ -8076,7 +8259,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
                 <div className="joint-chat-invite" key={invite.id}>
                   <span>{invite.sender_vehicle_label || invite.sender_employee_name} möchte schreiben.</span>
                   <div>
-                    <button type="button" className="primary" onClick={() => decideChatInvite(invite, 'accepted')}>Annehmen</button>
+                    <button type="button" className="primary" onClick={() => decideChatInvite(invite, 'accepted')} disabled={chatKeyLocked}>Annehmen</button>
                     <button type="button" onClick={() => decideChatInvite(invite, 'declined')}>Ablehnen</button>
                   </div>
                 </div>
@@ -8124,9 +8307,9 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
                   }
                 }}
                 placeholder="z.B. Treffpunkt, Funkgruppe, Bereitstellung"
-                disabled={!activeChatThreadId}
+                disabled={!activeChatThreadId || chatKeyLocked}
               />
-              <button type="button" className="primary" onClick={sendChatMessage} disabled={!activeChatThreadId || !chatText.trim()}>
+              <button type="button" className="primary" onClick={sendChatMessage} disabled={!activeChatThreadId || !chatText.trim() || chatKeyLocked}>
                 Senden
               </button>
             </div>
