@@ -717,6 +717,86 @@ function actionLines(measures) {
   ].filter(hasValue);
 }
 
+function parseProtocolEventTime(value) {
+  const match = String(value || '').match(/\b(\d{1,2})[:.](\d{2})\b/);
+  if (!match) return 9999;
+  const hour = Number(match[1]);
+  const minute = Number(match[2]);
+  if (hour > 23 || minute > 59) return 9999;
+  return hour * 60 + minute;
+}
+
+function protocolEventLine(timeValue, text) {
+  if (!hasValue(text)) return '';
+  return hasValue(timeValue) ? `${String(timeValue).trim()} - ${String(text).trim()}` : String(text).trim();
+}
+
+function addProtocolEvent(events, timeValue, text) {
+  const line = protocolEventLine(timeValue, text);
+  if (line) events.push({ sort: parseProtocolEventTime(timeValue), line });
+}
+
+function chronologyLines(patient) {
+  const vital = patient.vitalwerte || {};
+  const x = patient.xabcde || {};
+  const s = patient.samplers || {};
+  const o = patient.opqrst || {};
+  const amls = patient.amls || {};
+  const measures = patient.massnahmen || {};
+  const reanimation = patient.reanimation || {};
+  const handover = patient.uebergabe || {};
+  const events = [];
+  const symptom = symptomSummary(vital, s, o);
+  addProtocolEvent(events, '', hasValue(symptom) ? `Hauptproblem dokumentiert: ${symptom}` : 'Einsatzdokumentation begonnen.');
+  const firstVitals = compactJoin([
+    hasValue(formatBloodPressure(vital)) ? `RR ${formatBloodPressure(vital)}` : '',
+    hasValue(vital.puls) ? `Puls ${formatObservation(vital.puls, effectiveVitalStatus(vital, 'puls_status'), '/min')}` : '',
+    hasValue(vital.spo2) ? `SpO2 ${formatObservation(vital.spo2, effectiveVitalStatus(vital, 'spo2_status'), '%')}` : '',
+    hasValue(vital.af) ? `AF ${formatObservation(vital.af, effectiveVitalStatus(vital, 'af_status'), '/min')}` : '',
+    hasValue(vital.gcs) ? `GCS ${formatObservation(vital.gcs, effectiveVitalStatus(vital, 'gcs_status'), '/15')}` : ''
+  ]);
+  addProtocolEvent(events, '', hasValue(firstVitals) ? `Erstbefund/Vitalwerte: ${firstVitals}` : '');
+  const xabcde = compactJoin([
+    hasValue(x.blutung) ? `X ${x.blutung}` : '',
+    hasValue(x.atemweg) ? `A ${x.atemweg}` : '',
+    hasValue(x.atmung) ? `B ${x.atmung}` : '',
+    hasValue(x.haut) ? `C ${x.haut}` : '',
+    hasValue(x.avpu) ? `D AVPU ${x.avpu}` : '',
+    hasValue(x.bodycheck) ? `E ${x.bodycheck}` : ''
+  ]);
+  addProtocolEvent(events, '', hasValue(xabcde) ? `xABCDE-Erstbeurteilung: ${xabcde}` : '');
+  if (hasValue(amls.arbeitsdiagnose)) addProtocolEvent(events, '', `Arbeitsdiagnose/Verdacht: ${amls.arbeitsdiagnose}`);
+  if (o.schmerz_vorhanden === 'Ja') {
+    const pain = compactJoin([o.onset, o.quality, o.region, hasValue(o.nrs) ? `NRS ${o.nrs}/10` : '', o.zeitverlauf || o.time], '; ');
+    addProtocolEvent(events, o.onset, hasValue(pain) ? `Schmerzassessment: ${pain}` : '');
+  }
+  (Array.isArray(measures.timeline) ? measures.timeline : []).forEach((item) => {
+    const row = item || {};
+    addProtocolEvent(events, row.zeit, row.massnahme);
+  });
+  (Array.isArray(measures.medikation) ? measures.medikation : []).forEach((item) => {
+    const row = item || {};
+    const medication = compactJoin([row.medikament, row.dosis, row.weg]);
+    addProtocolEvent(events, row.zeit, hasValue(medication) ? `Medikation: ${medication}` : '');
+  });
+  if (reanimation.active) {
+    addProtocolEvent(events, reanimation.cpr_start, compactJoin(['Reanimation begonnen', hasValue(reanimation.initial_rhythm) ? `Initialrhythmus ${reanimation.initial_rhythm}` : ''], '; '));
+    (Array.isArray(reanimation.shocks) ? reanimation.shocks : []).forEach((item, index) => {
+      const shock = item || {};
+      addProtocolEvent(events, shock.zeit, compactJoin([`${index + 1}. Defibrillation`, hasValue(shock.energie) ? `${shock.energie} J` : '', shock.rhythmus], '; '));
+    });
+    if (hasValue(reanimation.rosc)) addProtocolEvent(events, reanimation.rosc_time, `ROSC: ${reanimation.rosc}`);
+    addProtocolEvent(events, reanimation.cpr_end, compactJoin(['CPR-Ende/Übergabe', reanimation.outcome], '; '));
+  }
+  const handoverText = compactJoin([
+    hasValue(handover.ziel) ? `Ziel/Empfänger ${handover.ziel}` : '',
+    handover.text,
+    hasValue(handover.lagerung) ? `Lagerung/Transfer ${handover.lagerung}` : ''
+  ], '; ');
+  addProtocolEvent(events, '', hasValue(handoverText) ? `Übergabe vorbereitet: ${handoverText}` : '');
+  return events.sort((left, right) => left.sort - right.sort).map((item) => item.line);
+}
+
 function reanimationLines(reanimation) {
   const shocks = Array.isArray(reanimation.shocks) ? reanimation.shocks : [];
   const lines = [
@@ -813,26 +893,13 @@ function generateLocalProtocolText(patient) {
   text += '==================================================\n';
   text += `Lokal erzeugt am ${new Date().toLocaleString('de-DE')}\n`;
   text += 'Enthält ausschließlich dokumentierte Angaben; vor Verwendung vollständig prüfen.\n\n';
-  text += addProtocolBlock('BESATZUNG / SCHICHT', [
-    ['Transportführer/in', crew.verantwortlicher],
-    ['Teampartner/in', crew.fahrer],
-    ['Azubi', crew.azubi],
-    ['Praktikant/in', crew.praktikant],
-  ]);
-  const jointCase = patient.gemeinsamer_einsatz || {};
-  text += addProtocolBlock('GEMEINSAMER EINSATZ', [
-    ['Gemeinsame Einsatz-ID', formatJointCaseCode(jointCase.id)],
-    ['Rolle', jointCase.role === 'teilen' ? 'Einsatz wird geteilt' : jointCase.role === 'uebernehmen' ? 'Einsatz wurde übernommen' : jointCase.role],
-    ['Geteilt von', jointCase.source_employee_name],
-    ['Rettungsmittel', jointCase.vehicle],
-    ['Verknüpft am', jointCase.linked_at],
-  ]);
   const symptom = symptomSummary(vital, s, o);
   text += addProtocolParagraph('EINSATZBERICHT', [
     hasValue(symptom)
       ? `Bei ${patientIdentity(vital)} wurde präklinisch folgendes Hauptproblem dokumentiert: ${symptom}.`
       : `Bei ${patientIdentity(vital)} wurde ein Rettungsdiensteinsatz dokumentiert; ein Kurzbericht ist noch nicht hinterlegt.`,
-    hasValue(amls.arbeitsdiagnose) ? `Als Arbeitsdiagnose/Verdacht wurde ${amls.arbeitsdiagnose} festgehalten.` : ''
+    hasValue(amls.arbeitsdiagnose) ? `Als Arbeitsdiagnose/Verdacht wurde ${amls.arbeitsdiagnose} festgehalten.` : '',
+    hasValue(handover.ziel) ? `Die Versorgung wurde auf Übergabe an ${handover.ziel} ausgerichtet.` : ''
   ]);
   text += addProtocolParagraph('ERSTBEFUND UND VERLAUF', [
     compactJoin([
@@ -850,8 +917,53 @@ function generateLocalProtocolText(patient) {
       hasValue(x.bodycheck) ? `E ${x.bodycheck}` : ''
     ])
   ]);
+  text += addProtocolParagraph('ANAMNESE UND SCHMERZASSESSMENT', [
+    compactJoin([
+      hasValue(s.symptome) ? `Symptome: ${s.symptome}` : '',
+      hasValue(formatSelectedAllergies(s)) ? `Allergien: ${formatSelectedAllergies(s)}` : '',
+      hasValue(formatSelectedMedication(s)) ? `Medikation: ${formatSelectedMedication(s)}` : '',
+      hasValue(s.vorgeschichte) ? `Vorgeschichte: ${s.vorgeschichte}` : ''
+    ], '; '),
+    o.schmerz_vorhanden === 'Ja' ? compactJoin([
+      'Schmerzassessment:',
+      o.onset,
+      o.quality,
+      o.region,
+      hasValue(o.radiation) ? `Ausstrahlung ${o.radiation}` : '',
+      hasValue(o.nrs) ? `NRS ${o.nrs}/10` : '',
+      o.zeitverlauf
+    ], ' ') : '',
+    hasValue(s.ereignis) ? `Ereignis/Verlauf vor Eintreffen: ${s.ereignis}.` : ''
+  ]);
   text += addProtocolParagraph('MAßNAHMEN UND WIRKUNG', [actionLines(measures).join('; ') || 'Keine Maßnahmen/Medikationen dokumentiert.']);
   text += addProtocolParagraph('REANIMATION', reanimationLines(reanimation));
+  const chronology = chronologyLines(patient);
+  if (chronology.length > 0) {
+    text += `EINSATZCHRONOLOGIE\n==================================================\n${chronology.map((line) => `- ${line}`).join('\n')}\n\n`;
+  }
+  text += addProtocolParagraph('ÜBERGABE-KURZFAZIT', [
+    compactJoin([
+      hasValue(handover.ziel) ? `Ziel/Empfänger: ${handover.ziel}` : '',
+      handover.text,
+      hasValue(handover.lagerung) ? `Lagerung/Transfer: ${handover.lagerung}` : '',
+      hasValue(handover.wertsachen) ? `Wertsachen/Eigentum: ${handover.wertsachen}` : '',
+      hasValue(handover.krankenkassenkarte) ? `Krankenkassenkarte: ${handover.krankenkassenkarte}` : ''
+    ], ' ')
+  ]);
+  text += addProtocolBlock('BESATZUNG / SCHICHT', [
+    ['Transportführer/in', crew.verantwortlicher],
+    ['Teampartner/in', crew.fahrer],
+    ['Azubi', crew.azubi],
+    ['Praktikant/in', crew.praktikant],
+  ]);
+  const jointCase = patient.gemeinsamer_einsatz || {};
+  text += addProtocolBlock('GEMEINSAMER EINSATZ', [
+    ['Gemeinsame Einsatz-ID', formatJointCaseCode(jointCase.id)],
+    ['Rolle', jointCase.role === 'teilen' ? 'Einsatz wird geteilt' : jointCase.role === 'uebernehmen' ? 'Einsatz wurde übernommen' : jointCase.role],
+    ['Geteilt von', jointCase.source_employee_name],
+    ['Rettungsmittel', jointCase.vehicle],
+    ['Verknüpft am', jointCase.linked_at],
+  ]);
   text += addProtocolBlock('VITALWERTE & DEMOGRAPHIE', [
     ['Alter', vital.alter],
     ['Geschlecht', vital.geschlecht],

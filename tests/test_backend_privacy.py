@@ -79,6 +79,41 @@ class BackendPrivacyTests(unittest.TestCase):
         self.assertIn("Gemeinsame Einsatz-ID: NANA-ABCD-1234", protocol)
         self.assertIn("Rolle: Einsatz wurde übernommen", protocol)
 
+    def test_protocol_includes_sorted_chronology_and_handover_summary(self):
+        protocol = main.generate_protocol_text({
+            "vitalwerte": {
+                "alter": "45",
+                "geschlecht": "männlich",
+                "kurzbericht": "Thoraxschmerz seit dem Morgen",
+                "rr_sys": "160",
+                "rr_dia": "95",
+                "puls": "112",
+                "spo2": "94",
+                "af": "22",
+                "gcs": "15",
+            },
+            "xabcde": {"atemweg": "frei", "atmung": "tachypnoe", "haut": "blass", "avpu": "Alert", "bodycheck": "Unauffällig"},
+            "samplers": {"symptome": "Thoraxdruck", "ereignis": "Belastungsbeginn"},
+            "opqrst": {"schmerz_vorhanden": "Ja", "onset": "08:05", "quality": "Drückend", "region": "Thorax", "nrs": "8"},
+            "amls": {"arbeitsdiagnose": "ACS-Verdacht"},
+            "massnahmen": {
+                "timeline": [
+                    {"zeit": "08:15", "massnahme": "Monitoring angelegt"},
+                    {"zeit": "08:10", "massnahme": "12-Kanal-EKG geschrieben"},
+                ],
+                "medikation": [{"zeit": "08:20", "medikament": "ASS", "dosis": "250 mg", "weg": "i.v."}],
+            },
+            "uebergabe": {"ziel": "Chest-Pain-Unit", "text": "Voranmeldung erfolgt", "lagerung": "Oberkörper hoch"},
+        })
+
+        self.assertIn("EINSATZCHRONOLOGIE", protocol)
+        chronology = protocol.split("EINSATZCHRONOLOGIE", 1)[1]
+        self.assertLess(chronology.index("08:05 - Schmerzassessment"), chronology.index("08:10 - 12-Kanal-EKG geschrieben"))
+        self.assertLess(chronology.index("08:10 - 12-Kanal-EKG geschrieben"), chronology.index("08:15 - Monitoring angelegt"))
+        self.assertLess(chronology.index("08:15 - Monitoring angelegt"), chronology.index("08:20 - Medikation: ASS, 250 mg, i.v."))
+        self.assertIn("ÜBERGABE-KURZFAZIT", protocol)
+        self.assertIn("Die Versorgung wurde auf Übergabe an Chest-Pain-Unit ausgerichtet.", protocol)
+
     def test_quality_flags_context_sensitive_gaps(self):
         quality = main.assess_protocol_quality({
             "patient": {"patientengruppe": "Erwachsener"},

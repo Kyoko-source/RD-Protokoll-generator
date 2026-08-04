@@ -858,6 +858,31 @@ def format_action_lines(measures):
     return lines
 
 
+def parse_event_time(value):
+    text = str(value or "").strip()
+    match = re.search(r"\b(\d{1,2})[:.](\d{2})\b", text)
+    if not match:
+        return 99 * 60 + 99
+    hour = int(match.group(1))
+    minute = int(match.group(2))
+    if hour > 23 or minute > 59:
+        return 99 * 60 + 99
+    return hour * 60 + minute
+
+
+def event_line(time_value, text):
+    if not valid(text):
+        return ""
+    time_text = str(time_value or "").strip()
+    return f"{time_text} - {text}" if valid(time_text) else str(text).strip()
+
+
+def add_event(events, time_value, text):
+    line = event_line(time_value, text)
+    if line:
+        events.append({"sort": parse_event_time(time_value), "line": line})
+
+
 def format_reanimation_lines(reanimation):
     if not isinstance(reanimation, dict):
         return []
@@ -904,6 +929,78 @@ def format_reanimation_lines(reanimation):
             if valid(line):
                 documented.append(line)
     return documented
+
+
+def build_chronology_lines(patient):
+    vital = patient.get("vitalwerte", {}) or {}
+    x = patient.get("xabcde", {}) or {}
+    s = patient.get("samplers", {}) or {}
+    o = patient.get("opqrst", {}) or {}
+    amls = patient.get("amls", {}) or {}
+    measures = patient.get("massnahmen", {}) or {}
+    reanimation = patient.get("reanimation", {}) or {}
+    if not isinstance(reanimation, dict):
+        reanimation = {}
+    handover = patient.get("uebergabe", {}) or {}
+    events = []
+
+    symptom = format_symptom_summary(vital, s, o)
+    add_event(events, "", f"Hauptproblem dokumentiert: {symptom}" if valid(symptom) else "Einsatzdokumentation begonnen.")
+    first_vitals = compact_join([
+        f"RR {format_blood_pressure(vital)}" if valid(format_blood_pressure(vital)) else "",
+        f"Puls {format_observation(vital.get('puls'), effective_vital_status(vital, 'puls_status'), '/min')}" if valid(format_observation(vital.get("puls"), effective_vital_status(vital, "puls_status"), "/min")) else "",
+        f"SpO2 {format_observation(vital.get('spo2'), effective_vital_status(vital, 'spo2_status'), '%')}" if valid(format_observation(vital.get("spo2"), effective_vital_status(vital, "spo2_status"), "%")) else "",
+        f"AF {format_observation(vital.get('af'), effective_vital_status(vital, 'af_status'), '/min')}" if valid(format_observation(vital.get("af"), effective_vital_status(vital, "af_status"), "/min")) else "",
+        f"GCS {format_observation(vital.get('gcs'), effective_vital_status(vital, 'gcs_status'), '/15')}" if valid(format_observation(vital.get("gcs"), effective_vital_status(vital, "gcs_status"), "/15")) else "",
+    ])
+    add_event(events, "", f"Erstbefund/Vitalwerte: {first_vitals}" if valid(first_vitals) else "")
+    xabcde = compact_join([
+        f"X {x.get('blutung')}" if valid(x.get("blutung")) else "",
+        f"A {x.get('atemweg')}" if valid(x.get("atemweg")) else "",
+        f"B {x.get('atmung')}" if valid(x.get("atmung")) else "",
+        f"C {x.get('haut')}" if valid(x.get("haut")) else "",
+        f"D AVPU {x.get('avpu')}" if valid(x.get("avpu")) else "",
+        f"E {x.get('bodycheck')}" if valid(x.get("bodycheck")) else "",
+    ])
+    add_event(events, "", f"xABCDE-Erstbeurteilung: {xabcde}" if valid(xabcde) else "")
+    if valid(amls.get("arbeitsdiagnose")):
+        add_event(events, "", f"Arbeitsdiagnose/Verdacht: {amls.get('arbeitsdiagnose')}")
+    if o.get("schmerz_vorhanden") == "Ja":
+        pain = compact_join([
+            o.get("onset"),
+            o.get("quality"),
+            o.get("region"),
+            f"NRS {o.get('nrs')}/10" if valid(o.get("nrs")) else "",
+            o.get("zeitverlauf") or o.get("time"),
+        ], "; ")
+        add_event(events, o.get("onset"), f"Schmerzassessment: {pain}" if valid(pain) else "")
+    for item in measures.get("timeline", []) if isinstance(measures.get("timeline"), list) else []:
+        if isinstance(item, dict):
+            add_event(events, item.get("zeit"), item.get("massnahme"))
+        elif valid(item):
+            add_event(events, "", str(item))
+    for item in measures.get("medikation", []) if isinstance(measures.get("medikation"), list) else []:
+        if isinstance(item, dict):
+            medication = compact_join([item.get("medikament"), item.get("dosis"), item.get("weg")])
+            add_event(events, item.get("zeit"), f"Medikation: {medication}" if valid(medication) else "")
+        elif valid(item):
+            add_event(events, "", f"Medikation: {item}")
+    if reanimation.get("active"):
+        add_event(events, reanimation.get("cpr_start"), compact_join(["Reanimation begonnen", f"Initialrhythmus {reanimation.get('initial_rhythm')}" if valid(reanimation.get("initial_rhythm")) else ""], "; "))
+        for index, item in enumerate(reanimation.get("shocks", []) if isinstance(reanimation.get("shocks"), list) else [], start=1):
+            if isinstance(item, dict):
+                add_event(events, item.get("zeit"), compact_join([f"{index}. Defibrillation", f"{item.get('energie')} J" if valid(item.get("energie")) else "", item.get("rhythmus")], "; "))
+        if valid(reanimation.get("rosc")):
+            add_event(events, reanimation.get("rosc_time"), f"ROSC: {reanimation.get('rosc')}")
+        add_event(events, reanimation.get("cpr_end"), compact_join(["CPR-Ende/Übergabe", reanimation.get("outcome")], "; "))
+    handover_text = compact_join([
+        f"Ziel/Empfänger {handover.get('ziel')}" if valid(handover.get("ziel")) else "",
+        handover.get("text"),
+        f"Lagerung/Transfer {handover.get('lagerung')}" if valid(handover.get("lagerung")) else "",
+    ], "; ")
+    add_event(events, "", f"Übergabe vorbereitet: {handover_text}" if valid(handover_text) else "")
+
+    return [item["line"] for item in sorted(events, key=lambda item: item["sort"])]
 
 
 def build_sinnhaft_rows(patient):
@@ -968,6 +1065,8 @@ def build_narrative_report(patient):
         primary.append(f"Bei {identity} wurde ein Rettungsdiensteinsatz dokumentiert; ein Kurzbericht ist noch nicht hinterlegt.")
     if valid(amls.get("arbeitsdiagnose")):
         primary.append(f"Als Arbeitsdiagnose/Verdacht wurde {amls.get('arbeitsdiagnose')} festgehalten.")
+    if valid(handover.get("ziel")):
+        primary.append(f"Die Versorgung wurde auf Übergabe an {handover.get('ziel')} ausgerichtet.")
 
     assessment = []
     assessment.append(compact_join([
@@ -1003,9 +1102,12 @@ def build_narrative_report(patient):
             f"NRS {o.get('nrs')}/10" if valid(o.get("nrs")) else "",
             o.get("zeitverlauf"),
         ], " "))
+    if valid(s.get("ereignis")):
+        history.append(f"Ereignis/Verlauf vor Eintreffen: {s.get('ereignis')}.")
 
     actions = format_action_lines(measures)
     reanimation_summary = format_reanimation_lines(reanimation)
+    chronology = build_chronology_lines(patient)
     handover_sentence = compact_join([
         f"Ziel/Empfänger: {handover.get('ziel')}" if valid(handover.get("ziel")) else "",
         handover.get("text"),
@@ -1020,6 +1122,11 @@ def build_narrative_report(patient):
     text += add_paragraph("ANAMNESE UND SCHMERZASSESSMENT", [item for item in history if valid(item)])
     text += add_paragraph("MAßNAHMEN UND WIRKUNG", ["; ".join(actions) if actions else "Keine Maßnahmen/Medikationen dokumentiert."])
     text += add_paragraph("REANIMATION", reanimation_summary)
+    if chronology:
+        text += "EINSATZCHRONOLOGIE\n" + ("=" * 50) + "\n"
+        for line in chronology:
+            text += f"- {line}\n"
+        text += "\n"
     text += add_paragraph("ÜBERGABE-KURZFAZIT", [handover_sentence])
     return text
 
