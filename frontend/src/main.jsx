@@ -392,6 +392,7 @@ const traumaBodyRegions = {
 };
 
 const traumaInjuryTypes = ['Wunde', 'Blutung', 'Frakturverdacht', 'Luxationsverdacht', 'Prellung/Hämatom', 'Verbrennung', 'Schwellung', 'Druckschmerz', 'Fehlstellung', 'Amputation', 'Fremdkörper'];
+const optionalQuickCompleteSections = new Set(['rechner', 'psyche', 'massnahmen', 'reanimation']);
 
 function effectiveVitalStatus(vital, statusKey) {
   return vital?.[statusKey] === CUSTOM_STATUS ? vital?.[`${statusKey}_custom`] : vital?.[statusKey];
@@ -4819,6 +4820,9 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
   const [crewEmployees, setCrewEmployees] = useState([]);
   const [crewSwitch, setCrewSwitch] = useState({ open: false, target: null, password: '' });
   const [protocolSection, setProtocolSection] = useState(initialSection);
+  const [visitedOptionalSections, setVisitedOptionalSections] = useState(() => (
+    optionalQuickCompleteSections.has(initialSection) ? { [initialSection]: true } : {}
+  ));
   const [protocolNavCollapsed, setProtocolNavCollapsed] = useState(
     () => localStorage.getItem('nana_protocol_nav_collapsed') === 'true'
   );
@@ -4865,6 +4869,13 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       localStorage.setItem('nana_protocol_nav_collapsed', String(next));
       return next;
     });
+  }
+
+  function selectProtocolSection(key) {
+    if (optionalQuickCompleteSections.has(key)) {
+      setVisitedOptionalSections((current) => ({ ...current, [key]: true }));
+    }
+    setProtocolSection(key);
   }
   const vitalwerte = patient.vitalwerte || {};
   const patientData = patient.patient || {};
@@ -4972,23 +4983,27 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       key: 'psyche',
       label: 'Psyche',
       icon: Brain,
-      complete: hasValue(psyche.zustand)
+      complete: Boolean(visitedOptionalSections.psyche)
+        || hasValue(psyche.zustand)
         && hasValue(psyche.eigengefaehrdung)
         && hasValue(psyche.fremdgefaehrdung)
         && hasValue(psyche.unterbringungsweg)
     },
-    { key: 'rechner', label: 'Rechner', icon: Calculator, complete: Boolean(calculatorResult) },
+    { key: 'rechner', label: 'Rechner', icon: Calculator, complete: Boolean(visitedOptionalSections.rechner || calculatorResult) },
     {
       key: 'massnahmen',
       label: 'Maßnahmen',
       icon: Pill,
-      complete: (massnahmen.timeline || []).length > 0 || (massnahmen.medikation || []).length > 0
+      complete: Boolean(visitedOptionalSections.massnahmen)
+        || (massnahmen.timeline || []).length > 0
+        || (massnahmen.medikation || []).length > 0
     },
     {
       key: 'reanimation',
       label: 'Reanimation',
       icon: HeartPulse,
-      complete: Boolean(reanimation.active && hasValue(reanimation.outcome))
+      complete: Boolean(visitedOptionalSections.reanimation)
+        || Boolean(reanimation.active && hasValue(reanimation.outcome))
     },
     {
       key: 'abschluss',
@@ -6603,7 +6618,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
             <button
               type="button"
               className={`protocol-nav-item${isActive ? ' active' : ''}${item.complete ? ' complete' : ''}`}
-              onClick={() => setProtocolSection(item.key)}
+              onClick={() => selectProtocolSection(item.key)}
               title={protocolNavCollapsed ? `${item.label}${item.complete ? ' – vollständig' : ''}` : undefined}
               aria-current={isActive ? 'page' : undefined}
               key={item.key}
