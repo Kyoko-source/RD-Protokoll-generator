@@ -479,6 +479,13 @@ function compactJoin(values, separator = ', ') {
   return values.filter(hasValue).map((value) => String(value).trim()).join(separator);
 }
 
+function formatTraumaFinding(item) {
+  const region = traumaBodyRegions[item?.region]?.label || item?.region || '';
+  const side = hasValue(item?.side) ? `${item.side}: ` : '';
+  const detail = compactJoin([...(item?.verletzungsarten || []), item?.blutung ? `Blutung ${item.blutung}` : '', item?.notiz], '; ');
+  return compactJoin([region ? `${side}${region}` : '', detail || 'markiert'], ' - ');
+}
+
 function addProtocolParagraph(title, sentences) {
   const lines = sentences.filter(hasValue).map((value) => String(value).trim());
   if (lines.length === 0) return '';
@@ -615,7 +622,7 @@ function generateLocalProtocolText(patient) {
   text += 'Enthält ausschließlich dokumentierte Angaben; vor Verwendung vollständig prüfen.\n\n';
   text += addProtocolBlock('BESATZUNG / SCHICHT', [
     ['Transportführer/in', crew.verantwortlicher],
-    ['Fahrer/in', crew.fahrer],
+    ['Teampartner/in', crew.fahrer],
     ['Azubi', crew.azubi],
     ['Praktikant/in', crew.praktikant],
   ]);
@@ -680,10 +687,7 @@ function generateLocalProtocolText(patient) {
     ['BE-FAST Speech', x.befast_speech],
     ['BE-FAST Time', x.befast_time],
   ]);
-  text += renderListBlock('Trauma-Lokalisationen', x.trauma_befunde, (item) => {
-    const region = traumaBodyRegions[item?.region]?.label || item?.region || '';
-    return `${region} (${item?.side || ''}): ${compactJoin([...(item?.verletzungsarten || []), item?.blutung ? `Blutung ${item.blutung}` : '', item?.notiz], '; ')}`;
-  });
+  text += renderListBlock('Trauma-Lokalisationen', x.trauma_befunde, formatTraumaFinding);
   text += addProtocolBlock('SAMPLERS', [
     ['Symptome', s.symptome],
     ['Allergien', formatSelectedAllergies(s)],
@@ -4801,7 +4805,9 @@ function patientWithCrewDefaults(patient, employee) {
     ...(shiftCrew || {}),
     ...(nextPatient.besatzung || {}),
     verantwortlicher: nextPatient.besatzung?.verantwortlicher || shiftCrew?.verantwortlicher || employee?.name || '',
-    verantwortlicher_id: nextPatient.besatzung?.verantwortlicher_id || shiftCrew?.verantwortlicher_id || employee?.id || ''
+    verantwortlicher_id: nextPatient.besatzung?.verantwortlicher_id || shiftCrew?.verantwortlicher_id || employee?.id || '',
+    fahrer: nextPatient.besatzung?.fahrer || shiftCrew?.fahrer || '',
+    fahrer_id: nextPatient.besatzung?.fahrer_id || shiftCrew?.fahrer_id || ''
   };
   return nextPatient;
 }
@@ -5515,7 +5521,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
     if (sectionKey === 'B') return hasValue(xabcde.atmung) && hasValue(xabcde.atemgeraeusche);
     if (sectionKey === 'C') return hasValue(xabcde.haut) && hasValue(xabcde.rekap) && hasValue(xabcde.pulsqualitaet);
     if (sectionKey === 'D') return hasValue(xabcde.avpu) && hasValue(xabcde.pupillen);
-    if (sectionKey === 'E') return hasValue(xabcde.bodycheck) && (xabcde.bodycheck !== 'Auffällig' || hasValue(xabcde.bodycheck_text));
+    if (sectionKey === 'E') return hasValue(xabcde.bodycheck) && (xabcde.bodycheck !== 'Auffällig' || hasValue(xabcde.bodycheck_text) || traumaFindings().length > 0);
     return false;
   }
 

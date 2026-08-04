@@ -30,10 +30,39 @@ class BackendPrivacyTests(unittest.TestCase):
 
         self.assertEqual(redacted["locked_until"], "2026-07-18T12:30:00")
 
+    def test_display_datetime_label_uses_german_pdf_format(self):
+        label = main.display_datetime_label("2026-08-04T17:05:32+02:00")
+
+        self.assertEqual(label, "04.08.2026 17:05 Uhr")
+
     def test_medication_calculator_exposes_ruleset_version(self):
         result = main.calculate_medication(main.MedicationCalcRequest())
 
         self.assertEqual(result["ruleset_version"], main.MEDICAL_RULESET_VERSION)
+
+    def test_protocol_includes_team_partner_and_bodycheck_regions(self):
+        protocol = main.generate_protocol_text({
+            "besatzung": {
+                "verantwortlicher": "Florian",
+                "fahrer": "Max",
+            },
+            "xabcde": {
+                "bodycheck": "Auffällig",
+                "trauma_befunde": [
+                    {
+                        "region": "thorax_links",
+                        "side": "vorne",
+                        "verletzungsarten": ["Druckschmerz"],
+                        "blutung": "gering",
+                        "notiz": "Schürfwunde",
+                    }
+                ],
+            },
+        })
+
+        self.assertIn("Teampartner/in: Max", protocol)
+        self.assertIn("E Bodycheck: Auffällig", protocol)
+        self.assertIn("vorne: Brustkorb links - Druckschmerz; Blutung: gering; Schürfwunde", protocol)
 
 
 if __name__ == "__main__":

@@ -164,6 +164,13 @@ def parse_stored_datetime(value):
             return None
 
 
+def display_datetime_label(value=None):
+    parsed = parse_stored_datetime(value) if value else local_now()
+    if not parsed:
+        parsed = local_now()
+    return parsed.astimezone(APP_TIMEZONE).strftime("%d.%m.%Y %H:%M Uhr") if parsed.tzinfo else parsed.strftime("%d.%m.%Y %H:%M Uhr")
+
+
 if production_mode() and not os.getenv("NANA_DATA_KEY", "").strip():
     raise RuntimeError("NANA_DATA_KEY muss im Produktionsbetrieb gesetzt sein.")
 
@@ -370,6 +377,67 @@ def add_lines(title, rows):
 
 def compact_join(values, separator=", "):
     return separator.join(str(value).strip() for value in values if valid(value))
+
+
+TRAUMA_REGION_LABELS = {
+    "kopf": "Kopf",
+    "gesicht": "Gesicht",
+    "hinterkopf": "Hinterkopf",
+    "hals": "Hals",
+    "schulter_rechts": "Schulter rechts",
+    "schulter_links": "Schulter links",
+    "thorax": "Brustkorb",
+    "thorax_rechts": "Brustkorb rechts",
+    "thorax_links": "Brustkorb links",
+    "abdomen": "Bauch",
+    "abdomen_rechts": "Bauch rechts",
+    "abdomen_links": "Bauch links",
+    "becken": "Becken",
+    "oberarm_rechts": "Oberarm rechts",
+    "oberarm_links": "Oberarm links",
+    "ellenbogen_rechts": "Ellenbogen rechts",
+    "ellenbogen_links": "Ellenbogen links",
+    "unterarm_rechts": "Unterarm rechts",
+    "unterarm_links": "Unterarm links",
+    "hand_rechts": "Hand rechts",
+    "hand_links": "Hand links",
+    "oberschenkel_rechts": "Oberschenkel rechts",
+    "oberschenkel_links": "Oberschenkel links",
+    "knie_rechts": "Knie rechts",
+    "knie_links": "Knie links",
+    "unterschenkel_rechts": "Unterschenkel rechts",
+    "unterschenkel_links": "Unterschenkel links",
+    "fuss_rechts": "Fuß rechts",
+    "fuss_links": "Fuß links",
+    "arm_links": "Arm links",
+    "arm_rechts": "Arm rechts",
+    "bein_links": "Bein links",
+    "bein_rechts": "Bein rechts",
+    "ruecken_oben": "Oberer Rücken",
+    "ruecken_unten": "Unterer Rücken",
+    "gesaess_rechts": "Gesäß rechts",
+    "gesaess_links": "Gesäß links",
+}
+
+
+def trauma_region_label(region):
+    return TRAUMA_REGION_LABELS.get(str(region or "").strip(), clean_text(region, 120))
+
+
+def format_trauma_finding(finding):
+    if not isinstance(finding, dict):
+        return ""
+    region = trauma_region_label(finding.get("region"))
+    side = str(finding.get("side") or "").strip()
+    side_label = f"{side}: " if valid(side) else ""
+    injuries = compact_join(finding.get("verletzungsarten", []))
+    detail = compact_join([
+        injuries,
+        f"Blutung: {finding.get('blutung')}" if valid(finding.get("blutung")) else "",
+        finding.get("notiz"),
+    ], "; ")
+    location = compact_join([side_label + region if valid(region) else "", detail or "markiert"], " - ")
+    return location
 
 
 def normalize_dispatch_coordinates(value):
@@ -1322,7 +1390,7 @@ def generate_protocol_text(patient):
 
     text += add_lines("BESATZUNG / SCHICHT", [
         ("Transportführer/in", crew.get("verantwortlicher")),
-        ("Fahrer/in", crew.get("fahrer")),
+        ("Teampartner/in", crew.get("fahrer")),
         ("Azubi", crew.get("azubi")),
         ("Praktikant/in", crew.get("praktikant")),
     ])
@@ -1393,11 +1461,9 @@ def generate_protocol_text(patient):
     if trauma_findings:
         text += "TRAUMA-LOKALISATIONEN\n" + ("=" * 50) + "\n"
         for finding in trauma_findings:
-            if not isinstance(finding, dict):
-                continue
-            injuries = compact_join(finding.get("verletzungsarten", []))
-            detail = compact_join([injuries, f"Blutung: {finding.get('blutung')}" if valid(finding.get("blutung")) else "", finding.get("notiz")], "; ")
-            text += f"- {finding.get('region', '')} ({finding.get('side', '')}): {detail or 'markiert'}\n"
+            line = format_trauma_finding(finding)
+            if valid(line):
+                text += f"- {line}\n"
         text += "\n"
     text += add_lines("SAMPLERS", [
         ("Symptome", s.get("symptome")),
@@ -3107,16 +3173,14 @@ def protocol_pdf(payload: ProtocolRequest, employee=Depends(current_employee)):
     patient = sanitize_pilot_patient(payload.patient)
     protocol_text = generate_protocol_text(patient)
     summary = build_case_summary(patient)
-    created_at = local_now().isoformat(timespec="seconds")
     pdf_bytes = build_pdf_bytes(
-        "Laufender Einsatz",
+        "Einsatzprotokoll (Entwurf)",
         protocol_text,
         {
-            "Exportiert am": created_at,
-            "Mitarbeiter": employee.get("name", ""),
+            "Erstellt am": display_datetime_label(),
+            "Dokumentiert durch": employee.get("name", ""),
             "Zusammenfassung": summary,
-            "Quelle": "laufender Entwurf",
-            "Regelstand": MEDICAL_RULESET_VERSION,
+            "Regelwerk": MEDICAL_RULESET_VERSION,
         },
     )
     audit(
@@ -3183,15 +3247,15 @@ def case_pdf(case_id: str, employee=Depends(current_employee)):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Nicht freigegeben.")
 
     pdf_bytes = build_pdf_bytes(
-        f"Einsatz {case_id}",
+        "Einsatzprotokoll",
         item.get("protocol_text", ""),
         {
             "Einsatz-ID": case_id,
-            "Abgeschlossen am": item.get("completed_at", ""),
-            "Mitarbeiter": item.get("employee_name", ""),
+            "Abgeschlossen am": display_datetime_label(item.get("completed_at", "")),
+            "Dokumentiert durch": item.get("employee_name", ""),
             "Zusammenfassung": item.get("summary", ""),
             "Aufbewahrung bis": item.get("retention_until", ""),
-            "Regelstand": item.get("ruleset_version", MEDICAL_RULESET_VERSION),
+            "Regelwerk": item.get("ruleset_version", MEDICAL_RULESET_VERSION),
         },
     )
     audit(
