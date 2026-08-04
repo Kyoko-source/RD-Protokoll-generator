@@ -1363,15 +1363,13 @@ function StartPortal({ session, connectivity, onOpenEinsatz, onOpenShift }) {
   const employee = session?.employee || null;
   const shiftCrew = employee?.id ? loadLocalShiftCrew(employee.id) : null;
   const partnerName = shiftCrew?.fahrer || 'kein Teampartner gesetzt';
-  const leaderName = shiftCrew?.verantwortlicher || employee?.name || 'nicht angemeldet';
   const shiftMeta = [
     employee?.station ? stationLabel(employee.station) : '',
     employee?.vehicle_scope ? vehicleScopeLabel(employee.vehicle_scope) : ''
   ].filter(hasValue).join(' · ') || 'Schicht offen';
   const connectionLabel = !connectivity?.online ? 'Offline verfügbar' : connectivity?.backendOnline ? 'Backend verbunden' : 'Lokal bereit';
   const connectionDetail = connectivity?.lastSync ? `Letzte Sicherung ${connectivity.lastSync}` : 'Sicherung startet mit dem ersten Entwurf';
-  const accessLabel = employee?.role === 'admin' ? 'Admin-Profil' : employee ? roleLabel(employee.role) : 'Schichtprofil';
-  const accessDetail = employee?.role === 'admin' ? 'Produktions-Ampel im Adminbereich bereit' : 'Einsatz- und Schichtmodus getrennt';
+  const profileLabel = employee?.role === 'admin' ? 'Admin' : employee ? roleLabel(employee.role) : 'Profil offen';
 
   return (
     <main className="start-shell">
@@ -1411,33 +1409,20 @@ function StartPortal({ session, connectivity, onOpenEinsatz, onOpenShift }) {
         </button>
       </section>
 
-      <section className="start-ops-panel" aria-label="Einsatzstatus">
-        <div className="start-ops-item">
+      <section className="start-context-rail" aria-label="Einsatzstatus">
+        <div className="start-context-main">
           <Activity size={19} />
           <span>
             <strong>{connectionLabel}</strong>
             <small>{connectionDetail}</small>
           </span>
         </div>
-        <div className="start-ops-item">
-          <UserRound size={19} />
-          <span>
-            <strong>{leaderName}</strong>
-            <small>{shiftMeta} · Partner: {partnerName}</small>
-          </span>
+        <div className="start-context-chips">
+          <span><ShieldCheck size={16} /> Offlinefähig</span>
+          <span><Activity size={16} /> Automatische Sicherung</span>
+          <span><UserRound size={16} /> {shiftMeta}</span>
+          <span>{profileLabel}</span>
         </div>
-        <div className="start-ops-item">
-          <ShieldCheck size={19} />
-          <span>
-            <strong>{accessLabel}</strong>
-            <small>{accessDetail}</small>
-          </span>
-        </div>
-      </section>
-
-      <section className="start-footer">
-        <span><ShieldCheck size={17} /> Offlinefähig</span>
-        <span><Activity size={17} /> Automatische Sicherung</span>
       </section>
     </main>
   );
