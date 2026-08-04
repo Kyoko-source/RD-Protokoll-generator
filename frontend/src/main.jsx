@@ -349,6 +349,14 @@ const opqrstOptions = {
 };
 
 const befastNormalValues = new Set(['Unauffällig', 'Symmetrisch', 'Kein Absinken', 'Keine Angabe', '']);
+const befastNormalDraft = {
+  befast_balance: 'Unauffällig',
+  befast_eyes: 'Unauffällig',
+  befast_face: 'Symmetrisch',
+  befast_arms: 'Kein Absinken',
+  befast_speech: 'Unauffällig',
+  befast_time: 'nicht erforderlich - BE-FAST unauffällig'
+};
 
 const riskFactorLabels = {
   raucher: 'Raucher',
@@ -6084,7 +6092,14 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
     if (sectionKey === 'A') return hasValue(xabcde.atemweg) && hasValue(xabcde.hws);
     if (sectionKey === 'B') return hasValue(xabcde.atmung) && hasValue(xabcde.atemgeraeusche);
     if (sectionKey === 'C') return hasValue(xabcde.haut) && hasValue(xabcde.rekap) && hasValue(xabcde.pulsqualitaet);
-    if (sectionKey === 'D') return hasValue(xabcde.avpu) && hasValue(xabcde.pupillen);
+    if (sectionKey === 'D') return hasValue(xabcde.avpu) && hasValue(xabcde.pupillen) && (isChild || (
+      hasValue(xabcde.befast_balance)
+      && hasValue(xabcde.befast_eyes)
+      && hasValue(xabcde.befast_face)
+      && hasValue(xabcde.befast_arms)
+      && hasValue(xabcde.befast_speech)
+      && hasValue(xabcde.befast_time)
+    ));
     if (sectionKey === 'E') return hasValue(xabcde.bodycheck) && (xabcde.bodycheck !== 'Auffällig' || hasValue(xabcde.bodycheck_text) || traumaFindings().length > 0);
     return false;
   }
@@ -6096,6 +6111,17 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
     if (positives.length > 0) return { level: 'critical', text: `BE-FAST auffällig: ${positives.join(' · ')}` };
     if (documented.length === keys.length) return { level: 'ok', text: 'BE-FAST ohne dokumentierte Auffälligkeit' };
     return null;
+  }
+
+  function markBefastUnremarkable() {
+    setPatient((current) => ({
+      ...current,
+      xabcde: {
+        ...(current.xabcde || {}),
+        ...befastNormalDraft
+      }
+    }));
+    markActionFeedback('befast-clear', 'BE-FAST als unauffällig dokumentiert.');
   }
 
   function samplersSectionComplete(sectionKey) {
@@ -6176,8 +6202,19 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
 
           {!isChild && <>
           <div className="inline-divider" />
-          <h3>BE-FAST Schlaganfall-Screening</h3>
-          <p className="field-hint">B Balance · E Eyes · F Face · A Arms · S Speech · T Time</p>
+          <div className="befast-head">
+            <div>
+              <h3>BE-FAST Schlaganfall-Screening</h3>
+              <p className="field-hint">B Balance · E Eyes · F Face · A Arms · S Speech · T Time</p>
+            </div>
+            <button
+              type="button"
+              className={actionFeedback?.key === 'befast-clear' ? 'action-confirmed' : ''}
+              onClick={markBefastUnremarkable}
+            >
+              Unauffällig
+            </button>
+          </div>
           <div className="xabcde-subgrid">
             {renderXabcdeSelect('befast_balance', 'B - Balance')}
             {renderXabcdeSelect('befast_eyes', 'E - Eyes')}

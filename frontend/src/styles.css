@@ -4935,6 +4935,31 @@ form button,
   background: rgba(255, 255, 255, 0.10);
 }
 
+.befast-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 0 0 10px;
+}
+
+.befast-head h3,
+.befast-head p {
+  margin: 0;
+}
+
+.befast-head button {
+  min-height: 38px;
+  padding: 0 14px;
+  border-radius: 999px;
+  color: #d9fff1;
+  background: rgba(78, 211, 171, 0.16);
+  border: 1px solid rgba(78, 211, 171, 0.32);
+  font-weight: 920;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
 .befast-status {
   margin-top: 14px;
   padding: 12px;
