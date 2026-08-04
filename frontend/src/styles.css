@@ -2298,6 +2298,12 @@ form button,
   filter: drop-shadow(0 0 6px rgba(64, 232, 172, 0.48));
 }
 
+.protocol-tabs .protocol-nav-item.pinned-bottom {
+  margin-top: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+}
+
 .protocol-nav-collapsed .protocol-tabs .protocol-nav-toggle {
   justify-content: center;
   padding: 0;
@@ -2348,6 +2354,97 @@ form button,
 
 .psyche-panel fieldset {
   margin: 0;
+}
+
+.joint-case-panel {
+  display: grid;
+  gap: 16px;
+}
+
+.joint-case-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.joint-case-card,
+.joint-linked-summary {
+  display: grid;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 12px;
+  background: rgba(7, 18, 34, 0.5);
+  border: 1px solid rgba(130, 174, 220, 0.16);
+}
+
+.joint-code-card {
+  display: grid;
+  gap: 8px;
+  padding: 16px;
+  border-radius: 12px;
+  background:
+    linear-gradient(135deg, rgba(14, 165, 233, 0.18), rgba(20, 184, 166, 0.12)),
+    rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(82, 210, 230, 0.24);
+}
+
+.joint-code-card small {
+  color: rgba(235, 244, 255, 0.62);
+  font-weight: 850;
+  text-transform: uppercase;
+}
+
+.joint-code-card strong {
+  color: #f6fbff;
+  font-size: 1.5rem;
+  letter-spacing: 0;
+  overflow-wrap: anywhere;
+}
+
+.joint-code-card img {
+  width: min(220px, 100%);
+  aspect-ratio: 1;
+  border-radius: 8px;
+  background: #f4fbff;
+  border: 1px solid rgba(82, 210, 230, 0.24);
+}
+
+.joint-scanner {
+  width: min(320px, 100%);
+  min-height: 260px;
+  overflow: hidden;
+  border-radius: 12px;
+  background: rgba(0, 0, 0, 0.32);
+  border: 1px solid rgba(82, 210, 230, 0.24);
+}
+
+.joint-scanner video {
+  max-width: 100%;
+  border-radius: inherit;
+}
+
+.joint-code-actions,
+.joint-linked-summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.joint-linked-summary div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.joint-linked-summary span,
+.joint-case-result small {
+  color: rgba(235, 244, 255, 0.64);
+  font-weight: 760;
+}
+
+.joint-case-result {
+  grid-template-columns: minmax(120px, 0.5fr) minmax(0, 1fr) minmax(120px, 0.4fr) !important;
 }
 
 .psyche-legal-note {
@@ -5519,6 +5616,15 @@ legend {
     display: none;
   }
 
+  .protocol-tabs .protocol-nav-item.pinned-bottom {
+    margin-top: 0;
+  }
+
+  .joint-linked-summary {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
   .login-shell,
   .start-hero,
   .start-grid,
@@ -5553,6 +5659,9 @@ legend {
   .amls-summary,
   .support-grid,
   .candidate-grid,
+  .joint-case-grid,
+  .joint-linked-summary,
+  .joint-case-result,
   .admin-grid,
   .admin-secondary-grid,
   .admin-overview,

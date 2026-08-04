@@ -593,6 +593,52 @@ def get_finished_case(case_id):
     }
 
 
+def list_finished_cases_by_joint_case(joint_case_id, limit=50):
+    init_database()
+    needle = str(joint_case_id or "").strip()
+    if not needle:
+        return []
+    safe_limit = max(1, min(int(limit or 50), 200))
+    with _connect() as connection:
+        rows = connection.execute(
+            """
+            SELECT id, employee_id, employee_name, completed_at, summary, patient_json,
+                   protocol_text, status, anonymized_at, deleted_at, retention_until, ruleset_version
+            FROM finished_cases
+            WHERE status != 'deleted'
+            ORDER BY completed_at DESC
+            LIMIT 1000
+            """
+        ).fetchall()
+
+    matches = []
+    for row in rows:
+        try:
+            patient = _json_loads_secure(row["patient_json"], {})
+        except Exception:
+            patient = {}
+        joint_case = patient.get("gemeinsamer_einsatz", {}) if isinstance(patient, dict) else {}
+        if not isinstance(joint_case, dict) or str(joint_case.get("id") or "").strip() != needle:
+            continue
+        matches.append({
+            "id": row["id"],
+            "employee_id": row["employee_id"],
+            "employee_name": row["employee_name"],
+            "completed_at": row["completed_at"],
+            "summary": _decrypt_text(row["summary"]),
+            "patient": patient,
+            "protocol_text": _decrypt_text(row["protocol_text"]),
+            "status": row["status"],
+            "anonymized_at": row["anonymized_at"],
+            "deleted_at": row["deleted_at"],
+            "retention_until": row["retention_until"],
+            "ruleset_version": row["ruleset_version"],
+        })
+        if len(matches) >= safe_limit:
+            break
+    return matches
+
+
 def anonymize_finished_case(case_id, timestamp):
     init_database()
     anonymized_patient = {

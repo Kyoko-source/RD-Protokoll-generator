@@ -114,6 +114,29 @@ class StorageAuthTests(unittest.TestCase):
         self.assertTrue(row["patient_json"].startswith(storage.ENCRYPTED_PREFIX))
         self.assertTrue(row["protocol_text"].startswith(storage.ENCRYPTED_PREFIX))
 
+    def test_finished_cases_can_be_grouped_by_joint_case_id(self):
+        for case_id, joint_id, employee_name in [
+            ("case-1", "NANA-ABCD-1234", "RTW 1"),
+            ("case-2", "NANA-ABCD-1234", "KTW 2"),
+            ("case-3", "NANA-WXYZ-9999", "RTW 3"),
+        ]:
+            storage.save_finished_case({
+                "id": case_id,
+                "employee_id": employee_name.lower().replace(" ", "-"),
+                "employee_name": employee_name,
+                "completed_at": "2026-08-04T18:00:00",
+                "summary": f"{employee_name} Protokoll",
+                "patient": {"gemeinsamer_einsatz": {"id": joint_id}},
+                "protocol_text": f"{employee_name} Text",
+                "retention_until": "2026-09-04",
+                "ruleset_version": "NANA-SOP-test",
+            })
+
+        grouped = storage.list_finished_cases_by_joint_case("NANA-ABCD-1234")
+
+        self.assertEqual({item["id"] for item in grouped}, {"case-1", "case-2"})
+        self.assertEqual({item["employee_name"] for item in grouped}, {"RTW 1", "KTW 2"})
+
     def test_security_events_keep_encrypted_metadata_and_roundtrip(self):
         storage.write_audit_event({
             "timestamp": "2026-07-18T10:00:00",

@@ -69,6 +69,7 @@ from storage import (
     list_audit_events,
     list_expired_finished_cases,
     list_finished_cases,
+    list_finished_cases_by_joint_case,
     list_login_events,
     load_case_draft_store,
     load_employee_store,
@@ -438,6 +439,43 @@ def format_trauma_finding(finding):
     ], "; ")
     location = compact_join([side_label + region if valid(region) else "", detail or "markiert"], " - ")
     return location
+
+
+def normalize_joint_case_id(value):
+    raw = "".join(ch for ch in str(value or "").upper().strip() if ch.isalnum())
+    if raw.startswith("NANA"):
+        raw = raw[4:]
+    raw = raw[:12]
+    return f"NANA-{raw[:4]}-{raw[4:8]}-{raw[8:12]}".rstrip("-") if raw else ""
+
+
+def joint_case_summary(patient):
+    joint_case = patient.get("gemeinsamer_einsatz", {}) if isinstance(patient, dict) else {}
+    if not isinstance(joint_case, dict):
+        return {}
+    joint_id = normalize_joint_case_id(joint_case.get("id"))
+    if not valid(joint_id):
+        return {}
+    role_label = {
+        "teilen": "Einsatz wird geteilt",
+        "uebernehmen": "Einsatz wurde übernommen",
+    }.get(str(joint_case.get("role") or "").strip(), str(joint_case.get("role") or "").strip())
+    return {
+        "id": joint_id,
+        "role": role_label,
+        "source": clean_text(joint_case.get("source_employee_name"), 160),
+        "vehicle": clean_text(joint_case.get("vehicle"), 120),
+        "linked_at": clean_text(joint_case.get("linked_at"), 80),
+    }
+
+
+def public_joint_case_item(item):
+    return {
+        "id": item.get("id", ""),
+        "employee_name": item.get("employee_name", ""),
+        "completed_at": item.get("completed_at", ""),
+        "summary": item.get("summary", ""),
+    }
 
 
 def normalize_dispatch_coordinates(value):
@@ -1393,6 +1431,14 @@ def generate_protocol_text(patient):
         ("Teampartner/in", crew.get("fahrer")),
         ("Azubi", crew.get("azubi")),
         ("Praktikant/in", crew.get("praktikant")),
+    ])
+    joint_case = joint_case_summary(patient)
+    text += add_lines("GEMEINSAMER EINSATZ", [
+        ("Gemeinsame Einsatz-ID", joint_case.get("id")),
+        ("Rolle", joint_case.get("role")),
+        ("Geteilt von", joint_case.get("source")),
+        ("Rettungsmittel", joint_case.get("vehicle")),
+        ("Verknüpft am", joint_case.get("linked_at")),
     ])
 
     pat = patient_data.get("pat", {}) or {}
@@ -3168,6 +3214,38 @@ def protocol_quality(payload: ProtocolRequest, employee=Depends(current_employee
     return result
 
 
+@app.post("/api/joint-cases")
+def create_joint_case(employee=Depends(current_employee)):
+    joint_id = normalize_joint_case_id(secrets.token_hex(6))
+    audit(
+        "api_joint_case_created",
+        employee=employee,
+        entity_type="joint_case",
+        entity_id=joint_id,
+    )
+    return {
+        "joint_case_id": joint_id,
+        "created_by": employee.get("name", ""),
+        "created_at": display_datetime_label(),
+    }
+
+
+@app.get("/api/joint-cases/{joint_case_id}")
+def joint_case_detail(joint_case_id: str, employee=Depends(current_employee)):
+    normalized = normalize_joint_case_id(joint_case_id)
+    if not valid(normalized):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Gemeinsame Einsatz-ID fehlt.")
+    cases = [public_joint_case_item(item) for item in list_finished_cases_by_joint_case(normalized, limit=50)]
+    audit(
+        "api_joint_case_lookup",
+        employee=employee,
+        entity_type="joint_case",
+        entity_id=normalized,
+        details={"cases": len(cases)},
+    )
+    return {"joint_case_id": normalized, "cases": cases, "count": len(cases)}
+
+
 @app.post("/api/protocol/pdf")
 def protocol_pdf(payload: ProtocolRequest, employee=Depends(current_employee)):
     patient = sanitize_pilot_patient(payload.patient)
@@ -3226,12 +3304,20 @@ def finish_case(payload: ProtocolRequest, employee=Depends(current_employee)):
         entity_id=case_id,
         details={"quality_score": quality["score"], "warnings": quality["warning_count"], "criticals": quality["critical_count"], "force_finish": payload.force_finish},
     )
+    joint_case = joint_case_summary(patient)
+    joint_cases = (
+        [public_joint_case_item(item) for item in list_finished_cases_by_joint_case(joint_case.get("id"), limit=50)]
+        if joint_case.get("id")
+        else []
+    )
     return {
         "status": "finished",
         "case_id": case_id,
         "protocol_text": protocol_text,
         "quality": quality,
         "ruleset_version": MEDICAL_RULESET_VERSION,
+        "joint_case_id": joint_case.get("id", ""),
+        "joint_cases": joint_cases,
     }
 
 

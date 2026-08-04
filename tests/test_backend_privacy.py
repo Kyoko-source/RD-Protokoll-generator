@@ -64,6 +64,21 @@ class BackendPrivacyTests(unittest.TestCase):
         self.assertIn("E Bodycheck: Auffällig", protocol)
         self.assertIn("vorne: Brustkorb links - Druckschmerz; Blutung: gering; Schürfwunde", protocol)
 
+    def test_protocol_includes_joint_case_marker(self):
+        protocol = main.generate_protocol_text({
+            "gemeinsamer_einsatz": {
+                "id": "nana abcd 1234",
+                "role": "uebernehmen",
+                "source_employee_name": "RTW 1",
+                "vehicle": "KTW",
+                "linked_at": "04.08.2026 18:00",
+            }
+        })
+
+        self.assertIn("GEMEINSAMER EINSATZ", protocol)
+        self.assertIn("Gemeinsame Einsatz-ID: NANA-ABCD-1234", protocol)
+        self.assertIn("Rolle: Einsatz wurde übernommen", protocol)
+
 
 if __name__ == "__main__":
     unittest.main()

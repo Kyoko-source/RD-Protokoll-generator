@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
+import QRCode from 'qrcode';
 import {
   Activity,
   AlertTriangle,
@@ -394,6 +395,12 @@ const traumaBodyRegions = {
 const traumaInjuryTypes = ['Wunde', 'Blutung', 'Frakturverdacht', 'Luxationsverdacht', 'Prellung/Hämatom', 'Verbrennung', 'Schwellung', 'Druckschmerz', 'Fehlstellung', 'Amputation', 'Fremdkörper'];
 const optionalQuickCompleteSections = new Set(['rechner', 'psyche', 'massnahmen', 'reanimation']);
 
+function formatJointCaseCode(value) {
+  const raw = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '').replace(/^NANA/, '').slice(0, 12);
+  if (!raw) return '';
+  return `NANA-${[raw.slice(0, 4), raw.slice(4, 8), raw.slice(8, 12)].filter(Boolean).join('-')}`;
+}
+
 function effectiveVitalStatus(vital, statusKey) {
   return vital?.[statusKey] === CUSTOM_STATUS ? vital?.[`${statusKey}_custom`] : vital?.[statusKey];
 }
@@ -626,6 +633,14 @@ function generateLocalProtocolText(patient) {
     ['Teampartner/in', crew.fahrer],
     ['Azubi', crew.azubi],
     ['Praktikant/in', crew.praktikant],
+  ]);
+  const jointCase = patient.gemeinsamer_einsatz || {};
+  text += addProtocolBlock('GEMEINSAMER EINSATZ', [
+    ['Gemeinsame Einsatz-ID', formatJointCaseCode(jointCase.id)],
+    ['Rolle', jointCase.role === 'teilen' ? 'Einsatz wird geteilt' : jointCase.role === 'uebernehmen' ? 'Einsatz wurde übernommen' : jointCase.role],
+    ['Geteilt von', jointCase.source_employee_name],
+    ['Rettungsmittel', jointCase.vehicle],
+    ['Verknüpft am', jointCase.linked_at],
   ]);
   const symptom = symptomSummary(vital, s, o);
   text += addProtocolParagraph('EINSATZBERICHT', [
@@ -4795,6 +4810,7 @@ const emptyPatient = {
   einsatz: {},
   anfahrt: {},
   besatzung: { verantwortlicher: '', verantwortlicher_id: '', fahrer: '', fahrer_id: '', azubi: '', azubi_id: '', praktikant: '', praktikant_id: '' },
+  gemeinsamer_einsatz: {},
   uebergabe: {}
 };
 
@@ -4843,6 +4859,11 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
   const [calculator, setCalculator] = useState({ sop: 'Anaphylaxie (SOPKB0105)', age: '30', weight: '70', pregnant: 'Nein', bz: '55', rr_sys: '160', nrs: '7' });
   const [calculatorResult, setCalculatorResult] = useState(null);
   const [acceptedCalculatorMedication, setAcceptedCalculatorMedication] = useState(null);
+  const [jointCodeInput, setJointCodeInput] = useState('');
+  const [jointCaseLookup, setJointCaseLookup] = useState(null);
+  const [jointQrDataUrl, setJointQrDataUrl] = useState('');
+  const [jointScanActive, setJointScanActive] = useState(false);
+  const jointScannerElementId = useRef(`nana-joint-scanner-${Math.random().toString(36).slice(2)}`);
   const [refusal, setRefusal] = useState(() => {
     const now = new Date();
     return {
@@ -4914,6 +4935,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
   const psyche = patient.psyche || {};
   const massnahmen = patient.massnahmen || { timeline: [], medikation: [] };
   const reanimation = patient.reanimation || { shocks: [] };
+  const gemeinsamerEinsatz = patient.gemeinsamer_einsatz || {};
   const amls = patient.amls || {};
   const uebergabe = patient.uebergabe || {};
   const amlsCandidates = Array.isArray(amls.custom_candidates) ? amls.custom_candidates : [];
@@ -5011,7 +5033,14 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       icon: ShieldCheck,
       complete: hasValue(uebergabe.ziel) && hasValue(uebergabe.text)
     },
-    { key: 'protokoll', label: 'Dokumentation', icon: FileText, complete: hasValue(generatedProtocol) }
+    { key: 'protokoll', label: 'Dokumentation', icon: FileText, complete: hasValue(generatedProtocol) },
+    {
+      key: 'gemeinsam',
+      label: 'Gemeinsamer Einsatz',
+      icon: Cable,
+      complete: hasValue(gemeinsamerEinsatz.id),
+      pinnedBottom: true
+    }
   ];
   const requiredWorkflowKeys = ['patient', 'vitalwerte', 'xabcde', 'samplers', 'amls', 'abschluss', 'protokoll'];
   const requiredWorkflowItems = protocolNavItems.filter((item) => requiredWorkflowKeys.includes(item.key));
@@ -5093,6 +5122,73 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       loadAmlsSuggestions();
     }
   }, [protocolSection]);
+
+  useEffect(() => {
+    const code = formatJointCaseCode(gemeinsamerEinsatz.id);
+    if (!code) {
+      setJointQrDataUrl('');
+      return;
+    }
+    let cancelled = false;
+    QRCode.toDataURL(code, {
+      width: 220,
+      margin: 2,
+      color: { dark: '#061525', light: '#f4fbff' }
+    })
+      .then((dataUrl) => {
+        if (!cancelled) setJointQrDataUrl(dataUrl);
+      })
+      .catch(() => {
+        if (!cancelled) setJointQrDataUrl('');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [gemeinsamerEinsatz.id]);
+
+  useEffect(() => {
+    if (!jointScanActive || protocolSection !== 'gemeinsam') return undefined;
+    let scanner = null;
+    let stopped = false;
+
+    import('html5-qrcode')
+      .then(({ Html5Qrcode }) => {
+        if (stopped) return;
+        scanner = new Html5Qrcode(jointScannerElementId.current);
+        scanner.start(
+          { facingMode: 'environment' },
+          { fps: 10, qrbox: { width: 220, height: 220 } },
+          (decodedText) => {
+            const code = formatJointCaseCode(decodedText);
+            if (!code) return;
+            applyJointCase(code, 'uebernehmen', '');
+            setJointScanActive(false);
+          }
+        ).catch((err) => {
+          setJointScanActive(false);
+          setError(`QR-Kamera konnte nicht gestartet werden: ${err?.message || err}`);
+        });
+      })
+      .catch((err) => {
+        setJointScanActive(false);
+        setError(`QR-Scanner konnte nicht geladen werden: ${err?.message || err}`);
+      });
+
+    return () => {
+      stopped = true;
+      if (scanner) {
+        scanner.stop()
+          .catch(() => {})
+          .finally(() => {
+            try {
+              scanner.clear();
+            } catch {
+              // Scanner cleanup is best-effort after browser camera teardown.
+            }
+          });
+      }
+    };
+  }, [jointScanActive, protocolSection]);
 
   useEffect(() => {
     if (isChild && samplersSection === 'S2') {
@@ -6366,6 +6462,87 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
     }
   }
 
+  function applyJointCase(code, role, sourceName = '') {
+    const jointId = formatJointCaseCode(code);
+    if (!jointId) {
+      setError('Bitte eine gemeinsame Einsatz-ID eingeben.');
+      return;
+    }
+    setPatient((current) => ({
+      ...current,
+      gemeinsamer_einsatz: {
+        ...(current.gemeinsamer_einsatz || {}),
+        id: jointId,
+        role,
+        source_employee_name: sourceName || (role === 'teilen' ? employee?.name || '' : ''),
+        vehicle: current.besatzung?.fahrzeug || employee?.vehicle_scope || '',
+        linked_at: new Date().toLocaleString('de-DE')
+      }
+    }));
+    setJointCodeInput(jointId);
+    setJointCaseLookup(null);
+    markActionFeedback('joint-case-link', role === 'teilen' ? 'Gemeinsamer Einsatz-Code wurde erstellt.' : 'Gemeinsamer Einsatz wurde übernommen.');
+  }
+
+  async function createJointCase() {
+    setError('');
+    setStatusText('');
+    try {
+      const result = await api('/api/joint-cases', { method: 'POST', body: JSON.stringify({}) }, session.token);
+      applyJointCase(result.joint_case_id, 'teilen', result.created_by || employee?.name || '');
+    } catch (err) {
+      const fallback = formatJointCaseCode(window.crypto?.getRandomValues
+        ? Array.from(window.crypto.getRandomValues(new Uint8Array(6))).map((value) => value.toString(16).padStart(2, '0')).join('')
+        : `${Date.now()}`);
+      applyJointCase(fallback, 'teilen', employee?.name || '');
+      setStatusText(`Offline-Code erstellt: ${fallback}`);
+    }
+  }
+
+  function joinJointCase() {
+    applyJointCase(jointCodeInput, 'uebernehmen', '');
+  }
+
+  async function copyJointCaseCode() {
+    const code = formatJointCaseCode(gemeinsamerEinsatz.id || jointCodeInput);
+    if (!code) return;
+    try {
+      await navigator.clipboard.writeText(code);
+      markActionFeedback('joint-case-copy', 'Gemeinsamer Einsatz-Code wurde kopiert.');
+    } catch {
+      setStatusText(`Code zum Weitergeben: ${code}`);
+    }
+  }
+
+  async function shareJointCaseCode() {
+    const code = formatJointCaseCode(gemeinsamerEinsatz.id || jointCodeInput);
+    if (!code) return;
+    if (navigator.share) {
+      try {
+        await navigator.share({ title: 'NANA gemeinsamer Einsatz', text: `Gemeinsamer Einsatz-Code: ${code}` });
+        markActionFeedback('joint-case-share', 'Gemeinsamer Einsatz-Code wurde geteilt.');
+        return;
+      } catch {
+        // Sharing was cancelled; keep the code visible.
+      }
+    }
+    await copyJointCaseCode();
+  }
+
+  async function lookupJointCase() {
+    const code = formatJointCaseCode(gemeinsamerEinsatz.id || jointCodeInput);
+    if (!code) return;
+    setError('');
+    setStatusText('');
+    try {
+      const result = await api(`/api/joint-cases/${encodeURIComponent(code)}`, {}, session.token);
+      setJointCaseLookup(result);
+      markActionFeedback('joint-case-lookup', `${result.count || 0} verbundene Protokolle gefunden.`);
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
   function updateRefusal(key, value) {
     setRefusal((current) => ({ ...current, [key]: value }));
   }
@@ -6478,7 +6655,8 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
       setProtocolSection('protokoll');
       setForceFinish(false);
       const warningText = result.quality?.warning_count || result.quality?.critical_count ? ' mit QS-Warnungen' : '';
-      markActionFeedback('finish-case', `Einsatz${warningText} beendet und archiviert: ${result.case_id}`);
+      const jointText = result.joint_case_id ? ` · gemeinsamer Einsatz ${result.joint_cases?.length || 1} Protokoll(e)` : '';
+      markActionFeedback('finish-case', `Einsatz${warningText} beendet und archiviert: ${result.case_id}${jointText}`);
     } catch (err) {
       setError(err.message);
     }
@@ -6617,7 +6795,7 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
           return (
             <button
               type="button"
-              className={`protocol-nav-item${isActive ? ' active' : ''}${item.complete ? ' complete' : ''}`}
+              className={`protocol-nav-item${isActive ? ' active' : ''}${item.complete ? ' complete' : ''}${item.pinnedBottom ? ' pinned-bottom' : ''}`}
               onClick={() => selectProtocolSection(item.key)}
               title={protocolNavCollapsed ? `${item.label}${item.complete ? ' – vollständig' : ''}` : undefined}
               aria-current={isActive ? 'page' : undefined}
@@ -7523,6 +7701,80 @@ function ProtocolView({ session, employee, onSessionReplace, onBack, onLogout, c
             <input value={reanimation.notarzt_takeover || ''} onChange={(event) => updateReanimation('notarzt_takeover', event.target.value)} placeholder="z.B. 20:25 / ja / nein" />
           </label>
         </div>
+      </section>}
+
+      {protocolSection === 'gemeinsam' && <section className="work-panel joint-case-panel">
+        <div className="section-head">
+          <h2>Gemeinsamer Einsatz</h2>
+          <span>mehrere Fahrzeuge, ein Einsatzverbund</span>
+        </div>
+
+        <div className="joint-case-grid">
+          <article className="joint-case-card">
+            <div className="section-head compact-head">
+              <h3>Einsatz teilen</h3>
+              <span>Code für das zweite Fahrzeug erzeugen</span>
+            </div>
+            <button type="button" className="primary" onClick={createJointCase}>
+              Gemeinsamen Einsatz-Code erzeugen
+            </button>
+            {hasValue(gemeinsamerEinsatz.id) && (
+              <div className="joint-code-card" aria-label="Gemeinsamer Einsatz-Code">
+                <small>Code</small>
+                {jointQrDataUrl && <img src={jointQrDataUrl} alt="QR-Code gemeinsamer Einsatz" />}
+                <strong>{formatJointCaseCode(gemeinsamerEinsatz.id)}</strong>
+                <div className="joint-code-actions">
+                  <button type="button" onClick={copyJointCaseCode}>Kopieren</button>
+                  <button type="button" onClick={shareJointCaseCode}>Teilen</button>
+                </div>
+              </div>
+            )}
+          </article>
+
+          <article className="joint-case-card">
+            <div className="section-head compact-head">
+              <h3>Einsatz übernehmen</h3>
+              <span>Code vom ersten Fahrzeug eintragen</span>
+            </div>
+            <label>
+              Einsatz-Code
+              <input
+                value={jointCodeInput}
+                onChange={(event) => setJointCodeInput(formatJointCaseCode(event.target.value))}
+                placeholder="NANA-ABCD-1234"
+                autoCapitalize="characters"
+              />
+            </label>
+            <button type="button" className="primary" onClick={joinJointCase}>Einsatz übernehmen</button>
+            <button type="button" onClick={() => setJointScanActive((active) => !active)}>
+              {jointScanActive ? 'QR-Scan stoppen' : 'QR-Code scannen'}
+            </button>
+            {jointScanActive && <div className="joint-scanner" id={jointScannerElementId.current} />}
+          </article>
+        </div>
+
+        {hasValue(gemeinsamerEinsatz.id) && (
+          <article className="joint-linked-summary">
+            <div>
+              <strong>{formatJointCaseCode(gemeinsamerEinsatz.id)}</strong>
+              <span>{gemeinsamerEinsatz.role === 'teilen' ? 'Dieses Gerät teilt den Einsatz.' : 'Dieses Gerät übernimmt den geteilten Einsatz.'}</span>
+            </div>
+            <button type="button" onClick={lookupJointCase}>Archiv-Verbund prüfen</button>
+          </article>
+        )}
+
+        {jointCaseLookup && (
+          <div className="dynamic-list">
+            {(jointCaseLookup.cases || []).length === 0 && <p className="muted">Noch kein abgeschlossenes Protokoll in diesem Einsatzverbund.</p>}
+            {(jointCaseLookup.cases || []).map((item) => (
+              <div className="dynamic-row joint-case-result" key={item.id}>
+                <strong>{item.employee_name || 'Team'}</strong>
+                <span>{item.summary || item.id}</span>
+                <small>{item.completed_at}</small>
+              </div>
+            ))}
+          </div>
+        )}
       </section>}
 
       {protocolSection === 'abschluss' && <section className="work-panel">
