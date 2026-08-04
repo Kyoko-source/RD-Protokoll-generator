@@ -85,6 +85,14 @@ class ApiSmokeTests(unittest.TestCase):
         self.assertEqual(finish.status_code, 200)
         self.assertEqual(finish.json()["ruleset_version"], main.MEDICAL_RULESET_VERSION)
 
+        readiness = self.client.get("/api/admin/production-readiness")
+        self.assertEqual(readiness.status_code, 200)
+        readiness_payload = readiness.json()
+        self.assertIn(readiness_payload["overall"], {"ok", "warning", "critical"})
+        self.assertIn("counts", readiness_payload)
+        self.assertGreaterEqual(len(readiness_payload["items"]), 8)
+        self.assertTrue(any(item["id"] == "data_key" for item in readiness_payload["items"]))
+
     def test_weak_first_admin_password_is_rejected(self):
         response = self.client.post("/api/auth/setup-first-admin", json={
             "name": "Admin",

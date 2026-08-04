@@ -97,6 +97,12 @@ const FEEDBACK_STATUS_LABELS = {
   erledigt: 'Erledigt',
   abgelehnt: 'Abgelehnt'
 };
+const READINESS_STATUS_LABELS = {
+  ok: 'OK',
+  warning: 'Hinweis',
+  critical: 'Kritisch',
+  info: 'Info'
+};
 
 function roleLabel(role) {
   return EMPLOYEE_ROLE_OPTIONS.find((item) => item.value === role)?.label || 'Mitarbeiter';
@@ -126,6 +132,10 @@ function dispatchTargetLabel(target) {
 
 function adminPermissionLabel(permission) {
   return ADMIN_PERMISSION_OPTIONS.find((item) => item.value === permission)?.label || permission;
+}
+
+function readinessStatusLabel(statusValue) {
+  return READINESS_STATUS_LABELS[statusValue] || statusValue || 'Info';
 }
 
 function employeeVehicleMatches(employeeVehicleScope, requestedVehicleScope) {
@@ -2163,6 +2173,16 @@ function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, 
   const tiles = dashboard?.tiles || [];
   const shiftCrew = employee?.id ? loadLocalShiftCrew(employee.id) : {};
   const activeCases = useMemo(() => cases.filter((item) => item.status !== 'deleted'), [cases]);
+  const dashboardShiftCrew = [
+    ['TF', shiftCrew.verantwortlicher || employee?.name || 'offen'],
+    ['Fahrer/in', shiftCrew.fahrer || 'offen'],
+    ['Azubi', shiftCrew.azubi],
+    ['Praktikum', shiftCrew.praktikant]
+  ].filter(([, value], index) => index < 2 || hasValue(value));
+  const dashboardShiftMeta = [
+    employee?.station ? `Wache ${stationLabel(employee.station)}` : '',
+    employee?.vehicle_scope ? vehicleScopeLabel(employee.vehicle_scope) : ''
+  ].filter(hasValue).join(' · ') || 'Schichtdaten';
 
   async function logout() {
     await api('/api/auth/logout', { method: 'POST' }, session.token).catch(() => {});
@@ -2347,6 +2367,24 @@ function Dashboard({ session, onLogout, onSessionReplace, connectivity, onSync, 
         <div>
           <Activity size={20} />
           <span>{activeCases.length} archivierte Einsätze sichtbar</span>
+        </div>
+      </section>
+
+      <section className="active-shift-strip dashboard-active-shift" aria-label="Aktive Schicht">
+        <div className="active-shift-title">
+          <UserRound size={19} />
+          <div>
+            <strong>Aktive Schicht</strong>
+            <span>{dashboardShiftMeta}</span>
+          </div>
+        </div>
+        <div className="active-shift-crew">
+          {dashboardShiftCrew.map(([label, value]) => (
+            <span key={label}>
+              <b>{label}</b>
+              {value}
+            </span>
+          ))}
         </div>
       </section>
 
@@ -3444,6 +3482,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
   const [auditEvents, setAuditEvents] = useState([]);
   const [loginEvents, setLoginEvents] = useState([]);
   const [privacy, setPrivacy] = useState(null);
+  const [productionReadiness, setProductionReadiness] = useState(null);
   const [qualityRules, setQualityRules] = useState([]);
   const [cases, setCases] = useState([]);
   const [announcementData, setAnnouncementData] = useState({ patch_notes: [], planned_updates: [], feedback: [] });
@@ -3531,6 +3570,8 @@ function AdminView({ session, employee, onBack, onLogout }) {
   });
   const privacyWarningCount = (privacy?.checklist || []).filter((item) => item.status === 'warning').length;
   const privacyOkCount = (privacy?.checklist || []).filter((item) => item.status === 'ok').length;
+  const readinessCounts = productionReadiness?.counts || {};
+  const readinessActionCount = (productionReadiness?.required_actions || []).length;
   const openFeedbackCount = feedbackCounts.offen || 0;
   const missingAdminAreas = Object.entries(adminAccess)
     .filter(([, allowed]) => !allowed)
@@ -3546,11 +3587,12 @@ function AdminView({ session, employee, onBack, onLogout }) {
           return { key, ok: false, data: fallback };
         }
       };
-      const [employeeResult, auditResult, loginResult, privacyResult, caseResult, announcementResult, releaseResult, qualityResult] = await Promise.all([
+      const [employeeResult, auditResult, loginResult, privacyResult, readinessResult, caseResult, announcementResult, releaseResult, qualityResult] = await Promise.all([
         safeAdminLoad('employees', () => api('/api/admin/employees', {}, session.token), { employees: [] }),
         safeAdminLoad('logs', () => api('/api/admin/audit', {}, session.token), { events: [] }),
         safeAdminLoad('logs', () => api('/api/admin/login-events', {}, session.token), { events: [] }),
         safeAdminLoad('privacy', () => api('/api/admin/privacy', {}, session.token), null),
+        safeAdminLoad('privacy', () => api('/api/admin/production-readiness', {}, session.token), null),
         safeAdminLoad('cases', () => api('/api/admin/cases', {}, session.token), { cases: [] }),
         safeAdminLoad('content', () => api('/api/admin/announcements', {}, session.token), { patch_notes: [], planned_updates: [], feedback: [] }),
         safeAdminLoad('content', () => api('/api/admin/release', {}, session.token), null),
@@ -3560,13 +3602,14 @@ function AdminView({ session, employee, onBack, onLogout }) {
       const auditData = auditResult.data;
       const loginData = loginResult.data;
       const privacyData = privacyResult.data;
+      const readinessData = readinessResult.data;
       const caseData = caseResult.data;
       const announcementAdminData = announcementResult.data;
       const releaseData = releaseResult.data;
       const qualityData = qualityResult.data;
       setAdminAccess({
         employees: employeeResult.ok,
-        privacy: privacyResult.ok,
+        privacy: privacyResult.ok || readinessResult.ok,
         logs: auditResult.ok || loginResult.ok,
         cases: caseResult.ok,
         content: announcementResult.ok || releaseResult.ok,
@@ -3576,6 +3619,7 @@ function AdminView({ session, employee, onBack, onLogout }) {
       setAuditEvents(auditData.events || []);
       setLoginEvents(loginData.events || []);
       setPrivacy(privacyData);
+      setProductionReadiness(readinessData);
       setQualityRules(qualityData.rules || []);
       setRetentionDays(privacyData?.retention_days || 3650);
       setSecurityLogRetentionDays(privacyData?.security_log_retention_days || 180);
@@ -3907,6 +3951,52 @@ function AdminView({ session, employee, onBack, onLogout }) {
           <small>{securityLogRetentionDays || 180} Tage Logs</small>
         </div>
       </section>
+
+      {adminAccess.privacy && productionReadiness && (
+      <section className={`work-panel readiness-panel readiness-${productionReadiness.overall || 'info'}`}>
+        <div className="section-head">
+          <div>
+            <h2>Produktions-Ampel</h2>
+            <p>{productionReadiness.checked_at || 'gerade geprüft'}</p>
+          </div>
+          <span>{readinessStatusLabel(productionReadiness.overall)}</span>
+        </div>
+        <div className="readiness-summary-grid">
+          <div>
+            <CheckCircle2 size={18} />
+            <strong>{readinessCounts.ok || 0}</strong>
+            <span>OK</span>
+          </div>
+          <div>
+            <AlertTriangle size={18} />
+            <strong>{readinessCounts.warning || 0}</strong>
+            <span>Hinweise</span>
+          </div>
+          <div>
+            <ShieldCheck size={18} />
+            <strong>{readinessCounts.critical || 0}</strong>
+            <span>Kritisch</span>
+          </div>
+          <div>
+            <ClipboardList size={18} />
+            <strong>{readinessActionCount}</strong>
+            <span>Aktionen</span>
+          </div>
+        </div>
+        <div className="readiness-list">
+          {(productionReadiness.items || []).map((item) => (
+            <div className={`readiness-row readiness-row-${item.status}`} key={item.id}>
+              <span>{readinessStatusLabel(item.status)}</span>
+              <div>
+                <strong>{item.label}</strong>
+                <small>{item.detail}</small>
+                {item.evidence && <em>{item.evidence}</em>}
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+      )}
 
       <section className="admin-grid admin-primary-grid">
         {adminAccess.employees && (

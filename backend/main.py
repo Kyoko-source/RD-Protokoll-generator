@@ -2417,6 +2417,124 @@ def assert_strong_password(password):
         )
 
 
+def production_readiness_item(item_id, label, status_value, detail, evidence=None):
+    return {
+        "id": item_id,
+        "label": label,
+        "status": status_value,
+        "detail": detail,
+        "evidence": evidence or "",
+    }
+
+
+def production_readiness_report():
+    database = database_health_status()
+    encryption = encryption_status()
+    frontend_ready = (FRONTEND_DIST / "index.html").exists()
+    backup_env_path = PROJECT_ROOT / "deploy" / "backup.env"
+    encrypted_backups_required = os.getenv("NANA_REQUIRE_ENCRYPTED_BACKUPS", "").strip() == "1"
+    backup_passphrase_configured = bool(os.getenv("BACKUP_PASSPHRASE", "").strip())
+    bearer_allowed = not production_mode() or os.getenv("NANA_ENABLE_BEARER_AUTH", "").strip() == "1"
+    origins = configured_cors_origins()
+    items = [
+        production_readiness_item(
+            "environment",
+            "Produktionsmodus",
+            "ok" if production_mode() else "warning",
+            "NANA_ENV ist auf Produktion gesetzt." if production_mode() else "NANA_ENV steht nicht auf production.",
+            NANA_ENV,
+        ),
+        production_readiness_item(
+            "database",
+            "Datenbank",
+            "ok" if database.get("ok") else "critical",
+            database.get("detail", "SQLite erreichbar.") if not database.get("ok") else "SQLite erreichbar.",
+            database.get("path", ""),
+        ),
+        production_readiness_item(
+            "frontend",
+            "Frontend-Build",
+            "ok" if frontend_ready else "warning",
+            "Gebautes Frontend liegt bereit." if frontend_ready else "frontend/dist/index.html fehlt; npm.cmd run build ausführen.",
+            str(FRONTEND_DIST),
+        ),
+        production_readiness_item(
+            "data_key",
+            "Externer Datenschlüssel",
+            "ok" if encryption.get("key_source") == "environment" else "warning",
+            encryption.get("production_hint", ""),
+            encryption.get("key_source", ""),
+        ),
+        production_readiness_item(
+            "bearer_auth",
+            "Bearer-Auth",
+            "warning" if bearer_allowed and production_mode() else "ok",
+            "Produktiv deaktiviert; HttpOnly-Cookies aktiv." if not bearer_allowed else "Bearer-Auth ist noch erlaubt.",
+        ),
+        production_readiness_item(
+            "trusted_hosts",
+            "Host-Whitelist",
+            "ok" if bool(allowed_hosts) else "warning",
+            "Zugelassene Hosts sind konfiguriert." if allowed_hosts else "NANA_ALLOWED_HOSTS oder NANA_ALLOWED_ORIGINS setzen.",
+            ", ".join(allowed_hosts),
+        ),
+        production_readiness_item(
+            "cors",
+            "CORS",
+            "ok" if origins else "warning",
+            "Erlaubte Origins sind explizit gesetzt." if origins else "Keine erlaubten Origins konfiguriert.",
+            ", ".join(origins),
+        ),
+        production_readiness_item(
+            "request_limit",
+            "Request-Limit",
+            "ok" if MAX_REQUEST_BODY_BYTES <= 2 * 1024 * 1024 else "warning",
+            f"Maximale Anfragegröße: {MAX_REQUEST_BODY_BYTES} Bytes.",
+        ),
+        production_readiness_item(
+            "backup_config",
+            "Backup-Konfiguration",
+            "ok" if backup_env_path.exists() or backup_passphrase_configured else "warning",
+            "Backup-Secrets sind konfiguriert." if backup_env_path.exists() or backup_passphrase_configured else "deploy/backup.env oder BACKUP_PASSPHRASE fehlt.",
+            str(backup_env_path),
+        ),
+        production_readiness_item(
+            "backup_encryption",
+            "Backup-Verschlüsselung",
+            "ok" if encrypted_backups_required and (backup_passphrase_configured or backup_env_path.exists()) else "warning",
+            "Verschlüsselte Backups sind erzwungen." if encrypted_backups_required else "NANA_REQUIRE_ENCRYPTED_BACKUPS=1 setzen.",
+        ),
+        production_readiness_item(
+            "release",
+            "Release-Metadaten",
+            "ok" if NANA_RELEASE_SHA not in {"", "local"} and NANA_RELEASE_DATE else "info",
+            "Release-SHA und Deploy-Zeit sind gesetzt." if NANA_RELEASE_SHA not in {"", "local"} and NANA_RELEASE_DATE else "Lokaler Build oder Deploy-Metadaten fehlen.",
+            NANA_RELEASE_SHA,
+        ),
+        production_readiness_item(
+            "quality_rules",
+            "QS-Regeln",
+            "ok" if QUALITY_RULES else "warning",
+            f"{len(QUALITY_RULES)} Regeln aktiv.",
+            MEDICAL_RULESET_VERSION,
+        ),
+    ]
+    counts = {
+        "ok": sum(1 for item in items if item["status"] == "ok"),
+        "warning": sum(1 for item in items if item["status"] == "warning"),
+        "critical": sum(1 for item in items if item["status"] == "critical"),
+        "info": sum(1 for item in items if item["status"] == "info"),
+    }
+    overall = "critical" if counts["critical"] else "warning" if counts["warning"] else "ok"
+    return {
+        "overall": overall,
+        "counts": counts,
+        "items": items,
+        "required_actions": [item for item in items if item["status"] in {"warning", "critical"}],
+        "checked_at": local_now().isoformat(timespec="seconds"),
+    }
+
+
 @app.on_event("startup")
 def startup():
     init_database()
@@ -2448,6 +2566,17 @@ def health():
         },
         "ruleset_version": MEDICAL_RULESET_VERSION,
     }
+
+
+@app.get("/api/admin/production-readiness")
+def admin_production_readiness(employee=Depends(require_admin_permission("privacy"))):
+    report = production_readiness_report()
+    audit(
+        "api_production_readiness_checked",
+        employee=employee,
+        details={"overall": report["overall"], "warnings": report["counts"]["warning"], "criticals": report["counts"]["critical"]},
+    )
+    return report
 
 
 @app.get("/api/auth/employees")

@@ -11,6 +11,7 @@ from cryptography.fernet import Fernet, InvalidToken
 DB_PATH = os.getenv("NANA_DB_PATH", "nana.db")
 ENCRYPTED_PREFIX = "nana-fernet:v1:"
 SCHEMA_VERSION = 2
+_DATA_SECRET_CACHE = None
 
 
 @contextmanager
@@ -191,16 +192,23 @@ def _derive_fernet_key(secret):
 
 
 def _get_data_secret():
+    global _DATA_SECRET_CACHE
+    if _DATA_SECRET_CACHE:
+        return _DATA_SECRET_CACHE
+
     env_secret = os.getenv("NANA_DATA_KEY", "").strip()
     if env_secret:
+        _DATA_SECRET_CACHE = env_secret
         return env_secret
 
     stored = get_app_setting("local_data_key")
     if stored:
+        _DATA_SECRET_CACHE = stored
         return stored
 
     secret = base64.urlsafe_b64encode(os.urandom(32)).decode("ascii")
     set_app_setting("local_data_key", secret)
+    _DATA_SECRET_CACHE = secret
     return secret
 
 
@@ -681,6 +689,7 @@ def delete_expired_finished_cases(today, timestamp):
 
 def encrypt_existing_patient_data():
     init_database()
+    _get_data_secret()
     changed = 0
     with _connect() as connection:
         draft_rows = connection.execute("SELECT employee_id, draft_json FROM case_drafts").fetchall()

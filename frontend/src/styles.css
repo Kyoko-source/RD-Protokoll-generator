@@ -2501,6 +2501,10 @@ form button,
   font-weight: 800;
 }
 
+.dashboard-active-shift {
+  margin: -6px 0 22px;
+}
+
 .tile-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -2837,6 +2841,114 @@ form button,
   background:
     linear-gradient(135deg, rgba(42, 49, 78, 0.58) 0%, rgba(40, 50, 70, 0.48) 54%, rgba(55, 38, 64, 0.28) 100%),
     rgba(4, 12, 24, 0.30);
+}
+
+.readiness-panel {
+  margin: 0 0 18px;
+  background:
+    linear-gradient(135deg, rgba(20, 48, 70, 0.56), rgba(38, 47, 67, 0.50) 56%, rgba(30, 72, 58, 0.30)),
+    rgba(4, 12, 24, 0.32);
+}
+
+.readiness-warning {
+  border-color: rgba(245, 158, 11, 0.28);
+}
+
+.readiness-critical {
+  border-color: rgba(244, 63, 94, 0.34);
+}
+
+.readiness-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 14px 0;
+}
+
+.readiness-summary-grid div {
+  min-height: 78px;
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr);
+  gap: 2px 8px;
+  align-content: center;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(4, 12, 24, 0.25);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.readiness-summary-grid svg {
+  grid-row: span 2;
+  color: #63e6be;
+}
+
+.readiness-summary-grid strong {
+  color: #f7fbff;
+  font-size: 1.45rem;
+  line-height: 1;
+}
+
+.readiness-summary-grid span {
+  color: rgba(235, 244, 255, 0.62);
+  font-weight: 820;
+}
+
+.readiness-list {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.readiness-row {
+  display: grid;
+  grid-template-columns: 82px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 78px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(4, 12, 24, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.075);
+}
+
+.readiness-row > span {
+  align-self: start;
+  justify-self: start;
+  padding: 5px 8px;
+  border-radius: 999px;
+  color: #f7fbff;
+  background: rgba(99, 230, 190, 0.18);
+  font-size: 0.76rem;
+  font-weight: 900;
+}
+
+.readiness-row-warning > span {
+  background: rgba(245, 158, 11, 0.24);
+}
+
+.readiness-row-critical > span {
+  background: rgba(244, 63, 94, 0.26);
+}
+
+.readiness-row-info > span {
+  background: rgba(116, 185, 255, 0.20);
+}
+
+.readiness-row div {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.readiness-row strong {
+  color: #f7fbff;
+}
+
+.readiness-row small,
+.readiness-row em {
+  color: rgba(235, 244, 255, 0.62);
+  font-style: normal;
+  overflow-wrap: anywhere;
+  line-height: 1.35;
 }
 
 .admin-announcement-grid {
@@ -5238,6 +5350,8 @@ legend {
   .employee-insight-grid,
   .admin-permission-grid,
   .station-summary-grid,
+  .readiness-summary-grid,
+  .readiness-list,
   .privacy-summary-grid,
   .privacy-settings-panel,
   .privacy-checklist,
